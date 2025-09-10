@@ -30,7 +30,7 @@
                 <!-- Text area for data input -->
                 <div>
                     <label for="dataInput" class="block text-sm font-medium text-gray-700 mb-2">Paste Data Here:</label>
-                    <textarea id="dataInput" rows="10" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out" placeholder="e.g.,&#10;Month	Sales&#10;January	1500&#10;February	2750&#10;March	1200"></textarea>
+                    <textarea id="dataInput" rows="10" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out" placeholder="e.g.,&#10;Month	Product A	Product B&#10;January	1500	900&#10;February	2750	1200&#10;March	1200	1100"></textarea>
                 </div>
 
                 <!-- Button to generate the chart -->
@@ -52,47 +52,55 @@
         const ctx = document.getElementById('histogramCanvas').getContext('2d');
         let chartInstance = null; // To hold the chart instance
 
+        // A nice set of colors for the chart bars
+        const CHART_COLORS = [
+            'rgba(79, 70, 229, 0.8)',
+            'rgba(255, 99, 132, 0.8)',
+            'rgba(54, 162, 235, 0.8)',
+            'rgba(255, 206, 86, 0.8)',
+            'rgba(75, 192, 192, 0.8)',
+            'rgba(153, 102, 255, 0.8)',
+            'rgba(255, 159, 64, 0.8)'
+        ];
+
         // Function to parse the input data
         function parseData(input) {
             const lines = input.trim().split('\n');
-            const labels = [];
-            const dataPoints = [];
+            const labels = []; // for x-axis
             
-            // Default titles
-            let xAxisTitle = 'Category (1st Column)';
-            let yAxisTitle = 'Value (2nd Column)';
+            let xAxisTitle = 'Category';
+            let yAxisTitle = 'Total Value';
 
-            if (lines.length === 0) {
-                return { labels, dataPoints, xAxisTitle, yAxisTitle };
+            if (lines.length < 2) { // Need at least a header and one data row
+                return { labels, datasets: [], xAxisTitle, yAxisTitle };
             }
 
-            // Check the first line to see if it's a header
-            const firstLine = lines[0];
-            const firstLineParts = firstLine.split('\t').length > 1 ? firstLine.split('\t') : firstLine.split(',');
+            // The first line is always the header
+            const headerParts = lines.shift().trim().split(/\s*\t\s*/); // Split by tab and trim whitespace
+            xAxisTitle = headerParts.shift() || 'Category'; // First column name is X-axis title
+            const datasetLabels = headerParts;
 
-            // If the second part of the first line is NOT a number, assume it's a header line
-            if (firstLineParts.length === 2 && isNaN(parseFloat(firstLineParts[1].trim()))) {
-                xAxisTitle = firstLineParts[0].trim();
-                yAxisTitle = firstLineParts[1].trim();
-                lines.shift(); // Remove the header line from data processing
-            }
+            const datasets = datasetLabels.map(label => ({
+                label: label,
+                data: [],
+            }));
 
+            // Process the rest of the lines as data
             lines.forEach(line => {
-                // Split by tab, or fall back to comma
-                const parts = line.split('\t').length > 1 ? line.split('\t') : line.split(',');
-                
-                if (parts.length === 2) {
-                    const label = parts[0].trim();
-                    const value = parseFloat(parts[1].trim());
-
-                    if (label && !isNaN(value)) {
-                        labels.push(label);
-                        dataPoints.push(value);
+                const parts = line.trim().split(/\s*\t\s*/);
+                if (parts.length > 1) {
+                    labels.push(parts[0]); // First item is the x-axis label
+                    // The rest are data points for each dataset
+                    for (let i = 1; i < parts.length; i++) {
+                        if (datasets[i - 1]) {
+                            const value = parseFloat(parts[i]);
+                            datasets[i - 1].data.push(isNaN(value) ? 0 : value);
+                        }
                     }
                 }
             });
 
-            return { labels, dataPoints, xAxisTitle, yAxisTitle };
+            return { labels, datasets, xAxisTitle, yAxisTitle };
         }
 
         // Function to draw the chart
@@ -107,26 +115,26 @@
                 return;
             }
 
-            const { labels, dataPoints, xAxisTitle, yAxisTitle } = parseData(rawData);
+            const { labels, datasets, xAxisTitle, yAxisTitle } = parseData(rawData);
 
             // Destroy the previous chart instance if it exists
             if (chartInstance) {
                 chartInstance.destroy();
             }
 
+            // Assign colors to each dataset
+            const coloredDatasets = datasets.map((dataset, index) => ({
+                ...dataset,
+                backgroundColor: CHART_COLORS[index % CHART_COLORS.length],
+                borderRadius: 5,
+            }));
+
             // Create a new chart instance
             chartInstance = new Chart(ctx, {
                 type: 'bar', // Bar chart for histogram representation
                 data: {
                     labels: labels,
-                    datasets: [{
-                        label: yAxisTitle,
-                        data: dataPoints,
-                        backgroundColor: 'rgba(79, 70, 229, 0.8)', // Indigo color
-                        borderColor: 'rgba(79, 70, 229, 1)',
-                        borderWidth: 1,
-                        borderRadius: 5,
-                    }]
+                    datasets: coloredDatasets,
                 },
                 options: {
                     responsive: true,
@@ -146,6 +154,7 @@
                     },
                     scales: {
                         y: {
+                            stacked: true, // Enable stacking
                             beginAtZero: true,
                             title: {
                                 display: true,
@@ -157,6 +166,7 @@
                             }
                         },
                         x: {
+                            stacked: true, // Enable stacking
                             title: {
                                 display: true,
                                 text: xAxisTitle,

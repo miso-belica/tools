@@ -30,7 +30,7 @@
                 <!-- Text area for data input -->
                 <div>
                     <label for="dataInput" class="block text-sm font-medium text-gray-700 mb-2">Paste Data Here:</label>
-                    <textarea id="dataInput" rows="10" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out" placeholder="e.g.,&#10;Category A	150&#10;Category B	275&#10;Category C	120"></textarea>
+                    <textarea id="dataInput" rows="10" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out" placeholder="e.g.,&#10;Month	Sales&#10;January	1500&#10;February	2750&#10;March	1200"></textarea>
                 </div>
 
                 <!-- Button to generate the chart -->
@@ -57,6 +57,25 @@
             const lines = input.trim().split('\n');
             const labels = [];
             const dataPoints = [];
+            
+            // Default titles
+            let xAxisTitle = 'Category (1st Column)';
+            let yAxisTitle = 'Value (2nd Column)';
+
+            if (lines.length === 0) {
+                return { labels, dataPoints, xAxisTitle, yAxisTitle };
+            }
+
+            // Check the first line to see if it's a header
+            const firstLine = lines[0];
+            const firstLineParts = firstLine.split('\t').length > 1 ? firstLine.split('\t') : firstLine.split(',');
+
+            // If the second part of the first line is NOT a number, assume it's a header line
+            if (firstLineParts.length === 2 && isNaN(parseFloat(firstLineParts[1].trim()))) {
+                xAxisTitle = firstLineParts[0].trim();
+                yAxisTitle = firstLineParts[1].trim();
+                lines.shift(); // Remove the header line from data processing
+            }
 
             lines.forEach(line => {
                 // Split by tab, or fall back to comma
@@ -73,7 +92,7 @@
                 }
             });
 
-            return { labels, dataPoints };
+            return { labels, dataPoints, xAxisTitle, yAxisTitle };
         }
 
         // Function to draw the chart
@@ -88,7 +107,7 @@
                 return;
             }
 
-            const { labels, dataPoints } = parseData(rawData);
+            const { labels, dataPoints, xAxisTitle, yAxisTitle } = parseData(rawData);
 
             // Destroy the previous chart instance if it exists
             if (chartInstance) {
@@ -101,7 +120,7 @@
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: 'Data Values',
+                        label: yAxisTitle,
                         data: dataPoints,
                         backgroundColor: 'rgba(79, 70, 229, 0.8)', // Indigo color
                         borderColor: 'rgba(79, 70, 229, 1)',
@@ -114,7 +133,8 @@
                     maintainAspectRatio: true,
                     plugins: {
                         legend: {
-                            display: false // Hide legend for a cleaner look
+                            display: true,
+                            position: 'top',
                         },
                         tooltip: {
                             backgroundColor: '#111827',
@@ -129,7 +149,7 @@
                             beginAtZero: true,
                             title: {
                                 display: true,
-                                text: 'Value (2nd Column)',
+                                text: yAxisTitle,
                                 font: {
                                     size: 14,
                                     weight: '500'
@@ -139,7 +159,7 @@
                         x: {
                             title: {
                                 display: true,
-                                text: 'Category (1st Column)',
+                                text: xAxisTitle,
                                 font: {
                                     size: 14,
                                     weight: '500'
@@ -157,3 +177,4 @@
     </script>
 </body>
 </html>
+

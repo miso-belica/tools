@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omega-3 to Omega-6 Ratio Calculator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .search-box {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .food-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .food-item {
+            padding: 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.2s;
+        }
+
+        .food-item:last-child {
+            border-bottom: none;
+        }
+
+        .food-item:hover {
+            background-color: #f8f9ff;
+        }
+
+        .food-item.selected {
+            background-color: #667eea;
+            color: white;
+        }
+
+        .food-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .food-details {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .food-item.selected .food-details {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .results {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            padding: 25px;
+            color: white;
+            display: none;
+        }
+
+        .results.show {
+            display: block;
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .result-label {
+            opacity: 0.9;
+        }
+
+        .result-value {
+            font-weight: 700;
+        }
+
+        .ratio-display {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .ratio-label {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+
+        .ratio-value {
+            font-size: 36px;
+            font-weight: 700;
+        }
+
+        .ratio-interpretation {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            font-size: 14px;
+        }
+
+        .no-results {
+            padding: 20px;
+            text-align: center;
+            color: #999;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐟 Omega Ratio Calculator</h1>
+        <p class="subtitle">Calculate omega-3 to omega-6 ratio in foods (per 100g)</p>
+
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Search for a food..." autocomplete="off">
+        </div>
+
+        <div class="food-list" id="foodList"></div>
+
+        <div class="results" id="results">
+            <div class="result-row">
+                <span class="result-label">Omega-3 (ALA + EPA + DHA):</span>
+                <span class="result-value" id="omega3Value">-</span>
+            </div>
+            <div class="result-row">
+                <span class="result-label">Omega-6 (LA + AA):</span>
+                <span class="result-value" id="omega6Value">-</span>
+            </div>
+            <div class="ratio-display">
+                <div class="ratio-label">Omega-3 : Omega-6 Ratio</div>
+                <div class="ratio-value" id="ratioValue">-</div>
+                <div class="ratio-interpretation" id="interpretation"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Food database with omega-3 and omega-6 content (mg per 100g)
+        const foodDatabase = [
+            // Fish and seafood
+            { name: "Salmon (Atlantic, wild)", omega3: 2260, omega6: 170 },
+            { name: "Salmon (Atlantic, farmed)", omega3: 2500, omega6: 950 },
+            { name: "Mackerel", omega3: 2670, omega6: 219 },
+            { name: "Sardines", omega3: 1480, omega6: 280 },
+            { name: "Herring", omega3: 2150, omega6: 210 },
+            { name: "Tuna (fresh)", omega3: 1140, omega6: 40 },
+            { name: "Anchovies", omega3: 2110, omega6: 210 },
+            { name: "Trout", omega3: 1070, omega6: 240 },
+
+            // Nuts and seeds
+            { name: "Flaxseeds", omega3: 22813, omega6: 5911 },
+            { name: "Chia seeds", omega3: 17830, omega6: 5835 },
+            { name: "Walnuts", omega3: 9080, omega6: 38090 },
+            { name: "Hemp seeds", omega3: 9300, omega6: 28000 },
+            { name: "Almonds", omega3: 2, omega6: 12320 },
+            { name: "Cashews", omega3: 62, omega6: 7782 },
+            { name: "Pecans", omega3: 986, omega6: 20628 },
+            { name: "Sunflower seeds", omega3: 74, omega6: 23000 },
+            { name: "Pumpkin seeds", omega3: 187, omega6: 20710 },
+
+            // Oils
+            { name: "Flaxseed oil", omega3: 53368, omega6: 12701 },
+            { name: "Fish oil (salmon)", omega3: 35000, omega6: 1500 },
+            { name: "Walnut oil", omega3: 10400, omega6: 52890 },
+            { name: "Canola oil", omega3: 9137, omega6: 18645 },
+            { name: "Soybean oil", omega3: 6789, omega6: 50952 },
+            { name: "Olive oil (extra virgin)", omega3: 761, omega6: 9762 },
+            { name: "Corn oil", omega3: 1159, omega6: 53510 },
+            { name: "Sunflower oil", omega3: 28, omega6: 65700 },
+
+            // Vegetables
+            { name: "Spinach (raw)", omega3: 138, omega6: 26 },
+            { name: "Kale", omega3: 180, omega6: 138 },
+            { name: "Brussels sprouts", omega3: 270, omega6: 85 },
+            { name: "Broccoli", omega3: 21, omega6: 16 },
+            { name: "Edamame", omega3: 560, omega6: 2320 },
+
+            // Other
+            { name: "Eggs (whole)", omega3: 74, omega6: 1188 },
+            { name: "Chicken breast", omega3: 60, omega6: 600 },
+            { name: "Beef (grass-fed)", omega3: 80, omega6: 240 },
+            { name: "Beef (grain-fed)", omega3: 40, omega6: 720 },
+            { name: "Avocado", omega3: 111, omega6: 1674 },
+            { name: "Tofu", omega3: 360, omega6: 2875 },
+        ];
+
+        const searchInput = document.getElementById('searchInput');
+        const foodList = document.getElementById('foodList');
+        const results = document.getElementById('results');
+        const omega3Value = document.getElementById('omega3Value');
+        const omega6Value = document.getElementById('omega6Value');
+        const ratioValue = document.getElementById('ratioValue');
+        const interpretation = document.getElementById('interpretation');
+
+        let selectedFood = null;
+
+        function renderFoodList(foods) {
+            if (foods.length === 0) {
+                foodList.innerHTML = '<div class="no-results">No foods found</div>';
+                return;
+            }
+
+            foodList.innerHTML = foods.map(food => `
+                <div class="food-item" data-food="${food.name}">
+                    <div class="food-name">${food.name}</div>
+                    <div class="food-details">Ω-3: ${food.omega3}mg | Ω-6: ${food.omega6}mg</div>
+                </div>
+            `).join('');
+
+            // Add click handlers
+            foodList.querySelectorAll('.food-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const foodName = item.dataset.food;
+                    selectFood(foodName);
+                });
+            });
+        }
+
+        function selectFood(foodName) {
+            selectedFood = foodDatabase.find(f => f.name === foodName);
+
+            // Update UI
+            foodList.querySelectorAll('.food-item').forEach(item => {
+                item.classList.toggle('selected', item.dataset.food === foodName);
+            });
+
+            if (selectedFood) {
+                displayResults(selectedFood);
+            }
+        }
+
+        function displayResults(food) {
+            omega3Value.textContent = `${food.omega3.toLocaleString()} mg`;
+            omega6Value.textContent = `${food.omega6.toLocaleString()} mg`;
+
+            const ratio = food.omega3 / food.omega6;
+            const ratioStr = ratio >= 1
+                ? `${ratio.toFixed(2)} : 1`
+                : `1 : ${(1/ratio).toFixed(2)}`;
+
+            ratioValue.textContent = ratioStr;
+
+            // Interpretation
+            let interpText = '';
+            if (ratio >= 1) {
+                interpText = '✅ Excellent! This food has more omega-3 than omega-6, which is ideal for reducing inflammation.';
+            } else if (ratio >= 0.25) {
+                interpText = '👍 Good ratio. This food contributes positively to omega-3 intake relative to omega-6.';
+            } else if (ratio >= 0.1) {
+                interpText = '⚠️ Moderate. Contains more omega-6 than omega-3. Balance with high omega-3 foods.';
+            } else {
+                interpText = '⚠️ High in omega-6. Use sparingly and balance with omega-3 rich foods like fish or flaxseed.';
+            }
+
+            interpretation.textContent = interpText;
+            results.classList.add('show');
+        }
+
+        function filterFoods(query) {
+            const filtered = foodDatabase.filter(food =>
+                food.name.toLowerCase().includes(query.toLowerCase())
+            );
+            renderFoodList(filtered);
+        }
+
+        // Event listeners
+        searchInput.addEventListener('input', (e) => {
+            filterFoods(e.target.value);
+        });
+
+        // Initial render
+        renderFoodList(foodDatabase);
+    </script>
+</body>
+</html>

@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>NutriTrack</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0a0c0f;
+  --bg-card: #13161b;
+  --bg-card-hover: #1a1e25;
+  --bg-input: #1a1e25;
+  --border: #2a2f38;
+  --text: #e8eaed;
+  --text-dim: #8b919a;
+  --text-muted: #5c6370;
+  --accent: #7ceb4b;
+  --accent-dim: #5cb832;
+  --red: #f45866;
+  --orange: #f5a623;
+  --blue: #4da6ff;
+  --purple: #b57bff;
+  --cyan: #4dd9d0;
+  --ring-bg: #1e2228;
+  --font: 'DM Sans', -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --radius: 14px;
+  --radius-sm: 8px;
+}
+
+html, body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ─── TABS NAV ─── */
+.tab-nav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  display: flex;
+  background: #0d0f13;
+  border-top: 1px solid var(--border);
+  z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.tab-nav button {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 10px 4px 8px;
+  background: none; border: none; color: var(--text-muted);
+  font: 500 10px/1 var(--font); cursor: pointer;
+  transition: color .2s;
+}
+.tab-nav button.active { color: var(--accent); }
+.tab-nav button svg { width: 22px; height: 22px; }
+
+.tab-content { display: none; padding: 16px 16px 90px; max-width: 520px; margin: 0 auto; }
+.tab-content.active { display: block; }
+
+/* ─── HEADER ─── */
+.day-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 0 16px;
+}
+.day-header h2 { font-size: 15px; font-weight: 600; }
+.day-nav { display: flex; gap: 8px; align-items: center; }
+.day-nav button {
+  background: var(--bg-card); border: 1px solid var(--border);
+  color: var(--text); border-radius: var(--radius-sm);
+  width: 32px; height: 32px; display: grid; place-items: center;
+  cursor: pointer; font-size: 16px; transition: background .15s;
+}
+.day-nav button:hover { background: var(--bg-card-hover); }
+
+/* ─── CALORIE RING ─── */
+.cal-ring-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 20px 0 24px; position: relative;
+}
+.cal-ring-container { position: relative; width: 200px; height: 200px; }
+.cal-ring-container svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.cal-ring-container circle {
+  fill: none; stroke-width: 10; stroke-linecap: round;
+}
+.cal-ring-bg { stroke: var(--ring-bg); }
+.cal-ring-fill { stroke: var(--accent); transition: stroke-dashoffset .6s ease, stroke .3s; }
+.cal-ring-fill.over { stroke: var(--red); }
+.cal-ring-center {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+.cal-ring-value { font: 700 38px/1 var(--mono); letter-spacing: -1px; }
+.cal-ring-label { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+.cal-ring-pct {
+  position: absolute; bottom: 38px; left: 50%; transform: translateX(-50%);
+  font: 500 13px/1 var(--mono); color: var(--accent);
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 20px; padding: 4px 12px;
+}
+.cal-ring-pct.over { color: var(--red); border-color: rgba(244,88,102,.3); }
+
+.cal-side-stats {
+  display: flex; justify-content: space-around; width: 100%;
+  margin-top: 16px;
+}
+.cal-side-stat { text-align: center; }
+.cal-side-stat .icon { font-size: 20px; margin-bottom: 4px; }
+.cal-side-stat .val { font: 600 16px/1 var(--mono); }
+.cal-side-stat .lbl { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+/* ─── NUTRIENT GRID ─── */
+.section-title {
+  font-size: 14px; font-weight: 600; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 1px;
+  margin: 24px 0 12px; display: flex; align-items: center; gap: 8px;
+}
+.nutrient-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.nutrient-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 10px; text-align: center;
+}
+.nutrient-card .name { font-size: 11px; color: var(--text-dim); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+.nutrient-card .value { font: 600 20px/1 var(--mono); margin: 8px 0 4px; }
+.nutrient-card .mini-ring { width: 48px; height: 48px; margin: 6px auto; position: relative; }
+.nutrient-card .mini-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.nutrient-card .mini-ring circle { fill: none; stroke-width: 5; stroke-linecap: round; }
+.nutrient-card .mini-ring .bg { stroke: var(--ring-bg); }
+.nutrient-card .mini-ring .fill { transition: stroke-dashoffset .5s ease; }
+.nutrient-card .mini-ring .pct {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font: 500 10px/1 var(--mono);
+}
+.nutrient-card .goal { font-size: 10px; color: var(--text-muted); }
+
+/* ─── MEAL LIST ─── */
+.meal-section { margin-top: 24px; }
+.meal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px;
+}
+.meal-header h3 { font-size: 14px; font-weight: 600; }
+.meal-header span { font: 500 13px var(--mono); color: var(--text-dim); }
+.meal-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); margin-bottom: 6px;
+  cursor: pointer; transition: background .15s;
+}
+.meal-item:hover { background: var(--bg-card-hover); }
+.meal-item .info { flex: 1; min-width: 0; }
+.meal-item .food-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meal-item .food-detail { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.meal-item .kcal { font: 600 14px var(--mono); color: var(--accent); white-space: nowrap; }
+.meal-item .delete-btn {
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; padding: 4px; font-size: 16px; opacity: 0;
+  transition: opacity .15s, color .15s;
+}
+.meal-item:hover .delete-btn { opacity: 1; }
+.meal-item .delete-btn:hover { color: var(--red); }
+
+/* ─── ADD FOOD PANEL ─── */
+.add-food-bar {
+  position: fixed; bottom: 64px; left: 50%; transform: translateX(-50%);
+  z-index: 90; padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.add-food-btn {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--accent); border: none; color: #0a0c0f;
+  font-size: 28px; font-weight: 300; cursor: pointer;
+  display: grid; place-items: center;
+  box-shadow: 0 4px 20px rgba(124,235,75,.3);
+  transition: transform .15s, box-shadow .15s;
+}
+.add-food-btn:hover { transform: scale(1.08); box-shadow: 0 6px 28px rgba(124,235,75,.4); }
+
+/* ─── MODAL ─── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.7);
+  z-index: 200; display: none; place-items: end center;
+  backdrop-filter: blur(4px);
+}
+.modal-overlay.open { display: grid; }
+.modal {
+  background: var(--bg); border-radius: 20px 20px 0 0;
+  width: 100%; max-width: 520px; max-height: 90dvh;
+  overflow-y: auto; padding: 20px 16px 32px;
+  animation: slideUp .25s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } }
+.modal-handle {
+  width: 40px; height: 4px; background: var(--border);
+  border-radius: 2px; margin: 0 auto 16px;
+}
+.modal h3 { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+
+.search-input-wrap {
+  position: relative; margin-bottom: 12px;
+}
+.search-input {
+  width: 100%; padding: 12px 16px 12px 40px;
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
+  font: 400 15px var(--font); outline: none;
+  transition: border-color .2s;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-input-wrap .search-icon {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  color: var(--text-muted); font-size: 16px;
+}
+
+.search-results { max-height: 300px; overflow-y: auto; }
+.search-result-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px; border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background .15s; border-radius: var(--radius-sm);
+}
+.search-result-item:hover { background: var(--bg-card); }
+.search-result-item .r-name { font-size: 14px; font-weight: 500; }
+.search-result-item .r-brand { font-size: 11px; color: var(--text-dim); }
+.search-result-item .r-kcal { font: 500 13px var(--mono); color: var(--accent); }
+
+.search-status { padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+.portion-section { margin-top: 16px; }
+.portion-section label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 4px; font-weight: 500; }
+.portion-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.portion-row input, .portion-row select {
+  flex: 1; padding: 10px 12px;
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
+  font: 400 14px var(--font); outline: none;
+}
+.portion-row input:focus, .portion-row select:focus { border-color: var(--accent); }
+.portion-row select { appearance: none; }
+
+.meal-type-row { display: flex; gap: 6px; margin-bottom: 16px; }
+.meal-type-btn {
+  flex: 1; padding: 8px 4px;
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text-dim);
+  font: 500 12px var(--font); cursor: pointer; text-align: center;
+  transition: all .15s;
+}
+.meal-type-btn.active { background: var(--accent); color: #0a0c0f; border-color: var(--accent); }
+
+.nutrition-preview {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+  margin: 12px 0;
+}
+.nutrition-preview .np-item { text-align: center; padding: 8px 4px; background: var(--bg-card); border-radius: var(--radius-sm); }
+.nutrition-preview .np-val { font: 600 14px var(--mono); }
+.nutrition-preview .np-lbl { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+
+.add-confirm-btn {
+  width: 100%; padding: 14px;
+  background: var(--accent); border: none;
+  border-radius: var(--radius-sm); color: #0a0c0f;
+  font: 600 15px var(--font); cursor: pointer;
+  transition: opacity .15s;
+}
+.add-confirm-btn:disabled { opacity: .4; cursor: not-allowed; }
+.add-confirm-btn:not(:disabled):hover { opacity: .9; }
+
+/* ─── PROFILE TAB ─── */
+.profile-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; margin-bottom: 12px;
+}
+.profile-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+.profile-field { margin-bottom: 14px; }
+.profile-field label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 4px; font-weight: 500; }
+.profile-field input, .profile-field select {
+  width: 100%; padding: 10px 12px;
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
+  font: 400 14px var(--font); outline: none;
+}
+.profile-field input:focus, .profile-field select:focus { border-color: var(--accent); }
+.profile-row { display: flex; gap: 10px; }
+.profile-row .profile-field { flex: 1; }
+.save-profile-btn {
+  width: 100%; padding: 12px; margin-top: 8px;
+  background: var(--accent); border: none;
+  border-radius: var(--radius-sm); color: #0a0c0f;
+  font: 600 14px var(--font); cursor: pointer;
+}
+
+.targets-display { margin-top: 16px; }
+.target-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.target-row:last-child { border: none; }
+.target-row .t-name { font-size: 13px; color: var(--text-dim); }
+.target-row .t-val { font: 500 14px var(--mono); }
+
+/* ─── ANALYSIS TAB ─── */
+.analysis-period {
+  display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.period-btn {
+  padding: 8px 14px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 20px; color: var(--text-dim);
+  font: 500 12px var(--font); cursor: pointer;
+  transition: all .15s;
+}
+.period-btn.active { background: var(--accent); color: #0a0c0f; border-color: var(--accent); }
+
+.analysis-table {
+  width: 100%; border-collapse: collapse;
+  background: var(--bg-card); border-radius: var(--radius);
+  overflow: hidden; border: 1px solid var(--border);
+}
+.analysis-table th {
+  text-align: left; padding: 10px 12px;
+  font-size: 11px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: .5px;
+  border-bottom: 1px solid var(--border);
+}
+.analysis-table th:not(:first-child) { text-align: right; }
+.analysis-table td {
+  padding: 10px 12px; font-size: 13px;
+  border-bottom: 1px solid rgba(42,47,56,.5);
+}
+.analysis-table td:not(:first-child) { text-align: right; font-family: var(--mono); font-size: 13px; }
+.analysis-table tr:last-child td { border: none; }
+.analysis-table .dot {
+  display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; margin-right: 8px; vertical-align: middle;
+}
+.pct-good { color: var(--accent); }
+.pct-warn { color: var(--orange); }
+.pct-over { color: var(--red); }
+
+/* ─── Custom Food Modal ─── */
+.custom-food-section { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+.custom-food-btn {
+  width: 100%; padding: 10px;
+  background: none; border: 1px dashed var(--border);
+  border-radius: var(--radius-sm); color: var(--text-dim);
+  font: 500 13px var(--font); cursor: pointer;
+  transition: all .15s;
+}
+.custom-food-btn:hover { border-color: var(--accent); color: var(--accent); }
+.custom-fields { display: none; margin-top: 12px; }
+.custom-fields.open { display: block; }
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ─── Toast ─── */
+.toast {
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100px);
+  background: var(--bg-card); border: 1px solid var(--accent);
+  color: var(--accent); padding: 10px 20px;
+  border-radius: var(--radius-sm); font: 500 13px var(--font);
+  z-index: 300; transition: transform .3s ease;
+  box-shadow: 0 4px 20px rgba(0,0,0,.4);
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+.empty-state {
+  padding: 40px 20px; text-align: center; color: var(--text-muted);
+}
+.empty-state .icon { font-size: 40px; margin-bottom: 12px; opacity: .5; }
+.empty-state p { font-size: 13px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- TAB: DIARY -->
+<div class="tab-content active" id="tab-diary">
+  <div class="day-header">
+    <div class="day-nav">
+      <button onclick="changeDay(-1)">‹</button>
+    </div>
+    <h2 id="dayLabel"></h2>
+    <div class="day-nav">
+      <button onclick="changeDay(1)">›</button>
+    </div>
+  </div>
+
+  <div class="cal-ring-wrap">
+    <div class="cal-ring-container">
+      <svg viewBox="0 0 200 200">
+        <circle class="cal-ring-bg" cx="100" cy="100" r="85"/>
+        <circle class="cal-ring-fill" id="calRing" cx="100" cy="100" r="85"
+          stroke-dasharray="534" stroke-dashoffset="534"/>
+      </svg>
+      <div class="cal-ring-center">
+        <div class="cal-ring-value" id="calValue">0</div>
+        <div class="cal-ring-label" id="calTarget">/ 0 kcal</div>
+      </div>
+    </div>
+    <div class="cal-ring-pct" id="calPct">0 %</div>
+  </div>
+  <div class="cal-side-stats">
+    <div class="cal-side-stat">
+      <div class="icon">🍽</div>
+      <div class="val" id="statEaten">0</div>
+      <div class="lbl">Zjedené</div>
+    </div>
+    <div class="cal-side-stat">
+      <div class="icon">🎯</div>
+      <div class="val" id="statTarget">0</div>
+      <div class="lbl">Cieľ</div>
+    </div>
+    <div class="cal-side-stat">
+      <div class="icon">⚡</div>
+      <div class="val" id="statRemaining">0</div>
+      <div class="lbl">Zostáva</div>
+    </div>
+  </div>
+
+  <div class="section-title">Nutrienty</div>
+  <div class="nutrient-grid" id="nutrientGrid"></div>
+
+  <div id="mealsList"></div>
+</div>
+
+<!-- TAB: ANALYSIS -->
+<div class="tab-content" id="tab-analysis">
+  <h2 style="font-size:18px;font-weight:700;margin:12px 0 16px;">Analýza jedálníčka</h2>
+  <div class="analysis-period" id="periodBtns">
+    <button class="period-btn active" data-days="7">7 dní</button>
+    <button class="period-btn" data-days="14">14 dní</button>
+    <button class="period-btn" data-days="30">30 dní</button>
+  </div>
+  <div id="analysisPeriodLabel" style="font-size:12px;color:var(--text-muted);margin-bottom:12px;"></div>
+  <table class="analysis-table" id="analysisTable">
+    <thead>
+      <tr><th>Nutrient</th><th>Priemer</th><th>Cieľ</th><th>%</th></tr>
+    </thead>
+    <tbody id="analysisBody"></tbody>
+  </table>
+</div>
+
+<!-- TAB: PROFILE -->
+<div class="tab-content" id="tab-profile">
+  <h2 style="font-size:18px;font-weight:700;margin:12px 0 16px;">Profil</h2>
+  <div class="profile-card">
+    <h3>Osobné údaje</h3>
+    <div class="profile-row">
+      <div class="profile-field">
+        <label>Pohlavie</label>
+        <select id="profSex"><option value="male">Muž</option><option value="female">Žena</option></select>
+      </div>
+      <div class="profile-field">
+        <label>Vek</label>
+        <input type="number" id="profAge" value="30" min="15" max="99">
+      </div>
+    </div>
+    <div class="profile-row">
+      <div class="profile-field">
+        <label>Výška (cm)</label>
+        <input type="number" id="profHeight" value="178" min="100" max="250">
+      </div>
+      <div class="profile-field">
+        <label>Váha (kg)</label>
+        <input type="number" id="profWeight" value="80" min="30" max="300" step="0.1">
+      </div>
+    </div>
+    <div class="profile-field">
+      <label>Úroveň aktivity</label>
+      <select id="profActivity">
+        <option value="1.2">Sedavý (málo pohybu)</option>
+        <option value="1.375" selected>Mierne aktívny (1-3x/týždeň)</option>
+        <option value="1.55">Stredne aktívny (3-5x/týždeň)</option>
+        <option value="1.725">Veľmi aktívny (6-7x/týždeň)</option>
+        <option value="1.9">Extra aktívny (2x denne)</option>
+      </select>
+    </div>
+    <div class="profile-field">
+      <label>Cieľ</label>
+      <select id="profGoal">
+        <option value="-500">Chudnutie (−500 kcal)</option>
+        <option value="-250">Mierne chudnutie (−250 kcal)</option>
+        <option value="0" selected>Udržanie váhy</option>
+        <option value="250">Mierne naberanie (+250 kcal)</option>
+        <option value="500">Naberanie (+500 kcal)</option>
+      </select>
+    </div>
+    <button class="save-profile-btn" onclick="saveProfile()">Uložiť profil</button>
+  </div>
+  <div class="profile-card">
+    <h3>Vypočítané ciele</h3>
+    <div class="targets-display" id="targetsDisplay"></div>
+  </div>
+  <div class="profile-card">
+    <h3>Dáta</h3>
+    <button class="save-profile-btn" onclick="exportData()" style="margin-bottom:8px;background:var(--blue)">Exportovať dáta (JSON)</button>
+    <button class="save-profile-btn" onclick="document.getElementById('importFile').click()" style="background:var(--purple)">Importovať dáta</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+  </div>
+</div>
+
+<!-- ADD FOOD BUTTON -->
+<div class="add-food-bar">
+  <button class="add-food-btn" onclick="openAddFood()">+</button>
+</div>
+
+<!-- ADD FOOD MODAL -->
+<div class="modal-overlay" id="addFoodModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h3>Pridať jedlo</h3>
+
+    <div class="meal-type-row" id="mealTypeRow">
+      <button class="meal-type-btn active" data-meal="breakfast">Raňajky</button>
+      <button class="meal-type-btn" data-meal="lunch">Obed</button>
+      <button class="meal-type-btn" data-meal="dinner">Večera</button>
+      <button class="meal-type-btn" data-meal="snack">Snack</button>
+    </div>
+
+    <div class="search-input-wrap">
+      <span class="search-icon">🔍</span>
+      <input class="search-input" id="foodSearch" type="text" placeholder="Hľadať potravinu..." autocomplete="off">
+    </div>
+
+    <div class="search-results" id="searchResults">
+      <div class="search-status" id="searchStatus">Zadajte názov potraviny na vyhľadávanie</div>
+    </div>
+
+    <div id="portionSection" style="display:none">
+      <div style="font-size:14px;font-weight:600;margin-bottom:4px;" id="selectedFoodName"></div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;" id="selectedFoodBrand"></div>
+      <div class="portion-section">
+        <label>Množstvo</label>
+        <div class="portion-row">
+          <input type="number" id="portionAmount" value="100" min="1" step="1">
+          <select id="portionUnit">
+            <option value="g">g</option>
+            <option value="ml">ml</option>
+            <option value="ks">ks</option>
+          </select>
+        </div>
+      </div>
+      <div class="nutrition-preview" id="nutritionPreview"></div>
+      <button class="add-confirm-btn" onclick="confirmAddFood()">Pridať</button>
+    </div>
+
+    <div class="custom-food-section">
+      <button class="custom-food-btn" onclick="toggleCustomFood()">+ Vlastná potravina</button>
+      <div class="custom-fields" id="customFields">
+        <div class="profile-field"><label>Názov</label><input type="text" id="cfName" placeholder="Napr. Domáci chlieb"></div>
+        <div class="profile-row">
+          <div class="profile-field"><label>kcal / 100g</label><input type="number" id="cfKcal" value="0" min="0"></div>
+          <div class="profile-field"><label>Množstvo (g)</label><input type="number" id="cfAmount" value="100" min="1"></div>
+        </div>
+        <div class="profile-row">
+          <div class="profile-field"><label>Bielk. (g)</label><input type="number" id="cfProt" value="0" min="0" step="0.1"></div>
+          <div class="profile-field"><label>Sach. (g)</label><input type="number" id="cfCarb" value="0" min="0" step="0.1"></div>
+          <div class="profile-field"><label>Tuky (g)</label><input type="number" id="cfFat" value="0" min="0" step="0.1"></div>
+        </div>
+        <div class="profile-row">
+          <div class="profile-field"><label>Vláknina (g)</label><input type="number" id="cfFiber" value="0" min="0" step="0.1"></div>
+          <div class="profile-field"><label>Cukor (g)</label><input type="number" id="cfSugar" value="0" min="0" step="0.1"></div>
+          <div class="profile-field"><label>Soľ (g)</label><input type="number" id="cfSalt" value="0" min="0" step="0.01"></div>
+        </div>
+        <button class="add-confirm-btn" style="margin-top:8px" onclick="addCustomFood()">Pridať vlastné jedlo</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB NAV -->
+<nav class="tab-nav">
+  <button class="active" onclick="switchTab('diary',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    Denník
+  </button>
+  <button onclick="switchTab('analysis',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    Analýza
+  </button>
+  <button onclick="switchTab('profile',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    Profil
+  </button>
+</nav>
+
+<script>
+// ─── STATE ───
+const DB_KEY = 'nutritrack_data';
+let state = loadState();
+
+function defaultState() {
+  return {
+    profile: { sex: 'male', age: 30, height: 178, weight: 80, activity: 1.375, goal: 0 },
+    days: {},
+    customFoods: []
+  };
+}
+
+function loadState() {
+  try {
+    const d = JSON.parse(localStorage.getItem(DB_KEY));
+    return d && d.profile ? d : defaultState();
+  } catch { return defaultState(); }
+}
+
+function saveState() {
+  localStorage.setItem(DB_KEY, JSON.stringify(state));
+}
+
+// ─── DATE HANDLING ───
+let currentDate = new Date();
+function dateKey(d) {
+  return d.toISOString().slice(0, 10);
+}
+function formatDate(d) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const comp = new Date(d); comp.setHours(0,0,0,0);
+  const diff = (comp - today) / 86400000;
+  if (diff === 0) return 'Dnes';
+  if (diff === -1) return 'Včera';
+  if (diff === 1) return 'Zajtra';
+  return d.toLocaleDateString('sk-SK', { day: 'numeric', month: 'long' });
+}
+
+function changeDay(delta) {
+  currentDate.setDate(currentDate.getDate() + delta);
+  render();
+}
+
+// ─── NUTRITION CALCULATION ───
+function calcBMR(p) {
+  // Mifflin-St Jeor
+  if (p.sex === 'male') return 10 * p.weight + 6.25 * p.height - 5 * p.age + 5;
+  return 10 * p.weight + 6.25 * p.height - 5 * p.age - 161;
+}
+
+function calcTDEE(p) {
+  return Math.round(calcBMR(p) * p.activity);
+}
+
+function calcTargets(p) {
+  const tdee = calcTDEE(p);
+  const calTarget = Math.round(tdee + Number(p.goal));
+  // Macro split: protein 2g/kg, fat 0.9g/kg, rest carbs
+  const protein = Math.round(p.weight * 2);
+  const fat = Math.round(p.weight * 0.9);
+  const protCal = protein * 4;
+  const fatCal = fat * 9;
+  const carbCal = Math.max(calTarget - protCal - fatCal, 100);
+  const carbs = Math.round(carbCal / 4);
+  // Fiber: 14g per 1000 kcal (Institute of Medicine)
+  const fiber = Math.round(calTarget * 14 / 1000);
+  // Sugar: max 10% of cal
+  const sugar = Math.round(calTarget * 0.10 / 4);
+  // Salt: WHO < 5g
+  const salt = 5.0;
+  // Water: ~1ml per kcal roughly, simplified
+  const water = p.sex === 'male' ? 2.5 : 2.0;
+
+  return { calories: calTarget, protein, carbs, fat, fiber, sugar, salt, water, tdee };
+}
+
+// ─── GET DAY DATA ───
+function getDayEntries(dateStr) {
+  return state.days[dateStr] || [];
+}
+
+function addEntry(dateStr, entry) {
+  if (!state.days[dateStr]) state.days[dateStr] = [];
+  state.days[dateStr].push({ ...entry, id: Date.now() + Math.random() });
+  saveState();
+}
+
+function removeEntry(dateStr, id) {
+  if (state.days[dateStr]) {
+    state.days[dateStr] = state.days[dateStr].filter(e => e.id !== id);
+    if (!state.days[dateStr].length) delete state.days[dateStr];
+    saveState();
+  }
+}
+
+function sumNutrients(entries) {
+  const s = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, salt: 0 };
+  for (const e of entries) {
+    s.calories += e.calories || 0;
+    s.protein += e.protein || 0;
+    s.carbs += e.carbs || 0;
+    s.fat += e.fat || 0;
+    s.fiber += e.fiber || 0;
+    s.sugar += e.sugar || 0;
+    s.salt += e.salt || 0;
+  }
+  return s;
+}
+
+// ─── RENDER ───
+function render() {
+  const dk = dateKey(currentDate);
+  const entries = getDayEntries(dk);
+  const sums = sumNutrients(entries);
+  const targets = calcTargets(state.profile);
+
+  // Day label
+  document.getElementById('dayLabel').textContent = formatDate(currentDate);
+
+  // Calorie ring
+  const pct = targets.calories > 0 ? (sums.calories / targets.calories) * 100 : 0;
+  const circum = 2 * Math.PI * 85; // ~534
+  const offset = circum - (Math.min(pct, 100) / 100) * circum;
+  const ring = document.getElementById('calRing');
+  ring.style.strokeDashoffset = offset;
+  ring.classList.toggle('over', pct > 100);
+
+  document.getElementById('calValue').textContent = Math.round(sums.calories);
+  document.getElementById('calTarget').textContent = `/ ${targets.calories} kcal`;
+  const pctEl = document.getElementById('calPct');
+  pctEl.textContent = `${Math.round(pct)} %`;
+  pctEl.classList.toggle('over', pct > 100);
+
+  document.getElementById('statEaten').textContent = Math.round(sums.calories);
+  document.getElementById('statTarget').textContent = targets.calories;
+  const remaining = targets.calories - Math.round(sums.calories);
+  document.getElementById('statRemaining').textContent = remaining;
+
+  // Nutrient grid
+  const nutrients = [
+    { key: 'protein', name: 'Bielkoviny', unit: 'g', color: '#f45866', target: targets.protein },
+    { key: 'carbs', name: 'Sacharidy', unit: 'g', color: '#4da6ff', target: targets.carbs },
+    { key: 'fat', name: 'Tuky', unit: 'g', color: '#f5a623', target: targets.fat },
+    { key: 'fiber', name: 'Vláknina', unit: 'g', color: '#4dd9d0', target: targets.fiber },
+    { key: 'sugar', name: 'Cukry', unit: 'g', color: '#b57bff', target: targets.sugar },
+    { key: 'salt', name: 'Soľ', unit: 'g', color: '#8b919a', target: targets.salt },
+  ];
+
+  const grid = document.getElementById('nutrientGrid');
+  grid.innerHTML = nutrients.map(n => {
+    const val = sums[n.key] || 0;
+    const npct = n.target > 0 ? (val / n.target) * 100 : 0;
+    const miniCircum = 2 * Math.PI * 18;
+    const miniOffset = miniCircum - (Math.min(npct, 100) / 100) * miniCircum;
+    const strokeColor = npct > 120 ? 'var(--red)' : npct > 90 ? n.color : n.color;
+    return `<div class="nutrient-card">
+      <div class="name">${n.name}</div>
+      <div class="value" style="color:${n.color}">${val.toFixed(1)} ${n.unit}</div>
+      <div class="mini-ring">
+        <svg viewBox="0 0 48 48">
+          <circle class="bg" cx="24" cy="24" r="18"/>
+          <circle class="fill" cx="24" cy="24" r="18"
+            stroke="${strokeColor}"
+            stroke-dasharray="${miniCircum}"
+            stroke-dashoffset="${miniOffset}"/>
+        </svg>
+        <div class="pct" style="color:${npct>120?'var(--red)':n.color}">${Math.round(npct)}%</div>
+      </div>
+      <div class="goal">z ${n.target}${n.unit}</div>
+    </div>`;
+  }).join('');
+
+  // Meals list
+  const meals = { breakfast: 'Raňajky', lunch: 'Obed', dinner: 'Večera', snack: 'Snack' };
+  const mealsList = document.getElementById('mealsList');
+  let html = '';
+  for (const [key, label] of Object.entries(meals)) {
+    const mealEntries = entries.filter(e => e.meal === key);
+    if (!mealEntries.length && !entries.length) continue;
+    const mealCal = mealEntries.reduce((s, e) => s + (e.calories || 0), 0);
+    if (mealEntries.length) {
+      html += `<div class="meal-section">
+        <div class="meal-header"><h3>${label}</h3><span>${Math.round(mealCal)} kcal</span></div>
+        ${mealEntries.map(e => `<div class="meal-item">
+          <div class="info">
+            <div class="food-name">${e.name}</div>
+            <div class="food-detail">${e.amount}${e.unit} · B:${e.protein.toFixed(1)}g S:${e.carbs.toFixed(1)}g T:${e.fat.toFixed(1)}g</div>
+          </div>
+          <div class="kcal">${Math.round(e.calories)}</div>
+          <button class="delete-btn" onclick="event.stopPropagation();removeEntry('${dk}',${e.id});render()">✕</button>
+        </div>`).join('')}
+      </div>`;
+    }
+  }
+  if (!entries.length) {
+    html = `<div class="empty-state"><div class="icon">🥗</div><p>Zatiaľ žiadne jedlá.<br>Kliknite na + pre pridanie.</p></div>`;
+  }
+  mealsList.innerHTML = html;
+
+  // Update targets display
+  renderTargets();
+  renderAnalysis();
+}
+
+function renderTargets() {
+  const t = calcTargets(state.profile);
+  const rows = [
+    ['BMR', `${Math.round(calcBMR(state.profile))} kcal`],
+    ['TDEE', `${t.tdee} kcal`],
+    ['Cieľ kalórií', `${t.calories} kcal`],
+    ['Bielkoviny', `${t.protein} g`],
+    ['Sacharidy', `${t.carbs} g`],
+    ['Tuky', `${t.fat} g`],
+    ['Vláknina', `${t.fiber} g`],
+    ['Cukry (max)', `${t.sugar} g`],
+    ['Soľ (max)', `${t.salt} g`],
+  ];
+  document.getElementById('targetsDisplay').innerHTML = rows.map(([n,v]) =>
+    `<div class="target-row"><span class="t-name">${n}</span><span class="t-val">${v}</span></div>`
+  ).join('');
+}
+
+// ─── ANALYSIS ───
+let analysisDays = 7;
+
+function renderAnalysis() {
+  const targets = calcTargets(state.profile);
+  const end = new Date(); end.setHours(0,0,0,0);
+  const start = new Date(end); start.setDate(start.getDate() - analysisDays + 1);
+
+  document.getElementById('analysisPeriodLabel').textContent =
+    `${start.toLocaleDateString('sk-SK',{day:'numeric',month:'numeric'})} – ${end.toLocaleDateString('sk-SK',{day:'numeric',month:'numeric'})}`;
+
+  let totals = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, salt: 0 };
+  let daysWithData = 0;
+
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const entries = getDayEntries(dateKey(d));
+    if (entries.length) {
+      daysWithData++;
+      const s = sumNutrients(entries);
+      for (const k of Object.keys(totals)) totals[k] += s[k];
+    }
+  }
+
+  const divisor = daysWithData || 1;
+  const avg = {};
+  for (const k of Object.keys(totals)) avg[k] = totals[k] / divisor;
+
+  const colors = { calories: '#8b919a', protein: '#f45866', carbs: '#4da6ff', fat: '#f5a623', fiber: '#4dd9d0', sugar: '#b57bff', salt: '#8b919a' };
+  const labels = { calories: 'Energia', protein: 'Bielkoviny', carbs: 'Sacharidy', fat: 'Tuky', fiber: 'Vláknina', sugar: 'Cukry', salt: 'Soľ' };
+  const units = { calories: 'kcal', protein: 'g', carbs: 'g', fat: 'g', fiber: 'g', sugar: 'g', salt: 'g' };
+  const tgtMap = { calories: targets.calories, protein: targets.protein, carbs: targets.carbs, fat: targets.fat, fiber: targets.fiber, sugar: targets.sugar, salt: targets.salt };
+
+  const body = document.getElementById('analysisBody');
+  body.innerHTML = Object.keys(labels).map(k => {
+    const pct = tgtMap[k] > 0 ? (avg[k] / tgtMap[k]) * 100 : 0;
+    const pctClass = pct > 110 ? 'pct-over' : pct < 70 ? 'pct-warn' : 'pct-good';
+    return `<tr>
+      <td><span class="dot" style="background:${colors[k]}"></span>${labels[k]}</td>
+      <td>${avg[k].toFixed(k==='salt'?1:0)} ${units[k]}</td>
+      <td>${tgtMap[k]} ${units[k]}</td>
+      <td class="${pctClass}">${pct.toFixed(1)} %</td>
+    </tr>`;
+  }).join('');
+
+  if (!daysWithData) {
+    body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:30px;">Žiadne dáta za vybrané obdobie</td></tr>`;
+  }
+}
+
+document.getElementById('periodBtns').addEventListener('click', e => {
+  const btn = e.target.closest('.period-btn');
+  if (!btn) return;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  analysisDays = Number(btn.dataset.days);
+  renderAnalysis();
+});
+
+// ─── TABS ───
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'analysis') renderAnalysis();
+}
+
+// ─── PROFILE ───
+function loadProfile() {
+  const p = state.profile;
+  document.getElementById('profSex').value = p.sex;
+  document.getElementById('profAge').value = p.age;
+  document.getElementById('profHeight').value = p.height;
+  document.getElementById('profWeight').value = p.weight;
+  document.getElementById('profActivity').value = p.activity;
+  document.getElementById('profGoal').value = p.goal;
+}
+
+function saveProfile() {
+  state.profile = {
+    sex: document.getElementById('profSex').value,
+    age: Number(document.getElementById('profAge').value),
+    height: Number(document.getElementById('profHeight').value),
+    weight: Number(document.getElementById('profWeight').value),
+    activity: Number(document.getElementById('profActivity').value),
+    goal: Number(document.getElementById('profGoal').value),
+  };
+  saveState();
+  render();
+  showToast('Profil uložený ✓');
+}
+
+// ─── FOOD SEARCH (Open Food Facts) ───
+let searchTimeout;
+let selectedFood = null;
+let currentMealType = 'breakfast';
+
+function openAddFood() {
+  document.getElementById('addFoodModal').classList.add('open');
+  document.getElementById('foodSearch').value = '';
+  document.getElementById('searchResults').innerHTML = '<div class="search-status">Zadajte názov potraviny na vyhľadávanie</div>';
+  document.getElementById('portionSection').style.display = 'none';
+  document.getElementById('customFields').classList.remove('open');
+  selectedFood = null;
+  setTimeout(() => document.getElementById('foodSearch').focus(), 100);
+}
+
+document.getElementById('addFoodModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
+});
+
+document.getElementById('mealTypeRow').addEventListener('click', e => {
+  const btn = e.target.closest('.meal-type-btn');
+  if (!btn) return;
+  document.querySelectorAll('.meal-type-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentMealType = btn.dataset.meal;
+});
+
+document.getElementById('foodSearch').addEventListener('input', e => {
+  clearTimeout(searchTimeout);
+  const q = e.target.value.trim();
+  if (q.length < 2) {
+    document.getElementById('searchResults').innerHTML = '<div class="search-status">Zadajte aspoň 2 znaky</div>';
+    return;
+  }
+  document.getElementById('searchResults').innerHTML = '<div class="search-status">Hľadám...</div>';
+  searchTimeout = setTimeout(() => searchFood(q), 400);
+});
+
+async function searchFood(query) {
+  try {
+    // Search Open Food Facts + built-in generic foods
+    const results = [];
+
+    // Built-in generic foods (USDA-sourced data per 100g)
+    const generics = getGenericFoods();
+    const q = query.toLowerCase();
+    const matchedGenerics = generics.filter(f =>
+      f.name.toLowerCase().includes(q) || (f.aliases && f.aliases.some(a => a.includes(q)))
+    );
+    matchedGenerics.forEach(f => results.push({ ...f, source: 'generic' }));
+
+    // Open Food Facts API
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=15&fields=product_name,brands,nutriments,serving_size,code`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    if (data.products) {
+      for (const p of data.products) {
+        if (!p.product_name || !p.nutriments) continue;
+        const n = p.nutriments;
+        results.push({
+          name: p.product_name,
+          brand: p.brands || '',
+          per100: {
+            calories: n['energy-kcal_100g'] || (n.energy_100g ? n.energy_100g / 4.184 : 0),
+            protein: n.proteins_100g || 0,
+            carbs: n.carbohydrates_100g || 0,
+            fat: n.fat_100g || 0,
+            fiber: n.fiber_100g || 0,
+            sugar: n.sugars_100g || 0,
+            salt: n.salt_100g || 0,
+          },
+          source: 'off'
+        });
+      }
+    }
+
+    const container = document.getElementById('searchResults');
+    if (!results.length) {
+      container.innerHTML = '<div class="search-status">Žiadne výsledky. Skúste iný názov alebo pridajte vlastnú potravinu.</div>';
+      return;
+    }
+
+    container.innerHTML = results.slice(0, 20).map((r, i) => `
+      <div class="search-result-item" onclick='selectFood(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
+        <div>
+          <div class="r-name">${r.name}</div>
+          <div class="r-brand">${r.brand || (r.source === 'generic' ? '⭐ Generická potravina' : '')}</div>
+        </div>
+        <div class="r-kcal">${Math.round(r.per100.calories)} kcal/100g</div>
+      </div>
+    `).join('');
+  } catch (err) {
+    document.getElementById('searchResults').innerHTML = `<div class="search-status">Chyba vyhľadávania. Skúste znovu.</div>`;
+  }
+}
+
+function selectFood(food) {
+  selectedFood = food;
+  document.getElementById('selectedFoodName').textContent = food.name;
+  document.getElementById('selectedFoodBrand').textContent = food.brand || '';
+  document.getElementById('portionSection').style.display = 'block';
+  document.getElementById('portionAmount').value = 100;
+  updateNutritionPreview();
+}
+
+document.getElementById('portionAmount').addEventListener('input', updateNutritionPreview);
+
+function updateNutritionPreview() {
+  if (!selectedFood) return;
+  const amount = Number(document.getElementById('portionAmount').value) || 0;
+  const ratio = amount / 100;
+  const p = selectedFood.per100;
+  const preview = [
+    { label: 'kcal', val: Math.round(p.calories * ratio) },
+    { label: 'Bielk.', val: (p.protein * ratio).toFixed(1) + 'g' },
+    { label: 'Sach.', val: (p.carbs * ratio).toFixed(1) + 'g' },
+    { label: 'Tuky', val: (p.fat * ratio).toFixed(1) + 'g' },
+  ];
+  document.getElementById('nutritionPreview').innerHTML = preview.map(p =>
+    `<div class="np-item"><div class="np-val">${p.val}</div><div class="np-lbl">${p.label}</div></div>`
+  ).join('');
+}
+
+function confirmAddFood() {
+  if (!selectedFood) return;
+  const amount = Number(document.getElementById('portionAmount').value) || 0;
+  const unit = document.getElementById('portionUnit').value;
+  const ratio = amount / 100;
+  const p = selectedFood.per100;
+
+  addEntry(dateKey(currentDate), {
+    name: selectedFood.name,
+    brand: selectedFood.brand || '',
+    meal: currentMealType,
+    amount, unit,
+    calories: p.calories * ratio,
+    protein: p.protein * ratio,
+    carbs: p.carbs * ratio,
+    fat: p.fat * ratio,
+    fiber: (p.fiber || 0) * ratio,
+    sugar: (p.sugar || 0) * ratio,
+    salt: (p.salt || 0) * ratio,
+  });
+
+  document.getElementById('addFoodModal').classList.remove('open');
+  render();
+  showToast(`${selectedFood.name} pridané ✓`);
+}
+
+function toggleCustomFood() {
+  document.getElementById('customFields').classList.toggle('open');
+}
+
+function addCustomFood() {
+  const name = document.getElementById('cfName').value.trim();
+  if (!name) { showToast('Zadajte názov'); return; }
+  const amount = Number(document.getElementById('cfAmount').value) || 100;
+  const ratio = amount / 100;
+
+  addEntry(dateKey(currentDate), {
+    name,
+    brand: 'Vlastná',
+    meal: currentMealType,
+    amount, unit: 'g',
+    calories: Number(document.getElementById('cfKcal').value) * ratio,
+    protein: Number(document.getElementById('cfProt').value) * ratio,
+    carbs: Number(document.getElementById('cfCarb').value) * ratio,
+    fat: Number(document.getElementById('cfFat').value) * ratio,
+    fiber: Number(document.getElementById('cfFiber').value) * ratio,
+    sugar: Number(document.getElementById('cfSugar').value) * ratio,
+    salt: Number(document.getElementById('cfSalt').value) * ratio,
+  });
+
+  document.getElementById('addFoodModal').classList.remove('open');
+  render();
+  showToast(`${name} pridané ✓`);
+}
+
+// ─── GENERIC FOODS DATABASE (USDA values per 100g) ───
+function getGenericFoods() {
+  return [
+    { name: 'Kuracie prsia', aliases: ['chicken breast','kura','kurča'], brand: '', per100: { calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, sugar: 0, salt: 0.07 }},
+    { name: 'Ryža biela varená', aliases: ['rice','ryža','rýže'], brand: '', per100: { calories: 130, protein: 2.7, carbs: 28, fat: 0.3, fiber: 0.4, sugar: 0, salt: 0 }},
+    { name: 'Ryža hnedá varená', aliases: ['brown rice','hnedá ryža'], brand: '', per100: { calories: 123, protein: 2.7, carbs: 26, fat: 1.0, fiber: 1.8, sugar: 0, salt: 0 }},
+    { name: 'Vajce celé', aliases: ['egg','vajcia','vajíčko','vejce'], brand: '', per100: { calories: 155, protein: 13, carbs: 1.1, fat: 11, fiber: 0, sugar: 1.1, salt: 0.37 }},
+    { name: 'Ovesné vločky', aliases: ['oats','ovsené','ovos','vločky'], brand: '', per100: { calories: 379, protein: 13.2, carbs: 67.7, fat: 6.5, fiber: 10.1, sugar: 0.99, salt: 0 }},
+    { name: 'Banán', aliases: ['banana','banány'], brand: '', per100: { calories: 89, protein: 1.1, carbs: 23, fat: 0.3, fiber: 2.6, sugar: 12.2, salt: 0 }},
+    { name: 'Jablko', aliases: ['apple','jablká'], brand: '', per100: { calories: 52, protein: 0.3, carbs: 14, fat: 0.2, fiber: 2.4, sugar: 10.4, salt: 0 }},
+    { name: 'Chlieb celozrnný', aliases: ['bread','chléb','chleba','pečivo'], brand: '', per100: { calories: 247, protein: 13, carbs: 41, fat: 3.4, fiber: 7, sugar: 6, salt: 1.1 }},
+    { name: 'Jogurt biely', aliases: ['yogurt','jogúrt'], brand: '', per100: { calories: 61, protein: 3.5, carbs: 4.7, fat: 3.3, fiber: 0, sugar: 4.7, salt: 0.07 }},
+    { name: 'Tvaroh nízkotučný', aliases: ['cottage','tvaroh','tvarožek'], brand: '', per100: { calories: 72, protein: 12.4, carbs: 3.7, fat: 1.0, fiber: 0, sugar: 3.7, salt: 0.33 }},
+    { name: 'Losos', aliases: ['salmon','losos','ryba'], brand: '', per100: { calories: 208, protein: 20, carbs: 0, fat: 13.4, fiber: 0, sugar: 0, salt: 0.06 }},
+    { name: 'Tuniak v konzerve', aliases: ['tuna','tuňák','tuniak'], brand: '', per100: { calories: 116, protein: 25.5, carbs: 0, fat: 1, fiber: 0, sugar: 0, salt: 0.37 }},
+    { name: 'Hovädzie mleté', aliases: ['beef','hovädzí','hovadzí','mleté'], brand: '', per100: { calories: 254, protein: 17.2, carbs: 0, fat: 20, fiber: 0, sugar: 0, salt: 0.07 }},
+    { name: 'Brokol.', aliases: ['broccoli','brokolica'], brand: '', per100: { calories: 34, protein: 2.8, carbs: 7, fat: 0.4, fiber: 2.6, sugar: 1.7, salt: 0.03 }},
+    { name: 'Špenát', aliases: ['spinach','špenát'], brand: '', per100: { calories: 23, protein: 2.9, carbs: 3.6, fat: 0.4, fiber: 2.2, sugar: 0.4, salt: 0.08 }},
+    { name: 'Olivový olej', aliases: ['olive oil','olej','olivový'], brand: '', per100: { calories: 884, protein: 0, carbs: 0, fat: 100, fiber: 0, sugar: 0, salt: 0 }},
+    { name: 'Maslo', aliases: ['butter','maslo'], brand: '', per100: { calories: 717, protein: 0.9, carbs: 0.1, fat: 81, fiber: 0, sugar: 0.1, salt: 0.64 }},
+    { name: 'Mandle', aliases: ['almonds','mandle'], brand: '', per100: { calories: 579, protein: 21, carbs: 22, fat: 50, fiber: 12.5, sugar: 4.4, salt: 0 }},
+    { name: 'Arašidové maslo', aliases: ['peanut butter','arašídové','burské'], brand: '', per100: { calories: 588, protein: 25, carbs: 20, fat: 50, fiber: 6, sugar: 9, salt: 0.46 }},
+    { name: 'Zemiak varený', aliases: ['potato','zemiaky','brambory'], brand: '', per100: { calories: 87, protein: 1.9, carbs: 20, fat: 0.1, fiber: 1.8, sugar: 0.9, salt: 0 }},
+    { name: 'Cestoviny varené', aliases: ['pasta','špagety','cestoviny','těstoviny'], brand: '', per100: { calories: 131, protein: 5, carbs: 25, fat: 1.1, fiber: 1.8, sugar: 0.6, salt: 0 }},
+    { name: 'Mlieko polotučné', aliases: ['milk','mlieko','mléko'], brand: '', per100: { calories: 50, protein: 3.3, carbs: 4.8, fat: 2, fiber: 0, sugar: 5, salt: 0.04 }},
+    { name: 'Syr Eidam 30%', aliases: ['cheese','syr','eidam','sýr'], brand: '', per100: { calories: 260, protein: 30, carbs: 0, fat: 15, fiber: 0, sugar: 0, salt: 1.8 }},
+    { name: 'Avokádo', aliases: ['avocado','avokádo'], brand: '', per100: { calories: 160, protein: 2, carbs: 8.5, fat: 14.7, fiber: 6.7, sugar: 0.7, salt: 0 }},
+    { name: 'Med', aliases: ['honey','med'], brand: '', per100: { calories: 304, protein: 0.3, carbs: 82.4, fat: 0, fiber: 0.2, sugar: 82.1, salt: 0 }},
+    { name: 'Tofu', aliases: ['tofu','sójový'], brand: '', per100: { calories: 76, protein: 8, carbs: 1.9, fat: 4.8, fiber: 0.3, sugar: 0.6, salt: 0 }},
+    { name: 'Šošovica varená', aliases: ['lentils','šošovica','čočka'], brand: '', per100: { calories: 116, protein: 9, carbs: 20, fat: 0.4, fiber: 7.9, sugar: 1.8, salt: 0 }},
+    { name: 'Cícerový šalát', aliases: ['chickpeas','cícer','cizrna'], brand: '', per100: { calories: 164, protein: 8.9, carbs: 27, fat: 2.6, fiber: 7.6, sugar: 4.8, salt: 0 }},
+    { name: 'Proteínový prášok (whey)', aliases: ['protein','proteín','whey'], brand: '', per100: { calories: 370, protein: 78, carbs: 8, fat: 3, fiber: 0, sugar: 5, salt: 0.5 }},
+  ];
+}
+
+// ─── EXPORT / IMPORT ───
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `nutritrack-backup-${dateKey(new Date())}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast('Dáta exportované ✓');
+}
+
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (data.profile && data.days) {
+        state = data;
+        saveState();
+        loadProfile();
+        render();
+        showToast('Dáta importované ✓');
+      } else {
+        showToast('Neplatný formát súboru');
+      }
+    } catch { showToast('Chyba pri čítaní súboru'); }
+  };
+  reader.readAsText(file);
+}
+
+// ─── TOAST ───
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ─── INIT ───
+loadProfile();
+render();
+</script>
+</body>
+</html>

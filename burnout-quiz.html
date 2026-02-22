@@ -163,110 +163,111 @@
 
   .progress-label { font-size: 0.72rem; color: var(--muted); font-weight: 500; flex-shrink: 0; }
 
-  .questions-wrap {
-    max-width: 800px;
+  /* ── STEP VIEW ── */
+  .step-wrap {
+    max-width: 600px;
     margin: 0 auto;
-    padding: 1.5rem 2rem 6rem;
+    padding: 3.5rem 2rem 9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
   }
 
-  .scale-legend {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
-    padding: 0.85rem 1rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    margin-bottom: 1.5rem;
-    position: sticky;
-    top: 55px; z-index: 5;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  .step-question {
+    animation: fadeUp 0.38s ease both;
   }
 
-  .scale-legend-item {
-    text-align: center;
-    font-size: 0.6rem;
-    color: var(--muted);
-    line-height: 1.4;
+  .step-q-num {
+    font-size: 0.63rem;
+    color: var(--accent-light);
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 0.85rem;
   }
-  .scale-legend-item span { display: block; font-size: 0.82rem; color: var(--accent); font-weight: 600; margin-bottom: 0.15rem; }
 
-  .question-item {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 1.5rem;
+  .step-q-text {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(1.45rem, 3.5vw, 2rem);
+    line-height: 1.35;
+    color: var(--text);
+  }
+
+  .option-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    animation: fadeUp 0.38s ease 0.08s both;
+  }
+
+  .option-btn {
+    display: flex;
     align-items: center;
-    padding: 1rem 1rem;
+    gap: 1rem;
+    padding: 0.85rem 1.25rem;
+    border: 1.5px solid var(--border);
     border-radius: 10px;
-    margin-bottom: 5px;
-    transition: background 0.2s, box-shadow 0.2s;
-    animation: fadeUp 0.45s ease both;
-    border: 1.5px solid transparent;
-  }
-
-  .question-item:not(.answered):hover { background: rgba(255,255,255,0.6); }
-
-  .question-item.answered {
     background: var(--surface);
-    border-color: var(--border);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.12s;
+    text-align: left;
+    font-family: 'DM Sans', sans-serif;
+    width: 100%;
     box-shadow: 0 1px 4px rgba(0,0,0,0.04);
   }
 
-  .q-num { font-size: 0.64rem; color: var(--accent-light); font-weight: 600; margin-bottom: 0.2rem; letter-spacing: 0.04em; }
-
-  .q-text {
-    font-size: 0.92rem;
-    line-height: 1.55;
-    color: var(--text2);
-    transition: color 0.3s;
+  .option-btn:hover:not(.selected) {
+    border-color: var(--accent-light);
+    background: var(--accent-bg);
+    transform: translateX(3px);
   }
-  .question-item.answered .q-text { color: var(--text); }
 
-  .q-dot {
-    display: inline-block;
-    width: 7px; height: 7px;
+  .option-btn.selected {
+    border-color: var(--accent);
+    background: var(--accent);
+    box-shadow: 0 3px 12px rgba(139,94,60,0.28);
+    transform: none;
+  }
+
+  .opt-num {
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
-    background: var(--accent-light);
-    margin-left: 6px;
-    vertical-align: middle;
-    opacity: 0.7;
-  }
-
-  .radio-group {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
-    min-width: 238px;
-  }
-
-  .radio-group input { display: none; }
-
-  .radio-group label {
-    display: flex; align-items: center; justify-content: center;
-    height: 38px;
-    cursor: pointer;
     border: 1.5px solid var(--border);
-    border-radius: 7px;
-    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 600;
+    flex-shrink: 0;
     color: var(--muted);
-    font-weight: 500;
-    transition: all 0.15s;
     background: var(--bg2);
+    transition: all 0.15s;
   }
 
-  .radio-group label:hover {
+  .option-btn:hover:not(.selected) .opt-num {
     border-color: var(--accent-light);
     color: var(--accent);
-    background: var(--accent-bg);
+    background: #fff;
   }
 
-  .radio-group input:checked + label {
-    background: var(--accent);
+  .option-btn.selected .opt-num {
+    border-color: rgba(255,255,255,0.45);
     color: #fff;
-    border-color: var(--accent);
-    box-shadow: 0 2px 8px rgba(139,94,60,0.3);
+    background: rgba(255,255,255,0.18);
   }
 
+  .opt-label {
+    font-size: 0.92rem;
+    color: var(--text2);
+    font-weight: 400;
+    transition: color 0.15s;
+  }
+
+  .option-btn:hover:not(.selected) .opt-label { color: var(--accent); }
+  .option-btn.selected .opt-label { color: #fff; font-weight: 500; }
+
+  /* ── QUIZ FOOTER ── */
   .quiz-footer {
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
     background: rgba(245,240,235,0.97);
@@ -276,10 +277,31 @@
     justify-content: space-between;
     align-items: center;
     backdrop-filter: blur(12px);
+    gap: 1rem;
   }
 
-  .answered-count { font-size: 0.82rem; color: var(--text2); }
-  .answered-count strong { color: var(--accent); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text2);
+    border: 1.5px solid var(--border);
+    padding: 0.9rem 1.5rem;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 10px;
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+  .btn-ghost:disabled { opacity: 0.3; cursor: not-allowed; }
+  .btn-ghost[style*="hidden"] { visibility: hidden; }
+
+  .footer-step {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    flex: 1;
+  }
+  .footer-step strong { color: var(--text2); }
 
   /* ── RESULT ── */
   #result { justify-content: center; align-items: center; padding: 2rem; }
@@ -431,13 +453,18 @@
     to { opacity: 1; transform: translateY(0); }
   }
 
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
   @media (max-width: 600px) {
     .quiz-header { padding: 0.8rem 1rem; }
-    .questions-wrap { padding: 1rem 0.75rem 5rem; }
-    .scale-legend { display: none; }
-    .question-item { grid-template-columns: 1fr; gap: 0.75rem; }
-    .radio-group { min-width: 0; width: 100%; }
-    .radio-group label { height: 33px; font-size: 0.75rem; }
+    .step-wrap { padding: 2rem 1rem 8rem; gap: 2rem; }
+    .step-q-text { font-size: 1.3rem; }
+    .option-btn { padding: 0.75rem 1rem; gap: 0.75rem; }
+    .opt-label { font-size: 0.88rem; }
+    .quiz-footer { padding: 0.8rem 1rem; }
     .score-row { flex-direction: column; text-align: center; }
     .subscores { grid-template-columns: 1fr; }
     .actions { flex-direction: column; }
@@ -462,7 +489,7 @@
       </div>
     </div>
 
-    <button class="btn-primary" onclick="showPage('quiz')">Začať dotazník →</button>
+    <button class="btn-primary" onclick="startQuiz()">Začať dotazník →</button>
   </div>
 </div>
 
@@ -473,25 +500,21 @@
     <div class="progress-track">
       <div class="progress-fill" id="progressFill"></div>
     </div>
-    <span class="progress-label" id="progressLabel">0 / 21</span>
+    <span class="progress-label" id="progressLabel">1 / 21</span>
   </div>
 
-  <div class="questions-wrap">
-    <div class="scale-legend">
-      <div class="scale-legend-item"><span>1</span>nikdy</div>
-      <div class="scale-legend-item"><span>2</span>raz za čas</div>
-      <div class="scale-legend-item"><span>3</span>zriedka</div>
-      <div class="scale-legend-item"><span>4</span>niekedy</div>
-      <div class="scale-legend-item"><span>5</span>často</div>
-      <div class="scale-legend-item"><span>6</span>veľmi často</div>
-      <div class="scale-legend-item"><span>7</span>vždy</div>
+  <div class="step-wrap">
+    <div class="step-question" id="stepQuestion">
+      <div class="step-q-num" id="stepNum">Otázka 01</div>
+      <div class="step-q-text" id="stepText"></div>
     </div>
-    <div id="questionsList"></div>
+    <div class="option-list" id="optionList"></div>
   </div>
 
   <div class="quiz-footer">
-    <span class="answered-count">Zodpovedané: <strong id="answeredCount">0</strong> / 21</span>
-    <button class="btn-primary" id="submitBtn" onclick="submitQuiz()" disabled>Vyhodnotiť</button>
+    <button class="btn-ghost" id="prevBtn" onclick="goStep(-1)">← Späť</button>
+    <div class="footer-step"><strong id="footerCurrent">1</strong> z 21</div>
+    <button class="btn-primary" id="nextBtn" onclick="goStep(1)" disabled>Ďalej →</button>
   </div>
 </div>
 
@@ -535,7 +558,7 @@
     </div>
 
     <div class="actions">
-      <button class="btn-secondary" onclick="showPage('quiz')">Zmeniť odpovede</button>
+      <button class="btn-secondary" onclick="reviewAnswers()">Zmeniť odpovede</button>
       <button class="btn-primary" onclick="restart()">Nový test</button>
     </div>
   </div>
@@ -566,57 +589,95 @@ const questions = [
   { text: "Bol som plný úzkosti a obáv.", inv: false },
 ];
 
+const labels = ['nikdy', 'raz za čas', 'zriedka', 'niekedy', 'často', 'veľmi často', 'vždy'];
+
 const physQ = [0,3,6,9,15,19];
 const emoQ  = [1,4,7,10,13,16];
 const menQ  = [2,5,8,11,12,14,17,18,20];
+
 const answers = new Array(21).fill(null);
+let currentStep = 0;
+let autoAdvanceTimer = null;
 
-function buildQuestions() {
-  const list = document.getElementById('questionsList');
-  list.innerHTML = questions.map((q, i) => `
-    <div class="question-item" id="qi${i}" style="animation-delay:${i*0.03}s">
-      <div>
-        <div class="q-num">${String(i+1).padStart(2,'0')}</div>
-        <div class="q-text">${q.text}${q.inv ? '<span class="q-dot" title="Pozitívna otázka"></span>' : ''}</div>
-      </div>
-      <div class="radio-group">
-        ${[1,2,3,4,5,6,7].map(v => `
-          <input type="radio" name="q${i}" id="q${i}v${v}" value="${v}">
-          <label for="q${i}v${v}">${v}</label>
-        `).join('')}
-      </div>
-    </div>
-  `).join('');
+function renderStep(direction = 1) {
+  const i = currentStep;
+  const q = questions[i];
 
-  list.querySelectorAll('input[type=radio]').forEach(inp => {
-    inp.addEventListener('change', () => {
-      const idx = parseInt(inp.name.slice(1));
-      answers[idx] = parseInt(inp.value);
-      document.getElementById(`qi${idx}`).classList.add('answered');
-      updateProgress();
-    });
+  // Animate question in
+  const stepQ = document.getElementById('stepQuestion');
+  const optList = document.getElementById('optionList');
+  stepQ.style.animation = 'none';
+  optList.style.animation = 'none';
+  requestAnimationFrame(() => {
+    stepQ.style.animation = `fadeUp 0.38s ease both`;
+    optList.style.animation = `fadeUp 0.38s ease 0.08s both`;
   });
+
+  // Update header
+  document.getElementById('progressFill').style.width = `${(i / 21) * 100}%`;
+  document.getElementById('progressLabel').textContent = `${i + 1} / 21`;
+  document.getElementById('footerCurrent').textContent = i + 1;
+
+  // Question
+  document.getElementById('stepNum').textContent = `Otázka ${String(i + 1).padStart(2, '0')}`;
+  document.getElementById('stepText').textContent = q.text;
+
+  // Options
+  optList.innerHTML = labels.map((label, j) => {
+    const v = j + 1;
+    const sel = answers[i] === v;
+    return `<button class="option-btn${sel ? ' selected' : ''}" onclick="selectAnswer(${v})">
+      <span class="opt-num">${v}</span>
+      <span class="opt-label">${label}</span>
+    </button>`;
+  }).join('');
+
+  // Nav buttons
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  prevBtn.disabled = i === 0;
+  prevBtn.style.visibility = i === 0 ? 'hidden' : 'visible';
+  nextBtn.textContent = i === 20 ? 'Vyhodnotiť' : 'Ďalej →';
+  nextBtn.disabled = answers[i] === null;
 }
 
-function updateProgress() {
-  const count = answers.filter(a => a !== null).length;
-  document.getElementById('answeredCount').textContent = count;
-  document.getElementById('progressLabel').textContent = `${count} / 21`;
-  document.getElementById('progressFill').style.width = `${(count/21)*100}%`;
-  document.getElementById('submitBtn').disabled = count < 21;
-}
+window.selectAnswer = function(value) {
+  clearTimeout(autoAdvanceTimer);
+  answers[currentStep] = value;
+  renderStep();
+
+  // Auto-advance (not on last question)
+  if (currentStep < 20) {
+    autoAdvanceTimer = setTimeout(() => {
+      currentStep++;
+      renderStep();
+    }, 480);
+  }
+};
+
+window.goStep = function(dir) {
+  clearTimeout(autoAdvanceTimer);
+  if (dir === 1 && currentStep === 20) {
+    submitQuiz();
+    return;
+  }
+  const next = currentStep + dir;
+  if (next < 0 || next > 20) return;
+  currentStep = next;
+  renderStep(dir);
+};
 
 function sub(indices) {
-  const v = indices.map(i=>answers[i]).filter(x=>x!==null);
-  return v.length ? (v.reduce((a,b)=>a+b,0)/v.length).toFixed(1) : '–';
+  const v = indices.map(i => answers[i]).filter(x => x !== null);
+  return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1) : '–';
 }
 
-window.submitQuiz = function() {
-  if (answers.some(a=>a===null)) return;
-  const A = [0,1,3,4,6,7,8,9,10,11,12,13,14,15,16,17,20].reduce((s,i)=>s+answers[i],0);
-  const B = [2,5,18,19].reduce((s,i)=>s+answers[i],0);
+function submitQuiz() {
+  if (answers.some(a => a === null)) return;
+  const A = [0,1,3,4,6,7,8,9,10,11,12,13,14,15,16,17,20].reduce((s,i) => s + answers[i], 0);
+  const B = [2,5,18,19].reduce((s,i) => s + answers[i], 0);
   showResult((A + (32 - B)) / 21);
-};
+}
 
 function showResult(bq) {
   const score = parseFloat(bq.toFixed(2));
@@ -625,22 +686,22 @@ function showResult(bq) {
   document.getElementById('emoScore').textContent = sub(emoQ);
   document.getElementById('menScore').textContent = sub(menQ);
 
-  const pct = Math.min(((score-1)/6)*100, 100);
+  const pct = Math.min(((score - 1) / 6) * 100, 100);
 
   const levels = [
-    { max:2,    color:'#4a7c5c', zone:'z1', title:'Bez vážnych problémov',
+    { max: 2,    color: '#4a7c5c', zone: 'z1', title: 'Bez vážnych problémov',
       short: 'Vaše výsledky naznačujú, že v súčasnosti nemáte vážne problémy so syndrómom vyhorenia. Pokračujte v starostlivosti o svoju pohodu a udržujte zdravé návyky.' },
-    { max:3,    color:'#6a9e5c', zone:'z2', title:'Uspokojivý stav',
+    { max: 3,    color: '#6a9e5c', zone: 'z2', title: 'Uspokojivý stav',
       short: 'Výsledok je uspokojivý, no stojí za to sledovať signály únavy a stresu. Venujte pozornosť rovnováhe medzi prácou a osobným životom.' },
-    { max:3.99, color:'#b87333', zone:'z3', title:'Odporúča sa zamyslenie',
+    { max: 3.99, color: '#b87333', zone: 'z3', title: 'Odporúča sa zamyslenie',
       short: 'Odporúča sa zamyslieť nad životom a prácou a ujasniť si rebríček hodnôt. Môžu pomôcť relaxačné techniky, pravidelný pohyb a rozhovor s blízkymi.' },
-    { max:4.99, color:'#c45a2a', zone:'z4', title:'Syndróm vyhorenia',
+    { max: 4.99, color: '#c45a2a', zone: 'z4', title: 'Syndróm vyhorenia',
       short: 'Je preukázaná prítomnosť syndrómu vyhorenia. Treba bezpodmienečne konať. Odporúča sa obrátiť na psychoterapeutické stredisko alebo psychoterapeuta, ideálne so zameraním na logoterapiu a existenciálnu psychoterapiu.' },
-    { max:7,    color:'#b84a3c', zone:'z5', title:'Akútna kríza — konajte ihneď',
+    { max: 7,    color: '#b84a3c', zone: 'z5', title: 'Akútna kríza — konajte ihneď',
       short: 'Ide o havarijný signál. Obráťte sa bezodkladne na najbližšieho klinického psychológa alebo psychoterapeuta. Ide o stav akútnej krízy, ktorý si vyžaduje odbornú pomoc.' },
   ];
 
-  const lvl = levels.find(l => score <= l.max) || levels[levels.length-1];
+  const lvl = levels.find(l => score <= l.max) || levels[levels.length - 1];
 
   document.getElementById('scoreCircle').style.borderColor = lvl.color;
   document.getElementById('scoreNum').style.color = lvl.color;
@@ -661,17 +722,27 @@ function showResult(bq) {
 window.showPage = function(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  window.scrollTo(0,0);
+  window.scrollTo(0, 0);
+};
+
+window.startQuiz = function() {
+  currentStep = 0;
+  renderStep();
+  showPage('quiz');
+};
+
+window.reviewAnswers = function() {
+  currentStep = 0;
+  renderStep();
+  showPage('quiz');
 };
 
 window.restart = function() {
   answers.fill(null);
-  buildQuestions();
-  updateProgress();
+  currentStep = 0;
+  renderStep();
   showPage('intro');
 };
-
-buildQuestions();
 </script>
 </body>
 </html>

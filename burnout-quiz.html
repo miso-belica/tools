@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BM Dotazník Vyhorenia</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f0eb;
+    --bg2: #ede7df;
+    --surface: #ffffff;
+    --border: #ddd6cc;
+    --text: #2c2520;
+    --text2: #5c5047;
+    --muted: #9e9087;
+    --accent: #8b5e3c;
+    --accent-light: #c4926a;
+    --accent-bg: #f2e8df;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 70% 50% at 15% 10%, rgba(196,146,106,0.1) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 85% 90%, rgba(139,94,60,0.07) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page { display: none; min-height: 100vh; position: relative; z-index: 1; }
+  .page.active { display: flex; flex-direction: column; }
+
+  /* ── INTRO ── */
+  #intro { justify-content: center; align-items: center; padding: 2rem; text-align: center; }
+
+  .intro-inner {
+    max-width: 520px;
+    animation: fadeUp 0.7s ease both;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--accent-bg);
+    color: var(--accent);
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 0.4rem 1rem;
+    border-radius: 100px;
+    margin-bottom: 2rem;
+    border: 1px solid rgba(139,94,60,0.22);
+  }
+
+  h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(2.8rem, 8vw, 4.8rem);
+    line-height: 1.05;
+    color: var(--text);
+    margin-bottom: 0.4rem;
+  }
+  h1 em { font-style: italic; color: var(--accent); }
+
+  .subtitle { font-size: 0.88rem; color: var(--muted); margin-bottom: 2.5rem; }
+
+  .intro-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.5rem 1.75rem;
+    text-align: left;
+    margin-bottom: 2.5rem;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.05);
+  }
+
+  .intro-card p {
+    font-size: 0.9rem;
+    line-height: 1.8;
+    color: var(--text2);
+  }
+
+  .intro-card strong { color: var(--accent); font-weight: 500; }
+
+  .intro-meta {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .meta-item { font-size: 0.75rem; color: var(--muted); }
+  .meta-item strong { display: block; color: var(--text2); font-size: 0.85rem; font-weight: 500; }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 0.95rem 2.5rem;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 10px;
+    box-shadow: 0 2px 14px rgba(139,94,60,0.28);
+    letter-spacing: 0.02em;
+  }
+  .btn-primary:hover { background: #7a5234; transform: translateY(-2px); box-shadow: 0 6px 22px rgba(139,94,60,0.35); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* ── QUIZ ── */
+  #quiz { padding: 0; }
+
+  .quiz-header {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(245,240,235,0.96);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    padding: 0.85rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .quiz-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.05rem;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .progress-track {
+    flex: 1; height: 5px;
+    background: var(--border);
+    border-radius: 100px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-light), var(--accent));
+    border-radius: 100px;
+    transition: width 0.4s ease;
+    width: 0%;
+  }
+
+  .progress-label { font-size: 0.72rem; color: var(--muted); font-weight: 500; flex-shrink: 0; }
+
+  .questions-wrap {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 1.5rem 2rem 6rem;
+  }
+
+  .scale-legend {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    padding: 0.85rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 1.5rem;
+    position: sticky;
+    top: 55px; z-index: 5;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+
+  .scale-legend-item {
+    text-align: center;
+    font-size: 0.6rem;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+  .scale-legend-item span { display: block; font-size: 0.82rem; color: var(--accent); font-weight: 600; margin-bottom: 0.15rem; }
+
+  .question-item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1.5rem;
+    align-items: center;
+    padding: 1rem 1rem;
+    border-radius: 10px;
+    margin-bottom: 5px;
+    transition: background 0.2s, box-shadow 0.2s;
+    animation: fadeUp 0.45s ease both;
+    border: 1.5px solid transparent;
+  }
+
+  .question-item:not(.answered):hover { background: rgba(255,255,255,0.6); }
+
+  .question-item.answered {
+    background: var(--surface);
+    border-color: var(--border);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+
+  .q-num { font-size: 0.64rem; color: var(--accent-light); font-weight: 600; margin-bottom: 0.2rem; letter-spacing: 0.04em; }
+
+  .q-text {
+    font-size: 0.92rem;
+    line-height: 1.55;
+    color: var(--text2);
+    transition: color 0.3s;
+  }
+  .question-item.answered .q-text { color: var(--text); }
+
+  .q-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent-light);
+    margin-left: 6px;
+    vertical-align: middle;
+    opacity: 0.7;
+  }
+
+  .radio-group {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    min-width: 238px;
+  }
+
+  .radio-group input { display: none; }
+
+  .radio-group label {
+    display: flex; align-items: center; justify-content: center;
+    height: 38px;
+    cursor: pointer;
+    border: 1.5px solid var(--border);
+    border-radius: 7px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-weight: 500;
+    transition: all 0.15s;
+    background: var(--bg2);
+  }
+
+  .radio-group label:hover {
+    border-color: var(--accent-light);
+    color: var(--accent);
+    background: var(--accent-bg);
+  }
+
+  .radio-group input:checked + label {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    box-shadow: 0 2px 8px rgba(139,94,60,0.3);
+  }
+
+  .quiz-footer {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+    background: rgba(245,240,235,0.97);
+    border-top: 1px solid var(--border);
+    padding: 0.9rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    backdrop-filter: blur(12px);
+  }
+
+  .answered-count { font-size: 0.82rem; color: var(--text2); }
+  .answered-count strong { color: var(--accent); }
+
+  /* ── RESULT ── */
+  #result { justify-content: center; align-items: center; padding: 2rem; }
+
+  .result-inner {
+    max-width: 600px;
+    width: 100%;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  .score-row {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.75rem 2rem;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+  }
+
+  .score-circle {
+    width: 110px; height: 110px;
+    border-radius: 50%;
+    border: 3px solid var(--border);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: border-color 0.5s;
+  }
+
+  .score-big {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2.6rem;
+    line-height: 1;
+    transition: color 0.5s;
+  }
+
+  .score-unit { font-size: 0.6rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 0.2rem; }
+
+  .score-info h2 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.4rem;
+    color: var(--text);
+    margin-bottom: 0.4rem;
+  }
+
+  .score-info p { font-size: 0.83rem; color: var(--text2); line-height: 1.65; }
+
+  .bar-section { margin-bottom: 1.25rem; }
+
+  .bar-track {
+    width: 100%; height: 8px;
+    background: var(--bg2);
+    border-radius: 100px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    margin-bottom: 0.6rem;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 100px;
+    width: 0%;
+    transition: width 1.2s cubic-bezier(.22,1,.36,1), background 0.5s;
+  }
+
+  .zones {
+    display: flex;
+    gap: 4px;
+  }
+
+  .zone {
+    flex: 1;
+    font-size: 0.58rem;
+    text-align: center;
+    padding: 0.45rem 0.15rem;
+    border-radius: 6px;
+    line-height: 1.4;
+    color: var(--muted);
+    background: var(--bg2);
+    border: 1.5px solid transparent;
+    transition: all 0.3s;
+  }
+  .zone b { display: block; font-size: 0.68rem; margin-bottom: 0.15rem; }
+  .zone.active { background: var(--surface); border-color: currentColor; font-weight: 500; color: inherit; }
+
+  .subscores {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .sub-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.1rem;
+    text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+
+  .sub-val {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.9rem;
+    color: var(--accent);
+  }
+
+  .sub-name {
+    font-size: 0.63rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 0.3rem;
+    line-height: 1.4;
+  }
+
+  .result-msg {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid;
+    border-radius: 0 12px 12px 0;
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+  }
+
+  .result-msg p { font-size: 0.88rem; line-height: 1.78; color: var(--text2); }
+
+  .actions { display: flex; gap: 0.75rem; }
+
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--text2);
+    border: 1.5px solid var(--border);
+    padding: 0.9rem 1.5rem;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 10px;
+  }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 600px) {
+    .quiz-header { padding: 0.8rem 1rem; }
+    .questions-wrap { padding: 1rem 0.75rem 5rem; }
+    .scale-legend { display: none; }
+    .question-item { grid-template-columns: 1fr; gap: 0.75rem; }
+    .radio-group { min-width: 0; width: 100%; }
+    .radio-group label { height: 33px; font-size: 0.75rem; }
+    .score-row { flex-direction: column; text-align: center; }
+    .subscores { grid-template-columns: 1fr; }
+    .actions { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<!-- INTRO -->
+<div id="intro" class="page active">
+  <div class="intro-inner" style="margin:auto;">
+    <div class="chip">Burnout Measure · BM</div>
+    <h1>Syndróm<br><em>Vyhorenia</em></h1>
+    <p class="subtitle">Štandardizovaný dotazník psychického vyhorenia</p>
+
+    <div class="intro-card">
+      <p>Dotazník meria tri aspekty celkového vyčerpania: <strong>fyzické</strong>, <strong>emocionálne</strong> a <strong>psychické</strong>. Pri každej otázke zvoľte, ako často daný pocit zažívate.</p>
+      <div class="intro-meta">
+        <div class="meta-item"><strong>21 otázok</strong>Škála 1 – 7</div>
+        <div class="meta-item"><strong>~3 minúty</strong>Čas vyplnenia</div>
+        <div class="meta-item"><strong>Anonymné</strong>Žiadne dáta sa neukladajú</div>
+      </div>
+    </div>
+
+    <button class="btn-primary" onclick="showPage('quiz')">Začať dotazník →</button>
+  </div>
+</div>
+
+<!-- QUIZ -->
+<div id="quiz" class="page">
+  <div class="quiz-header">
+    <span class="quiz-title">BM Dotazník</span>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <span class="progress-label" id="progressLabel">0 / 21</span>
+  </div>
+
+  <div class="questions-wrap">
+    <div class="scale-legend">
+      <div class="scale-legend-item"><span>1</span>nikdy</div>
+      <div class="scale-legend-item"><span>2</span>raz za čas</div>
+      <div class="scale-legend-item"><span>3</span>zriedka</div>
+      <div class="scale-legend-item"><span>4</span>niekedy</div>
+      <div class="scale-legend-item"><span>5</span>často</div>
+      <div class="scale-legend-item"><span>6</span>veľmi často</div>
+      <div class="scale-legend-item"><span>7</span>vždy</div>
+    </div>
+    <div id="questionsList"></div>
+  </div>
+
+  <div class="quiz-footer">
+    <span class="answered-count">Zodpovedané: <strong id="answeredCount">0</strong> / 21</span>
+    <button class="btn-primary" id="submitBtn" onclick="submitQuiz()" disabled>Vyhodnotiť</button>
+  </div>
+</div>
+
+<!-- RESULT -->
+<div id="result" class="page">
+  <div class="result-inner" style="margin:auto;">
+    <div class="chip" style="margin-bottom:1.25rem;">Váš výsledok</div>
+
+    <div class="score-row">
+      <div class="score-circle" id="scoreCircle">
+        <div class="score-big" id="scoreNum">–</div>
+        <div class="score-unit">BQ</div>
+      </div>
+      <div class="score-info">
+        <h2 id="resultTitle">–</h2>
+        <p id="resultText"></p>
+      </div>
+    </div>
+
+    <div class="bar-section">
+      <div class="bar-track">
+        <div class="bar-fill" id="resultBar"></div>
+      </div>
+      <div class="zones">
+        <div class="zone" id="z1" style="color:#4a7c5c"><b>≤ 2</b>Bez problémov</div>
+        <div class="zone" id="z2" style="color:#6a9e5c"><b>2–3</b>Uspokojivé</div>
+        <div class="zone" id="z3" style="color:#b87333"><b>3–4</b>Pozor</div>
+        <div class="zone" id="z4" style="color:#c45a2a"><b>4–5</b>Vyhorenie</div>
+        <div class="zone" id="z5" style="color:#b84a3c"><b>&gt; 5</b>Kríza</div>
+      </div>
+    </div>
+
+    <div class="subscores">
+      <div class="sub-card"><div class="sub-val" id="physScore">–</div><div class="sub-name">Fyzické<br>vyčerpanie</div></div>
+      <div class="sub-card"><div class="sub-val" id="emoScore">–</div><div class="sub-name">Emocionálne<br>vyčerpanie</div></div>
+      <div class="sub-card"><div class="sub-val" id="menScore">–</div><div class="sub-name">Psychické<br>vyčerpanie</div></div>
+    </div>
+
+    <div class="result-msg" id="resultMsg">
+      <p id="resultDetail"></p>
+    </div>
+
+    <div class="actions">
+      <button class="btn-secondary" onclick="showPage('quiz')">Zmeniť odpovede</button>
+      <button class="btn-primary" onclick="restart()">Nový test</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+const questions = [
+  { text: "Bol som unavený.", inv: false },
+  { text: "Bol som v depresii (tiesni).", inv: false },
+  { text: "Prežíval som krásny deň.", inv: true },
+  { text: "Bol som telesne vyčerpaný.", inv: false },
+  { text: "Bol som citovo vyčerpaný.", inv: false },
+  { text: "Bol som šťastný.", inv: true },
+  { text: "Cítil som sa zničený.", inv: false },
+  { text: "Nemohol som sa vzchopiť a pokračovať ďalej.", inv: false },
+  { text: "Bol som nešťastný.", inv: false },
+  { text: "Cítil som sa uštvaný a uťahaný.", inv: false },
+  { text: "Cítil som sa akoby chytený do pasce.", inv: false },
+  { text: "Cítil som sa akoby som bol nula (bezcenný).", inv: false },
+  { text: "Cítil som sa utrápený.", inv: false },
+  { text: "Ťažili ma starosti.", inv: false },
+  { text: "Cítil som sa sklamaný a rozčarovaný.", inv: false },
+  { text: "Bol som slabý a na najlepšej ceste ochorieť.", inv: false },
+  { text: "Cítil som sa beznádejne.", inv: false },
+  { text: "Cítil som sa odmietnutý a odvrhnutý.", inv: false },
+  { text: "Cítil som sa plný optimizmu.", inv: true },
+  { text: "Cítil som sa plný energie.", inv: true },
+  { text: "Bol som plný úzkosti a obáv.", inv: false },
+];
+
+const physQ = [0,3,6,9,15,19];
+const emoQ  = [1,4,7,10,13,16];
+const menQ  = [2,5,8,11,12,14,17,18,20];
+const answers = new Array(21).fill(null);
+
+function buildQuestions() {
+  const list = document.getElementById('questionsList');
+  list.innerHTML = questions.map((q, i) => `
+    <div class="question-item" id="qi${i}" style="animation-delay:${i*0.03}s">
+      <div>
+        <div class="q-num">${String(i+1).padStart(2,'0')}</div>
+        <div class="q-text">${q.text}${q.inv ? '<span class="q-dot" title="Pozitívna otázka"></span>' : ''}</div>
+      </div>
+      <div class="radio-group">
+        ${[1,2,3,4,5,6,7].map(v => `
+          <input type="radio" name="q${i}" id="q${i}v${v}" value="${v}">
+          <label for="q${i}v${v}">${v}</label>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('input[type=radio]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const idx = parseInt(inp.name.slice(1));
+      answers[idx] = parseInt(inp.value);
+      document.getElementById(`qi${idx}`).classList.add('answered');
+      updateProgress();
+    });
+  });
+}
+
+function updateProgress() {
+  const count = answers.filter(a => a !== null).length;
+  document.getElementById('answeredCount').textContent = count;
+  document.getElementById('progressLabel').textContent = `${count} / 21`;
+  document.getElementById('progressFill').style.width = `${(count/21)*100}%`;
+  document.getElementById('submitBtn').disabled = count < 21;
+}
+
+function sub(indices) {
+  const v = indices.map(i=>answers[i]).filter(x=>x!==null);
+  return v.length ? (v.reduce((a,b)=>a+b,0)/v.length).toFixed(1) : '–';
+}
+
+window.submitQuiz = function() {
+  if (answers.some(a=>a===null)) return;
+  const A = [0,1,3,4,6,7,8,9,10,11,12,13,14,15,16,17,20].reduce((s,i)=>s+answers[i],0);
+  const B = [2,5,18,19].reduce((s,i)=>s+answers[i],0);
+  showResult((A + (32 - B)) / 21);
+};
+
+function showResult(bq) {
+  const score = parseFloat(bq.toFixed(2));
+  document.getElementById('scoreNum').textContent = score.toFixed(2);
+  document.getElementById('physScore').textContent = sub(physQ);
+  document.getElementById('emoScore').textContent = sub(emoQ);
+  document.getElementById('menScore').textContent = sub(menQ);
+
+  const pct = Math.min(((score-1)/6)*100, 100);
+
+  const levels = [
+    { max:2,    color:'#4a7c5c', zone:'z1', title:'Bez vážnych problémov',
+      short: 'Vaše výsledky naznačujú, že v súčasnosti nemáte vážne problémy so syndrómom vyhorenia. Pokračujte v starostlivosti o svoju pohodu a udržujte zdravé návyky.' },
+    { max:3,    color:'#6a9e5c', zone:'z2', title:'Uspokojivý stav',
+      short: 'Výsledok je uspokojivý, no stojí za to sledovať signály únavy a stresu. Venujte pozornosť rovnováhe medzi prácou a osobným životom.' },
+    { max:3.99, color:'#b87333', zone:'z3', title:'Odporúča sa zamyslenie',
+      short: 'Odporúča sa zamyslieť nad životom a prácou a ujasniť si rebríček hodnôt. Môžu pomôcť relaxačné techniky, pravidelný pohyb a rozhovor s blízkymi.' },
+    { max:4.99, color:'#c45a2a', zone:'z4', title:'Syndróm vyhorenia',
+      short: 'Je preukázaná prítomnosť syndrómu vyhorenia. Treba bezpodmienečne konať. Odporúča sa obrátiť na psychoterapeutické stredisko alebo psychoterapeuta, ideálne so zameraním na logoterapiu a existenciálnu psychoterapiu.' },
+    { max:7,    color:'#b84a3c', zone:'z5', title:'Akútna kríza — konajte ihneď',
+      short: 'Ide o havarijný signál. Obráťte sa bezodkladne na najbližšieho klinického psychológa alebo psychoterapeuta. Ide o stav akútnej krízy, ktorý si vyžaduje odbornú pomoc.' },
+  ];
+
+  const lvl = levels.find(l => score <= l.max) || levels[levels.length-1];
+
+  document.getElementById('scoreCircle').style.borderColor = lvl.color;
+  document.getElementById('scoreNum').style.color = lvl.color;
+  document.getElementById('resultBar').style.background = lvl.color;
+  document.getElementById('resultMsg').style.borderLeftColor = lvl.color;
+  document.getElementById('resultTitle').textContent = lvl.title;
+  document.getElementById('resultText').textContent = '';
+  document.getElementById('resultDetail').textContent = lvl.short;
+
+  ['z1','z2','z3','z4','z5'].forEach(z =>
+    document.getElementById(z).classList.toggle('active', z === lvl.zone)
+  );
+
+  showPage('result');
+  setTimeout(() => { document.getElementById('resultBar').style.width = `${pct}%`; }, 150);
+}
+
+window.showPage = function(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+};
+
+window.restart = function() {
+  answers.fill(null);
+  buildQuestions();
+  updateProgress();
+  showPage('intro');
+};
+
+buildQuestions();
+</script>
+</body>
+</html>

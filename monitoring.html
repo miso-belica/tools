@@ -30,9 +30,18 @@ html, body {
 }
 
 main {
-  max-width: 920px;
-  margin: 0 auto;
-  padding: 48px 24px;
+  max-width: none;
+  margin: 0;
+  padding: 48px 16px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 56px;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 h1 {
@@ -41,7 +50,29 @@ h1 {
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 2px;
-  margin-bottom: 56px;
+}
+
+.range {
+  display: flex;
+  gap: 4px;
+  background: #13161b;
+  padding: 4px;
+  border-radius: 8px;
+}
+.range button {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font: 500 12px/1 var(--mono);
+  padding: 6px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.range button:hover { color: var(--text); }
+.range button.active {
+  background: #1a1e25;
+  color: var(--text);
 }
 
 .graph {
@@ -142,7 +173,14 @@ footer {
 </head>
 <body>
 <main>
-  <h1>Net Monitor</h1>
+  <header>
+    <h1>Net Monitor</h1>
+    <div class="range" role="tablist">
+      <button data-range="1h">1h</button>
+      <button data-range="24h">24h</button>
+      <button data-range="42d">42d</button>
+    </div>
+  </header>
 
   <section class="graph" id="g-google">
     <div class="graph-head">
@@ -180,8 +218,24 @@ const STORAGE_KEY = 'net-monitor-v1';
 const FAST_MS = 300;
 const SLOW_MS = 1000;
 const TIMEOUT_MS = 3000;
-const BAR_PX = 8;
-const GAP_PX = 2;
+const TARGET_BAR_PX = 4;
+const RANGES = {
+  '1h':  { minutes: 60,         maxBars: 60  },
+  '24h': { minutes: 24 * 60,    maxBars: 288 },
+  '42d': { minutes: RETENTION_MIN, maxBars: 504 },
+};
+const DEFAULT_RANGE = '24h';
+
+const getRange = () => {
+  const u = new URL(location.href);
+  const r = u.searchParams.get('range');
+  return RANGES[r] ? r : DEFAULT_RANGE;
+};
+const setRange = (r) => {
+  const u = new URL(location.href);
+  u.searchParams.set('range', r);
+  history.replaceState(null, '', u);
+};
 
 const slotOf = (t) => Math.floor(t / MIN);
 
@@ -273,16 +327,27 @@ const computeStats = (arr, classify, windowMin) => {
   return ((up / measured) * 100).toFixed(1) + '%';
 };
 
-const renderGraph = (sectionId, arr, classify, lastFmt) => {
+const SEVERITY = { red: 3, orange: 2, green: 1 };
+const worstClass = (a, b) => {
+  if (!a) return b;
+  if (!b) return a;
+  return SEVERITY[a] >= SEVERITY[b] ? a : b;
+};
+
+const renderGraph = (sectionId, arr, classify, lastFmt, range) => {
   const section = document.getElementById(sectionId);
   const barsEl = section.querySelector('.bars');
   const dot = section.querySelector('.dot');
   const statusEl = section.querySelector('.graph-status');
 
+  const cfg = RANGES[range];
   const width = barsEl.clientWidth || 600;
-  const n = Math.max(20, Math.floor((width + GAP_PX) / (BAR_PX + GAP_PX)));
+  const n = Math.max(20, Math.min(cfg.maxBars, Math.floor(width / TARGET_BAR_PX)));
+  const slotsPerBar = Math.max(1, Math.ceil(cfg.minutes / n));
+  const totalSlots = slotsPerBar * n;
+
   const nowSlot = slotOf(Date.now());
-  const startSlot = nowSlot - n + 1;
+  const startSlot = nowSlot - totalSlots + 1;
 
   const map = new Map();
   for (const e of arr) {
@@ -290,22 +355,46 @@ const renderGraph = (sectionId, arr, classify, lastFmt) => {
   }
 
   const frag = document.createDocumentFragment();
-  for (let s = startSlot; s <= nowSlot; s++) {
-    const e = map.get(s);
-    const cls = classify(e);
+  for (let i = 0; i < n; i++) {
+    const a = startSlot + i * slotsPerBar;
+    const b = a + slotsPerBar - 1;
+    let cls = null;
+    let measured = 0, fail = 0, slowCount = 0, msSum = 0, msN = 0;
+    for (let s = a; s <= b; s++) {
+      const e = map.get(s);
+      if (!e) continue;
+      measured++;
+      const c = classify(e);
+      cls = worstClass(cls, c);
+      if (c === 'red') fail++;
+      if (c === 'orange') slowCount++;
+      if (typeof e.ms === 'number' && e.ok) { msSum += e.ms; msN++; }
+    }
     const bar = document.createElement('div');
     bar.className = 'bar' + (cls ? ' ' + cls : '');
-    const tip = cls
-      ? `${fmtTime(s)}\n${lastFmt(e)}`
-      : `${fmtTime(s)}\nnot monitored`;
+    let tip;
+    if (slotsPerBar === 1) {
+      const e = map.get(a);
+      tip = e ? `${fmtTime(a)}\n${lastFmt(e)}` : `${fmtTime(a)}\nnot monitored`;
+    } else {
+      const span = `${fmtTime(a)} – ${fmtTime(b)}`;
+      if (measured === 0) {
+        tip = `${span}\nnot monitored`;
+      } else {
+        const parts = [`${measured}/${slotsPerBar} measured`];
+        if (fail) parts.push(`${fail} fail`);
+        if (slowCount) parts.push(`${slowCount} slow`);
+        if (msN) parts.push(`avg ${Math.round(msSum / msN)} ms`);
+        tip = `${span}\n${parts.join(' · ')}`;
+      }
+    }
     bar.setAttribute('data-tip', tip);
     frag.appendChild(bar);
   }
   barsEl.replaceChildren(frag);
 
   const last = arr[arr.length - 1];
-  const lastSlot = nowSlot;
-  const isCurrent = last && last.s === lastSlot;
+  const isCurrent = last && last.s === nowSlot;
   const cls = isCurrent ? classify(last) : null;
   dot.className = 'dot' + (cls === 'green' ? ' up' : cls === 'orange' ? ' slow' : cls === 'red' ? ' down' : '');
   statusEl.textContent = cls === 'green' ? 'Up' : cls === 'orange' ? 'Slow' : cls === 'red' ? 'Down' : 'Idle';
@@ -320,15 +409,24 @@ const renderGraph = (sectionId, arr, classify, lastFmt) => {
 const fmtGoogle = (e) => e.ok ? `${e.ms} ms` : 'fail';
 const fmtOnline = (e) => e.ok ? 'online' : 'offline';
 
-let prevDown = false;
 const render = () => {
-  const gCls = renderGraph('g-google', data.google, classifyGoogle, fmtGoogle);
-  const oCls = renderGraph('g-online', data.online, classifyOnline, fmtOnline);
+  const range = getRange();
+  document.querySelectorAll('.range button').forEach(b => {
+    b.classList.toggle('active', b.dataset.range === range);
+  });
+  const gCls = renderGraph('g-google', data.google, classifyGoogle, fmtGoogle, range);
+  const oCls = renderGraph('g-online', data.online, classifyOnline, fmtOnline, range);
   const down = gCls === 'red' || oCls === 'red';
   const baseTitle = 'Net Monitor';
   document.title = down ? '⚠ DOWN — ' + baseTitle : baseTitle;
-  prevDown = down;
 };
+
+document.querySelectorAll('.range button').forEach(b => {
+  b.addEventListener('click', () => {
+    setRange(b.dataset.range);
+    render();
+  });
+});
 
 render();
 tick();

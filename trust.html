@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trust Duel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Sora:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  :root{
+    --ink:#12162a;
+    --surface:#1b2140;
+    --surface-2:#242c52;
+    --line:rgba(237,239,247,0.10);
+    --text:#edeff7;
+    --muted:#9aa3c4;
+    --trust:#4fb0a0;
+    --trust-dim:#2c5c56;
+    --betray:#e0556b;
+    --betray-dim:#5c2c34;
+    --gold:#e8b84b;
+    --radius:18px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:radial-gradient(circle at 20% -10%, #1e2550 0%, var(--ink) 55%);
+    color:var(--text);
+    font-family:'Sora',system-ui,sans-serif;
+    min-height:100vh;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  h1,h2,h3{font-family:'Fraunces',Georgia,serif;margin:0 0 8px;letter-spacing:0.2px;}
+  #app{
+    max-width:480px;
+    margin:0 auto;
+    min-height:100vh;
+    padding:max(18px,env(safe-area-inset-top)) 18px max(24px,env(safe-area-inset-bottom));
+    display:flex;
+    flex-direction:column;
+  }
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:18px;
+    min-height:36px;
+  }
+  .topbar .brand{font-family:'Fraunces',serif;font-weight:700;font-size:1.05rem;letter-spacing:0.3px;color:var(--gold);}
+  .iconbtn{
+    background:var(--surface);
+    border:1px solid var(--line);
+    color:var(--muted);
+    width:36px;height:36px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:1rem;cursor:pointer;
+  }
+  .iconbtn:active{transform:scale(0.94);}
+  .card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:22px;
+    margin-bottom:16px;
+  }
+  .btn{
+    display:block;
+    width:100%;
+    border:none;
+    border-radius:14px;
+    padding:16px 18px;
+    font-family:'Sora',sans-serif;
+    font-weight:600;
+    font-size:1rem;
+    cursor:pointer;
+    text-align:center;
+    color:var(--text);
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    margin-bottom:12px;
+    transition:transform .08s ease;
+  }
+  .btn:active{transform:scale(0.98);}
+  .btn.primary{background:linear-gradient(135deg,var(--trust),#3d8f82);color:#08201c;border:none;}
+  .btn.gold{background:linear-gradient(135deg,var(--gold),#c78f2f);color:#2a1c04;border:none;}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);}
+  .btn.danger{background:linear-gradient(135deg,var(--betray),#a83b4d);color:#210a0d;border:none;}
+  .btn[disabled]{opacity:0.45;pointer-events:none;}
+  .pill-row{display:flex;gap:8px;margin-bottom:16px;}
+  .pill{
+    flex:1;text-align:center;padding:10px 6px;border-radius:12px;
+    border:1px solid var(--line);color:var(--muted);font-weight:600;font-size:0.92rem;cursor:pointer;
+  }
+  .pill.active{background:var(--trust-dim);color:var(--text);border-color:var(--trust);}
+  p{color:var(--muted);line-height:1.5;margin:0 0 14px;}
+  .center{text-align:center;}
+  .grow{flex:1;display:flex;flex-direction:column;justify-content:center;}
+  .badge{
+    display:inline-block;background:var(--surface-2);color:var(--gold);
+    font-family:'IBM Plex Mono',monospace;font-size:0.78rem;letter-spacing:1px;
+    padding:4px 10px;border-radius:20px;margin-bottom:10px;text-transform:uppercase;
+  }
+  .scoreboard{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+  .scoreboard .side{text-align:center;flex:1;}
+  .scoreboard .name{font-size:0.82rem;color:var(--muted);margin-bottom:2px;}
+  .scoreboard .score{font-family:'IBM Plex Mono',monospace;font-size:1.9rem;font-weight:600;}
+  .scoreboard .vs{color:var(--muted);font-size:0.8rem;padding:0 10px;}
+  .round-track{
+    display:flex;gap:4px;margin-bottom:20px;flex-wrap:wrap;justify-content:center;
+  }
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--line);}
+  .dot.done-trust{background:var(--trust);}
+  .dot.done-betray{background:var(--betray);}
+  .dot.current{outline:2px solid var(--gold);outline-offset:2px;}
+  .choice-row{display:flex;gap:12px;margin-top:8px;}
+  .choice-btn{
+    flex:1;
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:18px 8px 14px;
+    display:flex;flex-direction:column;align-items:center;gap:8px;
+    cursor:pointer;
+    color:var(--text);
+    font-weight:700;
+    font-size:0.95rem;
+  }
+  .choice-btn:active{transform:scale(0.97);}
+  .choice-btn.trust:hover, .choice-btn.trust:active{border-color:var(--trust);}
+  .choice-btn.betray:hover, .choice-btn.betray:active{border-color:var(--betray);}
+  .reveal-row{display:flex;align-items:center;justify-content:center;gap:18px;margin:18px 0;}
+  .reveal-chip{
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+    width:96px;
+  }
+  .reveal-chip .who{font-size:0.78rem;color:var(--muted);}
+  .reveal-icon{width:56px;height:56px;}
+  .reveal-plus{font-family:'IBM Plex Mono',monospace;font-weight:600;}
+  .history-strip{display:flex;gap:4px;overflow-x:auto;padding:4px 0 8px;margin-bottom:8px;}
+  .history-cell{
+    flex:0 0 auto;width:22px;height:22px;border-radius:6px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .history-cell.trust{background:var(--trust-dim);}
+  .history-cell.betray{background:var(--betray-dim);}
+  .history-cell svg{width:12px;height:12px;}
+  .code-display{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:2.6rem;font-weight:600;letter-spacing:6px;
+    text-align:center;color:var(--gold);
+    background:var(--surface-2);border:1px dashed var(--gold);
+    border-radius:14px;padding:18px 10px;margin:12px 0 18px;
+  }
+  input.code-input{
+    width:100%;font-family:'IBM Plex Mono',monospace;font-size:2rem;letter-spacing:8px;
+    text-align:center;background:var(--surface-2);border:1px solid var(--line);
+    border-radius:14px;color:var(--text);padding:16px 10px;margin-bottom:14px;
+  }
+  input.code-input:focus{outline:none;border-color:var(--gold);}
+  .spinner{
+    width:34px;height:34px;border-radius:50%;
+    border:3px solid var(--line);border-top-color:var(--gold);
+    animation:spin 0.9s linear infinite;margin:0 auto 16px;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .rank-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .rank-num{font-family:'IBM Plex Mono',monospace;color:var(--muted);width:22px;}
+  .rank-name{flex:0 0 92px;font-weight:600;font-size:0.9rem;}
+  .rank-bar-wrap{flex:1;background:var(--surface-2);border-radius:8px;height:16px;overflow:hidden;}
+  .rank-bar{height:100%;border-radius:8px;background:linear-gradient(90deg,var(--trust),#82d3c6);}
+  .rank-bar.you{background:linear-gradient(90deg,var(--gold),#f4d68a);}
+  .rank-val{width:44px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:0.85rem;color:var(--muted);}
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(8,10,22,0.72);
+    display:flex;align-items:center;justify-content:center;padding:20px;z-index:50;
+  }
+  .modal{
+    background:var(--surface);border:1px solid var(--line);border-radius:18px;
+    padding:24px;max-width:420px;max-height:80vh;overflow-y:auto;
+  }
+  .status-line{text-align:center;color:var(--muted);font-size:0.9rem;margin-bottom:10px;}
+  .matchup-title{display:flex;align-items:center;gap:10px;margin-bottom:4px;}
+  .matchup-title .oppname{font-family:'Fraunces',serif;font-size:1.3rem;}
+  @media (prefers-reduced-motion: reduce){
+    .spinner{animation:none;}
+    .btn,.choice-btn{transition:none;}
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function(){
+"use strict";
+
+/* ---------- game rules ---------- */
+function payoff(a,b){
+  if(a==='trust' && b==='trust') return [2,2];
+  if(a==='trust' && b==='betray') return [-1,3];
+  if(a==='betray' && b==='trust') return [3,-1];
+  return [0,0];
+}
+
+const ICON_TRUST = '<svg viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg"><circle cx="28" cy="28" r="26" fill="none" stroke="currentColor" stroke-width="2.5" opacity="0.55"/><circle cx="28" cy="28" r="16" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="28" cy="28" r="6" fill="currentColor"/></svg>';
+const ICON_BETRAY = '<svg viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg"><circle cx="28" cy="28" r="26" fill="none" stroke="currentColor" stroke-width="2.5" opacity="0.55"/><path d="M28 6 L34 24 L46 26 L30 32 L32 50 L28 38 L24 50 L26 32 L10 26 L22 24 Z" fill="currentColor"/></svg>';
+function icon(choice,size){
+  const svg = choice==='trust'?ICON_TRUST:ICON_BETRAY;
+  return svg.replace('<svg ', `<svg style="width:${size||24}px;height:${size||24}px;color:${choice==='trust'?'var(--trust)':'var(--betray)'}" `);
+}
+
+/* ---------- strategies (classic reciprocity strategies from game-theory tournaments) ---------- */
+const STRATEGIES = [
+  {id:'cooperator', name:'The Optimist', desc:'Trusts every single time, no matter what happens.',
+    fn:()=> 'trust'},
+  {id:'cheater', name:'The Wolf', desc:'Betrays every single time, no matter what happens.',
+    fn:()=> 'betray'},
+  {id:'copycat', name:'The Mirror', desc:'Starts with trust, then simply repeats your last move.',
+    fn:(self,other)=> other.length===0 ? 'trust' : other[other.length-1]},
+  {id:'grudger', name:'The Grudger', desc:'Trusts you completely — until you betray once. Then never again.',
+    fn:(self,other)=> other.includes('betray') ? 'betray' : 'trust'},
+  {id:'detective', name:'The Detective', desc:'Tests you with an early betrayal, then adapts to how you respond.',
+    fn:(self,other,round)=>{
+      const test=['trust','betray','trust','trust'];
+      if(round<4) return test[round];
+      const retaliated = other[1]==='betray';
+      return retaliated ? other[other.length-1] : 'betray';
+    }},
+  {id:'copykitten', name:'The Forgiver', desc:'Like The Mirror, but forgives a single slip — only turns after two betrayals in a row.',
+    fn:(self,other)=>{
+      if(other.length<2) return 'trust';
+      const last2 = other.slice(-2);
+      return (last2[0]==='betray' && last2[1]==='betray') ? 'betray' : 'trust';
+    }},
+  {id:'random', name:'The Wildcard', desc:'Flips a coin every round. Totally unpredictable.',
+    fn:()=> Math.random()<0.5?'trust':'betray'},
+];
+
+function classifyStyle(myHist, oppHist){
+  if(myHist.length===0) return 'Unreadable';
+  if(myHist.every(m=>m==='trust')) return 'The Optimist';
+  if(myHist.every(m=>m==='betray')) return 'The Wolf';
+  const firstBetray = myHist.indexOf('betray');
+  if(firstBetray>=0 && myHist.slice(firstBetray).every(m=>m==='betray') && myHist.slice(0,firstBetray).every(m=>m==='trust')){
+    return 'The Grudger';
+  }
+  let mirrorHits=0, total=0;
+  for(let i=1;i<myHist.length;i++){ total++; if(myHist[i]===oppHist[i-1]) mirrorHits++; }
+  if(total>0 && mirrorHits/total>0.75) return 'The Mirror';
+  return 'The Wildcard';
+}
+
+/* ---------- app state ---------- */
+const S = {
+  screen:'home',
+  showRules:false,
+  solo:{ rounds:10, queue:[], idx:0, myHist:[], oppHist:[], myScore:0, oppScore:0, round:0, results:[], revealing:null, tourney:null },
+  online:{ rounds:10, role:null, code:'', peer:null, conn:null, status:'idle', error:'',
+           myHist:[], oppHist:[], myScore:0, oppScore:0, round:0, myPick:null, oppPick:null, joinInput:'' }
+};
+
+function render(){
+  const app = document.getElementById('app');
+  app.innerHTML = topbar() + screenHTML() + (S.showRules ? rulesModal() : '');
+}
+
+function topbar(){
+  const showBack = S.screen!=='home';
+  return `<div class="topbar">
+    ${showBack ? `<div class="iconbtn" onclick="App.goHome()">←</div>` : `<div class="brand">TRUST DUEL</div>`}
+    ${showBack ? `<div class="brand">TRUST DUEL</div>` : `<div></div>`}
+    <div class="iconbtn" onclick="App.toggleRules()">?</div>
+  </div>`;
+}
+
+function rulesModal(){
+  return `<div class="modal-backdrop" onclick="if(event.target===this)App.toggleRules()">
+    <div class="modal">
+      <h3>How a round works</h3>
+      <p>Each round, both players secretly choose to <b style="color:var(--trust)">Trust</b> or <b style="color:var(--betray)">Betray</b>. Then both choices are revealed together.</p>
+      <p><b style="color:var(--trust)">Trust + Trust</b> — everyone earns <b>+2</b>. Steady cooperation pays off.</p>
+      <p><b>Trust + Betray</b> — the betrayer earns <b style="color:var(--betray)">+3</b>, the trusting player drops to <b>−1</b>.</p>
+      <p><b style="color:var(--betray)">Betray + Betray</b> — both earn <b>0</b>. Mutual distrust cancels out any gain.</p>
+      <p>Play enough rounds and a pattern emerges: strategies that reciprocate — reward trust, punish betrayal, sometimes forgive — tend to out-earn both blind trust and blind betrayal over time.</p>
+      <button class="btn primary" onclick="App.toggleRules()">Got it</button>
+    </div>
+  </div>`;
+}
+
+function screenHTML(){
+  switch(S.screen){
+    case 'home': return homeScreen();
+    case 'solo-setup': return soloSetupScreen();
+    case 'solo-match': return soloMatchScreen();
+    case 'solo-tourney': return soloTourneyScreen();
+    case 'online-home': return onlineHomeScreen();
+    case 'online-create': return onlineCreateScreen();
+    case 'online-join': return onlineJoinScreen();
+    case 'online-match': return onlineMatchScreen();
+    case 'online-result': return onlineResultScreen();
+    default: return '';
+  }
+}
+
+/* ---------- HOME ---------- */
+function homeScreen(){
+  return `<div class="grow">
+    <div class="center" style="margin-bottom:28px;">
+      <div class="badge">a game of reciprocity</div>
+      <h1 style="font-size:2.2rem;">Trust Duel</h1>
+      <p>Every round, you and an opponent choose to trust or betray. Play enough rounds, and you'll see which instincts actually pay off.</p>
+    </div>
+    <button class="btn primary" onclick="App.goSoloSetup()">🧠 Play vs. Strategies</button>
+    <button class="btn gold" onclick="App.goOnlineHome()">👥 Duel a Friend</button>
+    <p class="center" style="margin-top:6px;font-size:0.82rem;">Solo mode plays you against seven classic strategies, then reveals which one wins over time. Duel mode connects two phones live with a short room code.</p>
+  </div>`;
+}
+
+/* ---------- SOLO SETUP ---------- */
+function soloSetupScreen(){
+  return `<div class="grow">
+    <h2>Set up your run</h2>
+    <p>You'll face seven opponents, one at a time — each playing a different, well-known strategy. Choose how many rounds each match lasts.</p>
+    <div class="pill-row">
+      ${[6,10,15].map(n=>`<div class="pill ${S.solo.rounds===n?'active':''}" onclick="App.setSoloRounds(${n})">${n} rounds</div>`).join('')}
+    </div>
+    <button class="btn primary" onclick="App.startSolo()">Start</button>
+  </div>`;
+}
+
+/* ---------- SOLO MATCH ---------- */
+function soloMatchScreen(){
+  const opp = S.solo.queue[S.solo.idx];
+  const total = S.solo.rounds;
+  const dots = Array.from({length:total},(_,i)=>{
+    let cls='dot';
+    if(i<S.solo.round) cls += S.solo.myHist[i]==='betray'||S.solo.oppHist[i]==='betray' ? ' done-betray':' done-trust';
+    if(i===S.solo.round) cls+=' current';
+    return `<div class="${cls}"></div>`;
+  }).join('');
+
+  let body;
+  if(S.solo.revealing){
+    const r = S.solo.revealing;
+    body = `<div class="reveal-row">
+      <div class="reveal-chip"><div class="who">You</div>${icon(r.me,56)}</div>
+      <div class="reveal-plus mono">${r.d1>=0?'+':''}${r.d1} / ${r.d2>=0?'+':''}${r.d2}</div>
+      <div class="reveal-chip"><div class="who">${opp.name}</div>${icon(r.opp,56)}</div>
+    </div>
+    <button class="btn primary" onclick="App.soloNext()">${S.solo.round>=total ? 'See match result' : 'Next round'}</button>`;
+  } else {
+    body = `<div class="choice-row">
+      <div class="choice-btn trust" onclick="App.soloPick('trust')">${icon('trust',40)}Trust</div>
+      <div class="choice-btn betray" onclick="App.soloPick('betray')">${icon('betray',40)}Betray</div>
+    </div>`;
+  }
+
+  const histStrip = (arr)=> arr.map(c=>`<div class="history-cell ${c}">${icon(c,12)}</div>`).join('');
+
+  return `<div>
+    <div class="matchup-title"><span class="badge" style="margin:0;">match ${S.solo.idx+1} / ${S.solo.queue.length}</span></div>
+    <h2 class="oppname">${opp.name}</h2>
+    <p>${opp.desc}</p>
+    <div class="scoreboard">
+      <div class="side"><div class="name">You</div><div class="score">${S.solo.myScore}</div></div>
+      <div class="vs">round ${Math.min(S.solo.round+1,total)}/${total}</div>
+      <div class="side"><div class="name">${opp.name}</div><div class="score">${S.solo.oppScore}</div></div>
+    </div>
+    <div class="round-track">${dots}</div>
+    ${S.solo.myHist.length ? `<div class="history-strip">${histStrip(S.solo.myHist)}</div><div class="history-strip">${histStrip(S.solo.oppHist)}</div>` : ''}
+    <div class="card">${body}</div>
+  </div>`;
+}
+
+/* ---------- SOLO TOURNAMENT RESULT ---------- */
+function soloTourneyScreen(){
+  const t = S.solo.tourney;
+  const maxVal = Math.max(...t.rows.map(r=>r.avg), 0.01);
+  const rows = t.rows.map((r,i)=>`
+    <div class="rank-row">
+      <div class="rank-num">${i+1}</div>
+      <div class="rank-name">${r.name}</div>
+      <div class="rank-bar-wrap"><div class="rank-bar ${r.isYou?'you':''}" style="width:${Math.max(4,(r.avg/maxVal)*100)}%"></div></div>
+      <div class="rank-val">${r.avg.toFixed(2)}</div>
+    </div>`).join('');
+
+  return `<div>
+    <div class="badge">tournament complete</div>
+    <h2>Who actually wins?</h2>
+    <p>Beyond your own matches, every strategy above also played a full round-robin against each other. Ranked by average points earned per round:</p>
+    <div class="card">${rows}</div>
+    <div class="card">
+      <h3>The takeaway</h3>
+      <p>${t.summary}</p>
+    </div>
+    <button class="btn primary" onclick="App.goSoloSetup()">Run again</button>
+    <button class="btn ghost" onclick="App.goHome()">Home</button>
+  </div>`;
+}
+
+/* ---------- ONLINE HOME ---------- */
+function onlineHomeScreen(){
+  return `<div class="grow">
+    <h2>Duel a friend</h2>
+    <p>One of you creates a room and shares the code. The other joins with it. Works over the internet, phone to phone — no app install.</p>
+    <button class="btn primary" onclick="App.goOnlineCreate()">Create a room</button>
+    <button class="btn gold" onclick="App.goOnlineJoin()">Join with a code</button>
+  </div>`;
+}
+
+function onlineCreateScreen(){
+  const o = S.online;
+  if(o.status==='waiting'){
+    return `<div class="grow center">
+      <p>Share this code with your opponent:</p>
+      <div class="code-display">${o.code}</div>
+      <div class="spinner"></div>
+      <p class="status-line">Waiting for them to join…</p>
+      <button class="btn ghost" onclick="App.goHome()">Cancel</button>
+    </div>`;
+  }
+  if(o.status==='connecting'){
+    return `<div class="grow center"><div class="spinner"></div><p>Opening a room…</p></div>`;
+  }
+  if(o.status==='error'){
+    return `<div class="grow center">
+      <p style="color:var(--betray)">${o.error}</p>
+      <button class="btn primary" onclick="App.createRoom()">Try again</button>
+      <button class="btn ghost" onclick="App.goHome()">Home</button>
+    </div>`;
+  }
+  // setup: choose rounds then create
+  return `<div class="grow">
+    <h2>Room settings</h2>
+    <p>Choose how many rounds your duel will last.</p>
+    <div class="pill-row">
+      ${[6,10,15].map(n=>`<div class="pill ${S.online.rounds===n?'active':''}" onclick="App.setOnlineRounds(${n})">${n} rounds</div>`).join('')}
+    </div>
+    <button class="btn primary" onclick="App.createRoom()">Create room</button>
+  </div>`;
+}
+
+function onlineJoinScreen(){
+  const o = S.online;
+  if(o.status==='connecting'){
+    return `<div class="grow center"><div class="spinner"></div><p>Connecting…</p></div>`;
+  }
+  if(o.status==='error'){
+    return `<div class="grow center">
+      <p style="color:var(--betray)">${o.error}</p>
+      <button class="btn primary" onclick="App.goOnlineJoin()">Try again</button>
+      <button class="btn ghost" onclick="App.goHome()">Home</button>
+    </div>`;
+  }
+  return `<div class="grow">
+    <h2>Enter the code</h2>
+    <p>Ask your opponent for their 4-digit room code.</p>
+    <input class="code-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000" value="${o.joinInput}" oninput="App.setJoinInput(this.value)">
+    <button class="btn primary" ${o.joinInput.length!==4?'disabled':''} onclick="App.joinRoom()">Connect</button>
+  </div>`;
+}
+
+/* ---------- ONLINE MATCH ---------- */
+function onlineMatchScreen(){
+  const o = S.online;
+  const total = o.rounds;
+  const dots = Array.from({length:total},(_,i)=>{
+    let cls='dot';
+    if(i<o.myHist.length) cls += o.myHist[i]==='betray'||o.oppHist[i]==='betray' ? ' done-betray':' done-trust';
+    if(i===o.myHist.length && i===o.oppHist.length) cls+=' current';
+    return `<div class="${cls}"></div>`;
+  }).join('');
+
+  let body;
+  const haveMine = o.myPick!==null;
+  const haveTheirs = o.oppPick!==null;
+  if(haveMine && haveTheirs){
+    body = `<div class="reveal-row">
+      <div class="reveal-chip"><div class="who">You</div>${icon(o.myPick,56)}</div>
+      <div class="reveal-plus mono">${o.lastDelta ? (o.lastDelta[0]>=0?'+':'')+o.lastDelta[0]+' / '+(o.lastDelta[1]>=0?'+':'')+o.lastDelta[1] : ''}</div>
+      <div class="reveal-chip"><div class="who">Them</div>${icon(o.oppPick,56)}</div>
+    </div>
+    <button class="btn primary" onclick="App.onlineNext()">${o.myHist.length>=total ? 'See final result' : 'Next round'}</button>`;
+  } else if(haveMine && !haveTheirs){
+    body = `<div class="center"><div class="spinner"></div><p class="status-line">Waiting for them to choose…</p></div>`;
+  } else {
+    body = `<div class="choice-row">
+      <div class="choice-btn trust" onclick="App.onlinePick('trust')">${icon('trust',40)}Trust</div>
+      <div class="choice-btn betray" onclick="App.onlinePick('betray')">${icon('betray',40)}Betray</div>
+    </div>`;
+  }
+
+  const histStrip = (arr)=> arr.map(c=>`<div class="history-cell ${c}">${icon(c,12)}</div>`).join('');
+
+  return `<div>
+    <div class="scoreboard">
+      <div class="side"><div class="name">You</div><div class="score">${o.myScore}</div></div>
+      <div class="vs">round ${Math.min(o.myHist.length+1,total)}/${total}</div>
+      <div class="side"><div class="name">Them</div><div class="score">${o.oppScore}</div></div>
+    </div>
+    <div class="round-track">${dots}</div>
+    ${o.myHist.length ? `<div class="history-strip">${histStrip(o.myHist)}</div><div class="history-strip">${histStrip(o.oppHist)}</div>` : ''}
+    <div class="card">${body}</div>
+  </div>`;
+}
+
+function onlineResultScreen(){
+  const o = S.online;
+  const you = classifyStyle(o.myHist, o.oppHist);
+  const them = classifyStyle(o.oppHist, o.myHist);
+  const outcome = o.myScore===o.oppScore ? "It's a tie." : (o.myScore>o.oppScore ? "You came out ahead." : "They came out ahead.");
+  return `<div>
+    <div class="badge">duel complete</div>
+    <h2>${outcome}</h2>
+    <div class="scoreboard">
+      <div class="side"><div class="name">You</div><div class="score">${o.myScore}</div></div>
+      <div class="vs">final</div>
+      <div class="side"><div class="name">Them</div><div class="score">${o.oppScore}</div></div>
+    </div>
+    <div class="card">
+      <p>Your play most resembled <b style="color:var(--gold)">${you}</b>.</p>
+      <p>Their play most resembled <b style="color:var(--gold)">${them}</b>.</p>
+    </div>
+    <button class="btn primary" onclick="App.goHome()">Home</button>
+  </div>`;
+}
+
+/* ---------- SOLO logic ---------- */
+function resetSoloMatch(){
+  S.solo.myHist=[]; S.solo.oppHist=[]; S.solo.myScore=0; S.solo.oppScore=0; S.solo.round=0; S.solo.revealing=null;
+}
+
+const App = {
+  goHome(){ teardownOnline(); S.screen='home'; render(); },
+  toggleRules(){ S.showRules=!S.showRules; render(); },
+
+  goSoloSetup(){ S.screen='solo-setup'; render(); },
+  setSoloRounds(n){ S.solo.rounds=n; render(); },
+  startSolo(){
+    S.solo.queue = STRATEGIES.slice();
+    S.solo.idx=0; S.solo.results=[];
+    resetSoloMatch();
+    S.screen='solo-match'; render();
+  },
+  soloPick(choice){
+    const opp = S.solo.queue[S.solo.idx];
+    const oppChoice = opp.fn(S.solo.oppHist, S.solo.myHist, S.solo.round);
+    const [d1,d2] = payoff(choice, oppChoice);
+    S.solo.myHist.push(choice); S.solo.oppHist.push(oppChoice);
+    S.solo.myScore+=d1; S.solo.oppScore+=d2; S.solo.round++;
+    S.solo.revealing = {me:choice, opp:oppChoice, d1, d2};
+    render();
+  },
+  soloNext(){
+    if(S.solo.round>=S.solo.rounds){
+      S.solo.results.push({id:S.solo.queue[S.solo.idx].id, name:S.solo.queue[S.solo.idx].name, myScore:S.solo.myScore, oppScore:S.solo.oppScore});
+      S.solo.idx++;
+      if(S.solo.idx>=S.solo.queue.length){
+        S.solo.tourney = buildTourney();
+        S.screen='solo-tourney'; render(); return;
+      }
+      resetSoloMatch();
+      render(); return;
+    }
+    S.solo.revealing=null; render();
+  },
+};
+
+function buildTourney(){
+  const n = STRATEGIES.length;
+  const totals = {}; STRATEGIES.forEach(s=>totals[s.id]=0);
+  const roundsEach = S.solo.rounds;
+  for(let i=0;i<n;i++){
+    for(let j=i+1;j<n;j++){
+      const A=STRATEGIES[i], B=STRATEGIES[j];
+      let ha=[], hb=[], sa=0, sb=0;
+      for(let r=0;r<roundsEach;r++){
+        const ca = A.fn(ha,hb,r), cb = B.fn(hb,ha,r);
+        const [da,db] = payoff(ca,cb);
+        sa+=da; sb+=db; ha.push(ca); hb.push(cb);
+      }
+      totals[A.id]+=sa; totals[B.id]+=sb;
+    }
+  }
+  const matchesPer = n-1;
+  let rows = STRATEGIES.map(s=>({id:s.id, name:s.name, avg: totals[s.id]/(roundsEach*matchesPer)}));
+
+  const playerTotal = S.solo.results.reduce((a,r)=>a+r.myScore,0);
+  const playerAvg = playerTotal/(roundsEach*S.solo.results.length);
+  rows.push({id:'you', name:'You', avg:playerAvg, isYou:true});
+  rows.sort((a,b)=>b.avg-a.avg);
+
+  const winner = rows.find(r=>!r.isYou) || rows[0];
+  const worst = rows[rows.length-1];
+  const yourRank = rows.findIndex(r=>r.isYou)+1;
+  const summary = `${winner.name} came out on top overall, averaging ${winner.avg.toFixed(2)} points per round. `+
+    `Strategies that opened with trust but responded firmly to betrayal tend to compound steady gains, while pure betrayal racks up quick wins early and then collapses once it runs into someone who remembers. `+
+    `You placed ${yourRank} of ${rows.length}, averaging ${playerAvg.toFixed(2)} points per round.`;
+  return {rows, summary};
+}
+
+/* ---------- ONLINE logic (PeerJS) ---------- */
+const ROOM_PREFIX = 'trustduel-';
+
+function teardownOnline(){
+  try{ if(S.online.conn) S.online.conn.close(); }catch(e){}
+  try{ if(S.online.peer) S.online.peer.destroy(); }catch(e){}
+  S.online = { rounds:10, role:null, code:'', peer:null, conn:null, status:'idle', error:'',
+               myHist:[], oppHist:[], myScore:0, oppScore:0, round:0, myPick:null, oppPick:null, joinInput:'' };
+}
+
+App.goOnlineHome = function(){ teardownOnline(); S.screen='online-home'; render(); };
+App.goOnlineCreate = function(){ S.online.status='idle'; S.screen='online-create'; render(); };
+App.goOnlineJoin = function(){ S.online.status='idle'; S.online.joinInput=''; S.screen='online-join'; render(); };
+App.setOnlineRounds = function(n){ S.online.rounds=n; render(); };
+App.setJoinInput = function(v){ S.online.joinInput = v.replace(/[^0-9]/g,'').slice(0,4); render(); };
+
+function setupConnection(conn, role){
+  S.online.conn = conn;
+  S.online.role = role;
+  conn.on('open', ()=>{
+    S.online.status='connected';
+    if(role==='host'){
+      conn.send({type:'start', rounds:S.online.rounds});
+    }
+    S.screen='online-match';
+    render();
+  });
+  conn.on('data', handleOnlineData);
+  conn.on('close', ()=>{
+    if(S.screen==='online-match'){
+      S.online.error = 'Your opponent disconnected.';
+      S.screen='online-join';
+      render();
+    }
+  });
+  conn.on('error', ()=>{
+    S.online.error = "Connection lost.";
+    render();
+  });
+}
+
+function handleOnlineData(data){
+  if(data.type==='start'){
+    S.online.rounds = data.rounds;
+    S.screen='online-match';
+    render();
+  } else if(data.type==='pick'){
+    S.online.oppPick = data.choice;
+    S.online._oppRound = data.round;
+    maybeResolveOnlineRound();
+    render();
+  }
+}
+
+function maybeResolveOnlineRound(){
+  const o = S.online;
+  if(o.myPick!==null && o.oppPick!==null){
+    const [d1,d2] = payoff(o.myPick, o.oppPick);
+    o.myScore+=d1; o.oppScore+=d2;
+    o.lastDelta = [d1,d2];
+  }
+}
+
+App.createRoom = function(attempt){
+  attempt = attempt||0;
+  if(attempt>6){
+    S.online.status='error'; S.online.error='Could not open a room right now. Check your connection and try again.';
+    render(); return;
+  }
+  S.online.status='connecting'; render();
+  const code = String(Math.floor(1000+Math.random()*9000));
+  try{ if(S.online.peer) S.online.peer.destroy(); }catch(e){}
+  const peer = new Peer(ROOM_PREFIX+code);
+  S.online.peer = peer; S.online.code = code;
+  peer.on('open', ()=>{
+    S.online.status='waiting'; render();
+  });
+  peer.on('connection', (conn)=>{
+    setupConnection(conn, 'host');
+  });
+  peer.on('error', (err)=>{
+    if(String(err.type)==='unavailable-id'){
+      App.createRoom(attempt+1);
+    } else {
+      S.online.status='error';
+      S.online.error = 'Could not reach the connection service. Check your internet connection.';
+      render();
+    }
+  });
+};
+
+App.joinRoom = function(){
+  const code = S.online.joinInput;
+  if(code.length!==4) return;
+  S.online.status='connecting'; render();
+  try{ if(S.online.peer) S.online.peer.destroy(); }catch(e){}
+  const peer = new Peer();
+  S.online.peer = peer;
+  peer.on('open', ()=>{
+    const conn = peer.connect(ROOM_PREFIX+code, {reliable:true});
+    let settled = false;
+    conn.on('open', ()=>{ settled = true; });
+    setupConnection(conn, 'guest');
+    setTimeout(()=>{
+      if(!settled && S.online.status!=='connected'){
+        S.online.status='error';
+        S.online.error = "Couldn't find that room. Double-check the code.";
+        render();
+      }
+    }, 8000);
+  });
+  peer.on('error', ()=>{
+    S.online.status='error';
+    S.online.error = 'Could not reach the connection service. Check your internet connection.';
+    render();
+  });
+};
+
+App.onlinePick = function(choice){
+  const o = S.online;
+  o.myPick = choice;
+  if(o.conn) o.conn.send({type:'pick', round:o.myHist.length, choice});
+  maybeResolveOnlineRound();
+  render();
+};
+
+App.onlineNext = function(){
+  const o = S.online;
+  o.myHist.push(o.myPick); o.oppHist.push(o.oppPick);
+  o.myPick=null; o.oppPick=null; o.lastDelta=null;
+  if(o.myHist.length>=o.rounds){
+    S.screen='online-result'; render(); return;
+  }
+  render();
+};
+
+window.App = App;
+render();
+})();
+</script>
+</body>
+</html>

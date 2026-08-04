@@ -177,6 +177,14 @@
         .tooltip-value {
             font-weight: 500;
             color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .tooltip-diff {
+            font-size: 0.625rem;
+            min-height: 0.875rem;
         }
 
         @media (max-width: 600px) {
@@ -471,10 +479,11 @@
                 let diffHtml = '';
                 if (prevValue !== null) {
                     const diff = value - prevValue;
-                    const diffPercent = ((diff / prevValue) * 100).toFixed(1);
                     const sign = diff >= 0 ? '+' : '';
                     const color = diff >= 0 ? '#22c55e' : '#ef4444';
-                    diffHtml = `<span style="color: ${color}; font-size: 0.625rem; margin-left: 0.25rem;">${sign}${diffPercent}%</span>`;
+                    diffHtml = `<span class="tooltip-diff" style="color: ${color};">${sign}${formatFullNumber(diff)}</span>`;
+                } else {
+                    diffHtml = `<span class="tooltip-diff"></span>`;
                 }
                 
                 html += `

@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo Organizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .controls {
+            padding: 25px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-1px);
+        }
+        
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #059669;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .threshold-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .threshold-control label {
+            font-size: 14px;
+            color: #495057;
+            font-weight: 500;
+        }
+        
+        .threshold-control select {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .main-content {
+            display: flex;
+            min-height: 600px;
+        }
+        
+        .photos-area {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            max-height: 70vh;
+        }
+        
+        .timeline-group {
+            margin-bottom: 40px;
+        }
+        
+        .timeline-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            gap: 15px;
+        }
+        
+        .timeline-date {
+            font-size: 18px;
+            font-weight: 700;
+            color: #667eea;
+        }
+        
+        .timeline-line {
+            flex: 1;
+            height: 2px;
+            background: linear-gradient(90deg, #667eea, transparent);
+        }
+        
+        .photo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        
+        .photo-item {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 3px solid transparent;
+        }
+        
+        .photo-item:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        }
+        
+        .photo-item.selected {
+            border-color: #667eea;
+            transform: scale(0.95);
+        }
+        
+        .photo-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .photo-info {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px;
+            font-size: 11px;
+            text-align: center;
+        }
+        
+        .groups-panel {
+            width: 350px;
+            background: #f8f9fa;
+            border-left: 1px solid #e9ecef;
+            padding: 25px;
+            overflow-y: auto;
+        }
+        
+        .groups-panel h2 {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #212529;
+        }
+        
+        .group-item {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 2px solid #e9ecef;
+            transition: all 0.2s;
+        }
+        
+        .group-item:hover {
+            border-color: #667eea;
+        }
+        
+        .group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .group-count {
+            background: #667eea;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .group-name {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        
+        .group-date {
+            padding: 8px;
+            background: #e9ecef;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 13px;
+            font-family: monospace;
+            flex-shrink: 0;
+        }
+        
+        .group-desc {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        
+        .group-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+        
+        .empty-state h3 {
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .status-bar {
+            padding: 15px 30px;
+            background: #e7f3ff;
+            border-top: 1px solid #bee5eb;
+            font-size: 14px;
+            color: #004085;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(102, 126, 234, 0.3);
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📸 Photo Organizer</h1>
+            <p>Organize your photos into dated folders automatically</p>
+        </div>
+        
+        <div class="controls">
+            <button class="btn btn-primary" id="selectFolder">Select Photo Folder</button>
+            
+            <div class="threshold-control">
+                <label for="threshold">Group photos within:</label>
+                <select id="threshold">
+                    <option value="3600000">1 hour</option>
+                    <option value="21600000">6 hours</option>
+                    <option value="43200000">12 hours</option>
+                    <option value="86400000" selected>24 hours</option>
+                    <option value="172800000">48 hours</option>
+                    <option value="604800000">1 week</option>
+                </select>
+            </div>
+            
+            <button class="btn btn-success" id="organizeBtn" style="display:none;">Organize Photos</button>
+            <button class="btn btn-secondary" id="resetBtn" style="display:none;">Reset</button>
+        </div>
+        
+        <div class="main-content">
+            <div class="photos-area" id="photosArea">
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                        <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg>
+                    <h3>No photos loaded</h3>
+                    <p>Click "Select Photo Folder" to get started</p>
+                </div>
+            </div>
+            
+            <div class="groups-panel">
+                <h2>📁 Folder Groups (<span id="groupCount">0</span>)</h2>
+                <div id="groupsList"></div>
+            </div>
+        </div>
+        
+        <div class="status-bar" id="statusBar" style="display:none;"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+    <script>
+        let dirHandle = null;
+        let photos = [];
+        let groups = [];
+
+        const selectFolderBtn = document.getElementById('selectFolder');
+        const organizeBtn = document.getElementById('organizeBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const photosArea = document.getElementById('photosArea');
+        const groupsList = document.getElementById('groupsList');
+        const statusBar = document.getElementById('statusBar');
+        const thresholdSelect = document.getElementById('threshold');
+        const groupCount = document.getElementById('groupCount');
+
+        selectFolderBtn.addEventListener('click', selectFolder);
+        organizeBtn.addEventListener('click', organizePhotos);
+        resetBtn.addEventListener('click', reset);
+        thresholdSelect.addEventListener('change', () => {
+            if (photos.length > 0) {
+                autoGroupPhotos();
+            }
+        });
+
+        async function selectFolder() {
+            try {
+                dirHandle = await window.showDirectoryPicker();
+                showStatus('Loading photos...', true);
+                await loadPhotos();
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    alert('Error selecting folder: ' + err.message);
+                }
+            }
+        }
+
+        async function loadPhotos() {
+            photos = [];
+            const entries = [];
+            
+            for await (const entry of dirHandle.values()) {
+                if (entry.kind === 'file' && /\.(jpg|jpeg|png|gif|webp)$/i.test(entry.name)) {
+                    entries.push(entry);
+                }
+            }
+
+            showStatus(`Found ${entries.length} photos. Extracting dates...`, true);
+
+            for (let i = 0; i < entries.length; i++) {
+                const entry = entries[i];
+                const file = await entry.getFile();
+                const date = await extractDate(file);
+                
+                photos.push({
+                    fileHandle: entry,
+                    file: file,
+                    name: entry.name,
+                    date: date,
+                    url: URL.createObjectURL(file),
+                    selected: false
+                });
+
+                if ((i + 1) % 10 === 0) {
+                    showStatus(`Processing: ${i + 1}/${entries.length} photos`, true);
+                }
+            }
+
+            photos.sort((a, b) => a.date - b.date);
+            autoGroupPhotos();
+            renderPhotos();
+            organizeBtn.style.display = 'inline-block';
+            resetBtn.style.display = 'inline-block';
+            showStatus(`Loaded ${photos.length} photos in ${groups.length} groups`);
+        }
+
+        function extractDate(file) {
+            return new Promise((resolve) => {
+                EXIF.getData(file, function() {
+                    const dateStr = EXIF.getTag(this, 'DateTimeOriginal') || 
+                                   EXIF.getTag(this, 'DateTime');
+                    
+                    if (dateStr) {
+                        const parts = dateStr.split(' ');
+                        const datePart = parts[0].replace(/:/g, '-');
+                        const timePart = parts[1];
+                        const date = new Date(datePart + 'T' + timePart);
+                        resolve(date);
+                    } else {
+                        resolve(new Date(file.lastModified));
+                    }
+                });
+            });
+        }
+
+        function autoGroupPhotos() {
+            if (photos.length === 0) return;
+
+            groups = [];
+            const threshold = parseInt(thresholdSelect.value);
+            let currentGroup = {
+                photos: [photos[0]],
+                startDate: photos[0].date,
+                description: ''
+            };
+
+            for (let i = 1; i < photos.length; i++) {
+                const timeDiff = photos[i].date - currentGroup.startDate;
+                
+                if (timeDiff <= threshold) {
+                    currentGroup.photos.push(photos[i]);
+                } else {
+                    groups.push(currentGroup);
+                    currentGroup = {
+                        photos: [photos[i]],
+                        startDate: photos[i].date,
+                        description: ''
+                    };
+                }
+            }
+            groups.push(currentGroup);
+
+            renderGroups();
+            renderPhotos();
+        }
+
+        function renderPhotos() {
+            photosArea.innerHTML = '';
+
+            groups.forEach((group, groupIdx) => {
+                const timelineGroup = document.createElement('div');
+                timelineGroup.className = 'timeline-group';
+
+                const header = document.createElement('div');
+                header.className = 'timeline-header';
+                header.innerHTML = `
+                    <div class="timeline-date">${formatDate(group.startDate)}</div>
+                    <div class="timeline-line"></div>
+                `;
+                timelineGroup.appendChild(header);
+
+                const grid = document.createElement('div');
+                grid.className = 'photo-grid';
+
+                group.photos.forEach((photo, photoIdx) => {
+                    const item = document.createElement('div');
+                    item.className = 'photo-item' + (photo.selected ? ' selected' : '');
+                    item.innerHTML = `
+                        <img src="${photo.url}" alt="${photo.name}">
+                        <div class="photo-info">${photo.date.toLocaleTimeString()}</div>
+                    `;
+                    grid.appendChild(item);
+                });
+
+                timelineGroup.appendChild(grid);
+                photosArea.appendChild(timelineGroup);
+            });
+        }
+
+        function renderGroups() {
+            groupsList.innerHTML = '';
+            groupCount.textContent = groups.length;
+
+            groups.forEach((group, idx) => {
+                const item = document.createElement('div');
+                item.className = 'group-item';
+                
+                const folderName = formatFolderDate(group.startDate);
+                
+                item.innerHTML = `
+                    <div class="group-header">
+                        <strong>Group ${idx + 1}</strong>
+                        <span class="group-count">${group.photos.length} photos</span>
+                    </div>
+                    <div class="group-name">
+                        <div class="group-date">${folderName}</div>
+                        <input type="text" class="group-desc" placeholder="Description" value="${group.description}">
+                    </div>
+                    <div class="group-actions">
+                        <button class="btn-small btn-secondary split-btn">Split Here</button>
+                    </div>
+                `;
+
+                const descInput = item.querySelector('.group-desc');
+                descInput.addEventListener('input', (e) => {
+                    group.description = e.target.value;
+                });
+
+                const splitBtn = item.querySelector('.split-btn');
+                splitBtn.addEventListener('click', () => splitGroup(idx));
+
+                groupsList.appendChild(item);
+            });
+        }
+
+        function splitGroup(idx) {
+            if (groups[idx].photos.length < 2) {
+                alert('Cannot split a group with only one photo');
+                return;
+            }
+
+            const group = groups[idx];
+            const midPoint = Math.floor(group.photos.length / 2);
+            
+            const firstHalf = {
+                photos: group.photos.slice(0, midPoint),
+                startDate: group.photos[0].date,
+                description: group.description
+            };
+            
+            const secondHalf = {
+                photos: group.photos.slice(midPoint),
+                startDate: group.photos[midPoint].date,
+                description: ''
+            };
+
+            groups.splice(idx, 1, firstHalf, secondHalf);
+            renderGroups();
+            renderPhotos();
+        }
+
+        function formatDate(date) {
+            return date.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+        }
+
+        function formatFolderDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        async function organizePhotos() {
+            if (!confirm(`This will move ${photos.length} photos into ${groups.length} folders. Continue?`)) {
+                return;
+            }
+
+            showStatus('Organizing photos...', true);
+            let moved = 0;
+
+            for (const group of groups) {
+                const folderName = formatFolderDate(group.startDate) + 
+                                 (group.description ? ' ' + group.description : '');
+                
+                let folderHandle;
+                try {
+                    folderHandle = await dirHandle.getDirectoryHandle(folderName, { create: true });
+                } catch (err) {
+                    alert('Error creating folder: ' + err.message);
+                    return;
+                }
+
+                for (const photo of group.photos) {
+                    try {
+                        const newFileHandle = await folderHandle.getFileHandle(photo.name, { create: true });
+                        const writable = await newFileHandle.createWritable();
+                        await writable.write(photo.file);
+                        await writable.close();
+                        
+                        await dirHandle.removeEntry(photo.name);
+                        moved++;
+                        showStatus(`Moving photos: ${moved}/${photos.length}`, true);
+                    } catch (err) {
+                        console.error('Error moving photo:', err);
+                    }
+                }
+            }
+
+            showStatus(`Successfully organized ${moved} photos into ${groups.length} folders!`);
+            setTimeout(() => {
+                reset();
+                alert('Photos organized successfully!');
+            }, 2000);
+        }
+
+        function reset() {
+            photos.forEach(p => URL.revokeObjectURL(p.url));
+            photos = [];
+            groups = [];
+            dirHandle = null;
+            photosArea.innerHTML = `
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                        <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg>
+                    <h3>No photos loaded</h3>
+                    <p>Click "Select Photo Folder" to get started</p>
+                </div>
+            `;
+            groupsList.innerHTML = '';
+            groupCount.textContent = '0';
+            organizeBtn.style.display = 'none';
+            resetBtn.style.display = 'none';
+            statusBar.style.display = 'none';
+        }
+
+        function showStatus(message, loading = false) {
+            statusBar.style.display = 'block';
+            statusBar.innerHTML = loading ? `<span class="loading"></span>${message}` : message;
+        }
+    </script>
+</body>
+</html>

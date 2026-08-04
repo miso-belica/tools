@@ -471,9 +471,12 @@
             // Build tooltip content
             let html = `<div class="tooltip-title">Rok ${year}</div>`;
             
+            // Get visible indices and reverse them so highest values are on top
+            const visibleIndices = labels.map((_, i) => i).filter(i => !hiddenSet.has(i)).reverse();
+            
             let prevValue = null;
-            labels.forEach((label, i) => {
-                if (hiddenSet.has(i)) return;
+            visibleIndices.forEach((i) => {
+                const label = labels[i];
                 const value = data[i][year];
                 
                 let diffHtml = '';

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Investičná kalkulačka</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #f8fafc;
+        }
+
+        .inputs {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin-bottom: 1.5rem;
+            align-items: center;
+        }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            background: #1e293b;
+            padding: 0.375rem 0.5rem;
+            border-radius: 0.375rem;
+            border: 1px solid #334155;
+        }
+
+        .input-group label {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            white-space: nowrap;
+        }
+
+        .input-group input {
+            width: 4.5rem;
+            background: #0f172a;
+            border: 1px solid #475569;
+            border-radius: 0.25rem;
+            padding: 0.25rem 0.375rem;
+            color: #f8fafc;
+            font-size: 0.875rem;
+            text-align: right;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        .input-group span {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+
+        .chart-section {
+            background: #1e293b;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .chart-title {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #cbd5e1;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem 0.5rem;
+            font-size: 0.625rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            cursor: pointer;
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+            transition: opacity 0.2s;
+        }
+
+        .legend-item.hidden {
+            opacity: 0.3;
+        }
+
+        .legend-color {
+            width: 1rem;
+            height: 2px;
+            border-radius: 1px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 250px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        @media (max-width: 600px) {
+            .inputs {
+                gap: 0.5rem;
+            }
+
+            .input-group {
+                padding: 0.25rem 0.375rem;
+            }
+
+            .input-group input {
+                width: 3.5rem;
+            }
+
+            .chart-container {
+                height: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📈 Investičná kalkulačka</h1>
+        
+        <div class="inputs">
+            <div class="input-group">
+                <label>Počiatočná:</label>
+                <input type="number" id="initial" value="1000" min="0" step="100">
+                <span>€</span>
+            </div>
+            <div class="input-group">
+                <label>Mesačne:</label>
+                <input type="number" id="monthly" value="20" min="0" step="5">
+                <span>€</span>
+            </div>
+            <div class="input-group">
+                <label>Poplatky:</label>
+                <input type="number" id="fees" value="1" min="0" max="4" step="0.1">
+                <span>%</span>
+            </div>
+        </div>
+
+        <div class="chart-section">
+            <div class="chart-header">
+                <span class="chart-title">Očakávaný výnos podľa % zhodnotenia</span>
+                <div class="legend" id="returnLegend"></div>
+            </div>
+            <div class="chart-container">
+                <canvas id="returnChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-section">
+            <div class="chart-header">
+                <span class="chart-title">Vplyv poplatkov na výnos (pri 7% zhodnotení)</span>
+                <div class="legend" id="feeLegend"></div>
+            </div>
+            <div class="chart-container">
+                <canvas id="feeChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const returnRates = [2, 4, 6, 8, 10];
+        const feeRates = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4];
+        const years = 40;
+        
+        const returnColors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6'];
+        const feeColors = ['#22c55e', '#4ade80', '#86efac', '#bef264', '#fde047', '#fbbf24', '#fb923c', '#f87171', '#ef4444'];
+        
+        let hiddenReturnLines = new Set();
+        let hiddenFeeLines = new Set();
+
+        const initialInput = document.getElementById('initial');
+        const monthlyInput = document.getElementById('monthly');
+        const feesInput = document.getElementById('fees');
+        const returnCanvas = document.getElementById('returnChart');
+        const feeCanvas = document.getElementById('feeChart');
+
+        function calculateValue(initial, monthly, annualReturn, annualFee, yearCount) {
+            const monthlyReturn = (annualReturn - annualFee) / 100 / 12;
+            let value = initial;
+            
+            for (let month = 0; month < yearCount * 12; month++) {
+                value = value * (1 + monthlyReturn) + monthly;
+            }
+            
+            return value;
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(0) + 'k';
+            return num.toFixed(0);
+        }
+
+        function drawChart(canvas, datasets, colors, hiddenSet, labelSuffix = '%') {
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            
+            const width = rect.width;
+            const height = rect.height;
+            const padding = { top: 20, right: 15, bottom: 30, left: 50 };
+            const chartWidth = width - padding.left - padding.right;
+            const chartHeight = height - padding.top - padding.bottom;
+
+            ctx.clearRect(0, 0, width, height);
+
+            // Find max value from visible datasets
+            let maxValue = 0;
+            datasets.forEach((data, i) => {
+                if (!hiddenSet.has(i)) {
+                    maxValue = Math.max(maxValue, Math.max(...data));
+                }
+            });
+            if (maxValue === 0) maxValue = 1000;
+
+            // Draw grid and decade lines
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            
+            for (let i = 0; i <= years; i++) {
+                const x = padding.left + (i / years) * chartWidth;
+                
+                if (i % 10 === 0) {
+                    ctx.strokeStyle = '#475569';
+                    ctx.beginPath();
+                    ctx.moveTo(x, padding.top);
+                    ctx.lineTo(x, height - padding.bottom);
+                    ctx.stroke();
+                    
+                    ctx.fillStyle = '#94a3b8';
+                    ctx.font = '10px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(i + ' r', x, height - padding.bottom + 15);
+                }
+            }
+
+            // Y-axis labels
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'right';
+            
+            for (let i = 0; i <= 4; i++) {
+                const value = (maxValue / 4) * i;
+                const y = height - padding.bottom - (i / 4) * chartHeight;
+                ctx.fillText(formatNumber(value) + ' €', padding.left - 5, y + 3);
+                
+                ctx.strokeStyle = '#1e293b';
+                ctx.beginPath();
+                ctx.moveTo(padding.left, y);
+                ctx.lineTo(width - padding.right, y);
+                ctx.stroke();
+            }
+
+            // Draw lines
+            datasets.forEach((data, dataIndex) => {
+                if (hiddenSet.has(dataIndex)) return;
+                
+                ctx.strokeStyle = colors[dataIndex];
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                
+                data.forEach((value, i) => {
+                    const x = padding.left + (i / years) * chartWidth;
+                    const y = height - padding.bottom - (value / maxValue) * chartHeight;
+                    
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                
+                ctx.stroke();
+            });
+        }
+
+        function createLegend(container, labels, colors, hiddenSet, onToggle) {
+            container.innerHTML = '';
+            labels.forEach((label, i) => {
+                const item = document.createElement('div');
+                item.className = 'legend-item' + (hiddenSet.has(i) ? ' hidden' : '');
+                item.innerHTML = `<span class="legend-color" style="background: ${colors[i]}"></span>${label}`;
+                item.onclick = () => {
+                    if (hiddenSet.has(i)) hiddenSet.delete(i);
+                    else hiddenSet.add(i);
+                    onToggle();
+                };
+                container.appendChild(item);
+            });
+        }
+
+        function updateCharts() {
+            const initial = parseFloat(initialInput.value) || 0;
+            const monthly = parseFloat(monthlyInput.value) || 0;
+            const fees = parseFloat(feesInput.value) || 0;
+
+            // Return chart data
+            const returnData = returnRates.map(rate => {
+                return Array.from({length: years + 1}, (_, i) => 
+                    calculateValue(initial, monthly, rate, fees, i)
+                );
+            });
+
+            // Fee chart data (at 7% return)
+            const feeData = feeRates.map(fee => {
+                return Array.from({length: years + 1}, (_, i) => 
+                    calculateValue(initial, monthly, 7, fee, i)
+                );
+            });
+
+            drawChart(returnCanvas, returnData, returnColors, hiddenReturnLines);
+            drawChart(feeCanvas, feeData, feeColors, hiddenFeeLines);
+
+            createLegend(
+                document.getElementById('returnLegend'),
+                returnRates.map(r => r + '%'),
+                returnColors,
+                hiddenReturnLines,
+                updateCharts
+            );
+
+            createLegend(
+                document.getElementById('feeLegend'),
+                feeRates.map(r => r + '%'),
+                feeColors,
+                hiddenFeeLines,
+                updateCharts
+            );
+        }
+
+        initialInput.addEventListener('input', updateCharts);
+        monthlyInput.addEventListener('input', updateCharts);
+        feesInput.addEventListener('input', updateCharts);
+        window.addEventListener('resize', updateCharts);
+
+        updateCharts();
+    </script>
+</body>
+</html>

@@ -133,6 +133,50 @@
         canvas {
             width: 100%;
             height: 100%;
+            cursor: crosshair;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: #0f172a;
+            border: 1px solid #475569;
+            border-radius: 0.375rem;
+            padding: 0.5rem;
+            font-size: 0.75rem;
+            pointer-events: none;
+            z-index: 10;
+            min-width: 100px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .tooltip-title {
+            color: #94a3b8;
+            margin-bottom: 0.25rem;
+            font-weight: 500;
+        }
+
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.125rem 0;
+        }
+
+        .tooltip-label {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .tooltip-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .tooltip-value {
+            font-weight: 500;
+            color: #f8fafc;
         }
 
         @media (max-width: 600px) {
@@ -183,6 +227,7 @@
             </div>
             <div class="chart-container">
                 <canvas id="returnChart"></canvas>
+                <div class="tooltip" id="returnTooltip" style="display: none;"></div>
             </div>
         </div>
 
@@ -193,6 +238,7 @@
             </div>
             <div class="chart-container">
                 <canvas id="feeChart"></canvas>
+                <div class="tooltip" id="feeTooltip" style="display: none;"></div>
             </div>
         </div>
     </div>
@@ -213,6 +259,14 @@
         const feesInput = document.getElementById('fees');
         const returnCanvas = document.getElementById('returnChart');
         const feeCanvas = document.getElementById('feeChart');
+        const returnTooltip = document.getElementById('returnTooltip');
+        const feeTooltip = document.getElementById('feeTooltip');
+
+        // Store chart data and dimensions for tooltip
+        let chartState = {
+            return: { data: [], padding: null, chartWidth: 0, chartHeight: 0, maxValue: 0 },
+            fee: { data: [], padding: null, chartWidth: 0, chartHeight: 0, maxValue: 0 }
+        };
 
         function calculateValue(initial, monthly, annualReturn, annualFee, yearCount) {
             const monthlyReturn = (annualReturn - annualFee) / 100 / 12;
@@ -231,7 +285,7 @@
             return num.toFixed(0);
         }
 
-        function drawChart(canvas, datasets, colors, hiddenSet, labelSuffix = '%') {
+        function drawChart(canvas, datasets, colors, hiddenSet, stateKey, labelSuffix = '%') {
             const ctx = canvas.getContext('2d');
             const dpr = window.devicePixelRatio || 1;
             const rect = canvas.getBoundingClientRect();
@@ -256,6 +310,9 @@
                 }
             });
             if (maxValue === 0) maxValue = 1000;
+
+            // Store state for tooltip
+            chartState[stateKey] = { data: datasets, padding, chartWidth, chartHeight, maxValue, width, height };
 
             // Draw grid and decade lines
             ctx.strokeStyle = '#334155';
@@ -349,8 +406,8 @@
                 );
             });
 
-            drawChart(returnCanvas, returnData, returnColors, hiddenReturnLines);
-            drawChart(feeCanvas, feeData, feeColors, hiddenFeeLines);
+            drawChart(returnCanvas, returnData, returnColors, hiddenReturnLines, 'return');
+            drawChart(feeCanvas, feeData, feeColors, hiddenFeeLines, 'fee');
 
             createLegend(
                 document.getElementById('returnLegend'),
@@ -373,6 +430,117 @@
         monthlyInput.addEventListener('input', updateCharts);
         feesInput.addEventListener('input', updateCharts);
         window.addEventListener('resize', updateCharts);
+
+        function formatFullNumber(num) {
+            return num.toLocaleString('sk-SK', { maximumFractionDigits: 0 }) + ' €';
+        }
+
+        function handleChartInteraction(e, canvas, tooltip, stateKey, labels, colors, hiddenSet) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const state = chartState[stateKey];
+            
+            if (!state.padding) return;
+
+            const { padding, chartWidth, chartHeight, data, maxValue, width, height } = state;
+
+            // Check if within chart area
+            if (x < padding.left || x > width - padding.right || y < padding.top || y > height - padding.bottom) {
+                tooltip.style.display = 'none';
+                return;
+            }
+
+            // Calculate year from x position
+            const yearFloat = ((x - padding.left) / chartWidth) * years;
+            const year = Math.round(yearFloat);
+            
+            if (year < 0 || year > years) {
+                tooltip.style.display = 'none';
+                return;
+            }
+
+            // Build tooltip content
+            let html = `<div class="tooltip-title">Rok ${year}</div>`;
+            
+            let prevValue = null;
+            labels.forEach((label, i) => {
+                if (hiddenSet.has(i)) return;
+                const value = data[i][year];
+                
+                let diffHtml = '';
+                if (prevValue !== null) {
+                    const diff = value - prevValue;
+                    const diffPercent = ((diff / prevValue) * 100).toFixed(1);
+                    const sign = diff >= 0 ? '+' : '';
+                    const color = diff >= 0 ? '#22c55e' : '#ef4444';
+                    diffHtml = `<span style="color: ${color}; font-size: 0.625rem; margin-left: 0.25rem;">${sign}${diffPercent}%</span>`;
+                }
+                
+                html += `
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">
+                            <span class="tooltip-dot" style="background: ${colors[i]}"></span>
+                            ${label}
+                        </span>
+                        <span class="tooltip-value">${formatFullNumber(value)}${diffHtml}</span>
+                    </div>
+                `;
+                
+                prevValue = value;
+            });
+
+            tooltip.innerHTML = html;
+            tooltip.style.display = 'block';
+
+            // Position tooltip
+            let tooltipX = x + 15;
+            let tooltipY = y - 10;
+            
+            const tooltipRect = tooltip.getBoundingClientRect();
+            if (tooltipX + tooltipRect.width > rect.width) {
+                tooltipX = x - tooltipRect.width - 15;
+            }
+            if (tooltipY + tooltipRect.height > rect.height) {
+                tooltipY = rect.height - tooltipRect.height - 10;
+            }
+            if (tooltipY < 0) tooltipY = 10;
+
+            tooltip.style.left = tooltipX + 'px';
+            tooltip.style.top = tooltipY + 'px';
+        }
+
+        function hideTooltip(tooltip) {
+            tooltip.style.display = 'none';
+        }
+
+        // Return chart events
+        returnCanvas.addEventListener('mousemove', (e) => {
+            handleChartInteraction(e, returnCanvas, returnTooltip, 'return', 
+                returnRates.map(r => r + '%'), returnColors, hiddenReturnLines);
+        });
+        returnCanvas.addEventListener('mouseleave', () => hideTooltip(returnTooltip));
+        returnCanvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            handleChartInteraction(touch, returnCanvas, returnTooltip, 'return',
+                returnRates.map(r => r + '%'), returnColors, hiddenReturnLines);
+        });
+        returnCanvas.addEventListener('touchend', () => hideTooltip(returnTooltip));
+
+        // Fee chart events
+        feeCanvas.addEventListener('mousemove', (e) => {
+            handleChartInteraction(e, feeCanvas, feeTooltip, 'fee',
+                feeRates.map(r => r + '% popl.'), feeColors, hiddenFeeLines);
+        });
+        feeCanvas.addEventListener('mouseleave', () => hideTooltip(feeTooltip));
+        feeCanvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            handleChartInteraction(touch, feeCanvas, feeTooltip, 'fee',
+                feeRates.map(r => r + '% popl.'), feeColors, hiddenFeeLines);
+        });
+        feeCanvas.addEventListener('touchend', () => hideTooltip(feeTooltip));
 
         updateCharts();
     </script>

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Photo Gallery</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a; color: #fff; min-height: 100vh; overflow: hidden; touch-action: pan-y;
+        }
+        .container { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 16px; background: #141414; border-bottom: 1px solid #2a2a2a; flex-shrink: 0;
+        }
+        .header h1 { font-size: 1.1rem; font-weight: 500; color: #e0e0e0; }
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+        .folder-name { font-size: 0.8rem; color: #666; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .load-btn { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500; }
+        .viewer { flex: 1; display: flex; position: relative; overflow: hidden; min-height: 0; }
+        .photo-container { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; background: #0a0a0a; min-width: 0; }
+        .photo-container img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .no-photos { text-align: center; color: #666; padding: 20px; }
+        .no-photos p { margin-bottom: 16px; font-size: 1rem; }
+        .no-photos .hint { font-size: 0.85rem; color: #555; }
+        .browser-warning { background: #44403c; color: #fbbf24; padding: 16px; border-radius: 8px; margin-top: 20px; font-size: 0.85rem; line-height: 1.5; }
+        .photo-info-overlay { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.8)); padding: 40px 16px 16px; pointer-events: none; }
+        .photo-info-overlay .file-name { font-size: 0.9rem; font-weight: 500; margin-bottom: 4px; }
+        .photo-info-overlay .counter { font-size: 0.8rem; color: #999; }
+        .photo-info-overlay .current-tag { display: inline-block; background: #166534; color: #86efac; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; margin-top: 8px; }
+        .nav-arrow { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.1); border: none; color: white; width: 44px; height: 70px; cursor: pointer; font-size: 1.3rem; transition: background 0.2s; z-index: 10; }
+        .nav-arrow:hover { background: rgba(255,255,255,0.2); }
+        .nav-arrow.prev { left: 0; border-radius: 0 8px 8px 0; }
+        .nav-arrow.next { right: 0; border-radius: 8px 0 0 8px; }
+        .sidebar { width: 300px; background: #141414; border-left: 1px solid #2a2a2a; display: none; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+        .sidebar.visible { display: flex; }
+        .sidebar-header { padding: 16px; border-bottom: 1px solid #2a2a2a; display: flex; justify-content: space-between; align-items: center; }
+        .sidebar-header h2 { font-size: 0.9rem; font-weight: 500; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
+        .close-sidebar { display: none; background: none; border: none; color: #666; font-size: 1.5rem; cursor: pointer; padding: 0; line-height: 1; }
+        .file-info { padding: 16px; border-bottom: 1px solid #2a2a2a; }
+        .file-name { font-size: 0.95rem; font-weight: 500; margin-bottom: 8px; word-break: break-all; }
+        .file-meta { font-size: 0.8rem; color: #666; }
+        .counter { font-size: 0.85rem; color: #888; margin-top: 8px; }
+        .tags-section { flex: 1; padding: 16px; overflow-y: auto; }
+        .tags-section h3 { font-size: 0.85rem; font-weight: 500; color: #999; margin-bottom: 12px; }
+        .current-folder { background: #166534; color: #86efac; padding: 10px 14px; border-radius: 8px; font-size: 0.9rem; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+        .current-folder .remove-folder { background: rgba(0,0,0,0.3); border: none; color: #86efac; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; }
+        .no-folder { color: #666; font-size: 0.85rem; margin-bottom: 16px; padding: 10px 14px; background: #1a1a1a; border-radius: 8px; }
+        .recent-tags { margin-bottom: 16px; }
+        .recent-tags-label { font-size: 0.75rem; color: #666; margin-bottom: 8px; text-transform: uppercase; }
+        .recent-tags-list { display: flex; flex-wrap: wrap; gap: 8px; }
+        .recent-tag { background: #2a2a2a; color: #ccc; border: none; padding: 8px 14px; border-radius: 20px; font-size: 0.8rem; cursor: pointer; }
+        .recent-tag:hover { background: #3a3a3a; }
+        .tag-input-container { display: flex; gap: 8px; }
+        .tag-input { flex: 1; background: #1a1a1a; border: 1px solid #333; color: white; padding: 10px 12px; border-radius: 6px; font-size: 0.9rem; }
+        .tag-input:focus { outline: none; border-color: #3b82f6; }
+        .add-tag-btn { background: #3b82f6; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+        .tags-note { margin-top: 12px; font-size: 0.75rem; color: #555; line-height: 1.4; }
+        .actions { padding: 16px; border-top: 1px solid #2a2a2a; }
+        .delete-btn { width: 100%; background: #dc2626; color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 500; }
+        .footer { padding: 10px 16px; background: #141414; border-top: 1px solid #2a2a2a; display: flex; justify-content: center; gap: 24px; flex-shrink: 0; }
+        .shortcut { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #666; }
+        .key { background: #2a2a2a; padding: 3px 6px; border-radius: 4px; font-family: monospace; font-size: 0.7rem; }
+        .mobile-toolbar { display: none; padding: 12px 16px; background: #141414; border-top: 1px solid #2a2a2a; gap: 12px; flex-shrink: 0; }
+        .mobile-btn { flex: 1; background: #2a2a2a; color: white; border: none; padding: 14px 12px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .mobile-btn.danger { background: #dc2626; }
+        .mobile-btn.primary { background: #3b82f6; }
+        .undo-stack { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column-reverse; gap: 8px; z-index: 1000; pointer-events: none; width: calc(100% - 32px); max-width: 400px; }
+        .undo-item { background: #1f1f1f; border: 1px solid #333; color: white; padding: 12px 14px; border-radius: 8px; font-size: 0.85rem; display: flex; align-items: center; gap: 10px; pointer-events: auto; animation: slideIn 0.2s ease-out; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .undo-item .undo-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .undo-item .undo-timer { width: 28px; height: 28px; border-radius: 50%; background: conic-gradient(#3b82f6 var(--progress, 100%), #333 0); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 500; position: relative; flex-shrink: 0; }
+        .undo-item .undo-timer::before { content: ''; position: absolute; width: 20px; height: 20px; background: #1f1f1f; border-radius: 50%; }
+        .undo-item .undo-timer span { position: relative; z-index: 1; }
+        .undo-item .undo-btn { background: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; font-weight: 500; flex-shrink: 0; }
+        .toast { position: fixed; top: 70px; left: 50%; transform: translateX(-50%) translateY(-100px); background: #333; color: white; padding: 10px 20px; border-radius: 8px; font-size: 0.85rem; opacity: 0; transition: all 0.3s; z-index: 1001; max-width: calc(100% - 32px); text-align: center; }
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+        .toast.error { background: #dc2626; }
+        .toast.success { background: #16a34a; }
+        .loading { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 200; }
+        .loading.show { display: flex; }
+        .spinner { width: 40px; height: 40px; border: 3px solid #333; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .panel-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 99; }
+        .panel-overlay.show { display: block; }
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1rem; }
+            .footer { display: none; }
+            .mobile-toolbar { display: flex; }
+            .nav-arrow { width: 50px; height: 100%; top: 0; transform: none; border-radius: 0; background: transparent; font-size: 0; }
+            .nav-arrow:active { background: rgba(255,255,255,0.1); }
+            .sidebar { position: fixed; top: 0; right: 0; bottom: 0; width: 85%; max-width: 320px; z-index: 100; transform: translateX(100%); transition: transform 0.3s ease; }
+            .sidebar.visible { display: flex; transform: translateX(0); }
+            .close-sidebar { display: block; }
+            .undo-stack { bottom: 90px; }
+            .photo-info-overlay { display: block; }
+        }
+        @media (min-width: 769px) {
+            .photo-info-overlay { display: none; }
+            .sidebar.has-photos { display: flex; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header"><h1>Photo Gallery</h1><div class="header-actions"><span class="folder-name" id="folderName"></span><button class="load-btn" onclick="loadFolder()">Load Folder</button></div></header>
+        <div class="viewer">
+            <div class="photo-container" id="photoContainer">
+                <div class="no-photos" id="noPhotos"><p>No photos loaded</p><p class="hint">Click "Load Folder" to select a folder with images</p><div class="browser-warning" id="browserWarning" style="display: none;">⚠️ Your browser doesn't support the File System Access API. Please use Chrome, Edge, or another Chromium-based browser.</div></div>
+                <div class="photo-info-overlay" id="photoInfoOverlay" style="display: none;"><div class="file-name" id="overlayFileName"></div><div class="counter" id="overlayCounter"></div><div class="current-tag" id="overlayTag" style="display: none;"></div></div>
+            </div>
+            <button class="nav-arrow prev" onclick="prevPhoto()" id="prevBtn" style="display: none;">←</button>
+            <button class="nav-arrow next" onclick="nextPhoto()" id="nextBtn" style="display: none;">→</button>
+            <aside class="sidebar" id="sidebar">
+                <div class="sidebar-header"><h2>Photo Details</h2><button class="close-sidebar" onclick="closeSidebar()">×</button></div>
+                <div class="file-info"><div class="file-name" id="fileName">-</div><div class="file-meta" id="fileMeta">-</div><div class="counter" id="counter">-</div></div>
+                <div class="tags-section">
+                    <h3>Folder</h3><div id="currentFolderDisplay"></div>
+                    <div class="recent-tags" id="recentTagsSection" style="display: none;"><div class="recent-tags-label">Recent folders</div><div class="recent-tags-list" id="recentTagsList"></div></div>
+                    <div class="tag-input-container"><input type="text" class="tag-input" id="tagInput" placeholder="New folder name..." onkeypress="handleTagKeypress(event)"><button class="add-tag-btn" onclick="addTag()">Move</button></div>
+                    <p class="tags-note">Moving a photo places it in a folder. Each photo can only be in one folder at a time.</p>
+                </div>
+                <div class="actions"><button class="delete-btn" onclick="trashPhoto()">Move to Trash</button></div>
+            </aside>
+        </div>
+        <footer class="footer"><div class="shortcut"><span class="key">←</span> Prev</div><div class="shortcut"><span class="key">→</span> Next</div><div class="shortcut"><span class="key">Del</span> Trash</div><div class="shortcut"><span class="key">T</span> Tag</div><div class="shortcut"><span class="key">⌘Z</span> Undo</div></footer>
+        <div class="mobile-toolbar" id="mobileToolbar"><button class="mobile-btn danger" onclick="trashPhoto()">🗑 Trash</button><button class="mobile-btn primary" onclick="openSidebar()">📁 Tag</button></div>
+    </div>
+    <div class="panel-overlay" id="panelOverlay" onclick="closeSidebar()"></div>
+    <div class="undo-stack" id="undoStack"></div>
+    <div class="loading" id="loading"><div class="loading-content"><div class="spinner"></div><p>Loading...</p></div></div>
+    <div class="toast" id="toast"></div>
+<script>
+let photos = [], currentIndex = 0, directoryHandle = null, trashFolderHandle = null, recentTags = [], undoStack = [];
+const TRASH_FOLDER = '.trash', UNDO_TIMEOUT = 20000, MAX_RECENT_TAGS = 5, RECENT_TAGS_KEY = 'photoGalleryRecentTags';
+const hasFileSystemAccess = 'showDirectoryPicker' in window;
+const $ = id => document.getElementById(id);
+const photoContainer = $('photoContainer'), noPhotos = $('noPhotos'), browserWarning = $('browserWarning'), sidebar = $('sidebar');
+const prevBtn = $('prevBtn'), nextBtn = $('nextBtn'), fileName = $('fileName'), fileMeta = $('fileMeta'), counter = $('counter');
+const currentFolderDisplay = $('currentFolderDisplay'), recentTagsSection = $('recentTagsSection'), recentTagsList = $('recentTagsList');
+const tagInput = $('tagInput'), undoStackEl = $('undoStack'), loading = $('loading'), toast = $('toast'), folderNameEl = $('folderName');
+const panelOverlay = $('panelOverlay'), mobileToolbar = $('mobileToolbar'), photoInfoOverlay = $('photoInfoOverlay');
+const overlayFileName = $('overlayFileName'), overlayCounter = $('overlayCounter'), overlayTag = $('overlayTag');
+
+function loadRecentTags() { try { const s = localStorage.getItem(RECENT_TAGS_KEY); if (s) recentTags = JSON.parse(s); } catch(e){} }
+function saveRecentTags() { try { localStorage.setItem(RECENT_TAGS_KEY, JSON.stringify(recentTags)); } catch(e){} }
+function addToRecentTags(tag) { recentTags = recentTags.filter(t => t !== tag); recentTags.unshift(tag); if (recentTags.length > MAX_RECENT_TAGS) recentTags = recentTags.slice(0, MAX_RECENT_TAGS); saveRecentTags(); renderRecentTags(); }
+function renderRecentTags() { if (recentTags.length === 0) { recentTagsSection.style.display = 'none'; return; } recentTagsSection.style.display = 'block'; recentTagsList.innerHTML = recentTags.map(tag => `<button class="recent-tag" onclick="moveToFolder('${escapeAttr(tag)}')">${escapeHtml(tag)}</button>`).join(''); }
+if (!hasFileSystemAccess) browserWarning.style.display = 'block';
+loadRecentTags();
+function openSidebar() { sidebar.classList.add('visible'); panelOverlay.classList.add('show'); }
+function closeSidebar() { sidebar.classList.remove('visible'); panelOverlay.classList.remove('show'); }
+
+async function loadFolder() {
+    if (!hasFileSystemAccess) { showToast('File System Access API not supported', 'error'); return; }
+    try {
+        directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        loading.classList.add('show'); folderNameEl.textContent = directoryHandle.name;
+        photos.forEach(p => { if (p.url) URL.revokeObjectURL(p.url); });
+        photos = []; undoStack = []; renderUndoStack();
+        trashFolderHandle = await directoryHandle.getDirectoryHandle(TRASH_FOLDER, { create: true });
+        const exts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
+        for await (const e of directoryHandle.values()) {
+            if (e.kind === 'file' && exts.some(x => e.name.toLowerCase().endsWith(x))) {
+                const f = await e.getFile();
+                photos.push({ handle: e, file: f, url: URL.createObjectURL(f), name: e.name, size: f.size, type: f.type, lastModified: new Date(f.lastModified), folder: null });
+            }
+        }
+        for await (const e of directoryHandle.values()) {
+            if (e.kind === 'directory' && !e.name.startsWith('.')) {
+                for await (const fe of e.values()) {
+                    if (fe.kind === 'file' && exts.some(x => fe.name.toLowerCase().endsWith(x))) {
+                        const f = await fe.getFile();
+                        photos.push({ handle: fe, folderHandle: e, file: f, url: URL.createObjectURL(f), name: fe.name, size: f.size, type: f.type, lastModified: new Date(f.lastModified), folder: e.name });
+                    }
+                }
+            }
+        }
+        photos.sort((a, b) => a.name.localeCompare(b.name));
+        loading.classList.remove('show');
+        if (photos.length === 0) { showToast('No images found', 'error'); sidebar.classList.remove('has-photos'); return; }
+        currentIndex = 0; sidebar.classList.add('has-photos'); showPhoto(); showToast(`Loaded ${photos.length} photos`, 'success');
+    } catch (err) { loading.classList.remove('show'); if (err.name !== 'AbortError') showToast('Error: ' + err.message, 'error'); }
+}
+
+function showPhoto() {
+    if (photos.length === 0) { noPhotos.style.display = 'block'; photoInfoOverlay.style.display = 'none'; sidebar.classList.remove('has-photos'); prevBtn.style.display = 'none'; nextBtn.style.display = 'none'; mobileToolbar.style.display = 'none'; return; }
+    noPhotos.style.display = 'none'; photoInfoOverlay.style.display = 'block'; sidebar.classList.add('has-photos'); prevBtn.style.display = 'block'; nextBtn.style.display = 'block'; mobileToolbar.style.display = 'flex';
+    const p = photos[currentIndex];
+    let img = photoContainer.querySelector('img');
+    if (!img) { img = document.createElement('img'); photoContainer.insertBefore(img, photoInfoOverlay); }
+    img.src = p.url; img.alt = p.name;
+    fileName.textContent = p.name; fileMeta.textContent = `${formatSize(p.size)} • ${p.type || 'Unknown'}`; counter.textContent = `${currentIndex + 1} of ${photos.length}`;
+    overlayFileName.textContent = p.name; overlayCounter.textContent = `${currentIndex + 1} of ${photos.length}`;
+    if (p.folder) { overlayTag.style.display = 'inline-block'; overlayTag.textContent = '📁 ' + p.folder; } else { overlayTag.style.display = 'none'; }
+    renderCurrentFolder(); renderRecentTags();
+}
+
+function renderCurrentFolder() { if (photos.length === 0) return; const p = photos[currentIndex]; currentFolderDisplay.innerHTML = p.folder ? `<div class="current-folder"><span>📁 ${escapeHtml(p.folder)}</span><button class="remove-folder" onclick="removeFromFolder()">×</button></div>` : `<div class="no-folder">Not in any folder</div>`; }
+function formatSize(b) { if (b < 1024) return b + ' B'; if (b < 1048576) return (b / 1024).toFixed(1) + ' KB'; return (b / 1048576).toFixed(1) + ' MB'; }
+function nextPhoto() { if (photos.length) { currentIndex = (currentIndex + 1) % photos.length; showPhoto(); } }
+function prevPhoto() { if (photos.length) { currentIndex = (currentIndex - 1 + photos.length) % photos.length; showPhoto(); } }
+function handleTagKeypress(e) { if (e.key === 'Enter') addTag(); }
+async function addTag() { const t = tagInput.value.trim().replace(/[<>:"/\\|?*]/g, ''); if (!t) return; tagInput.value = ''; await moveToFolder(t); }
+
+async function moveToFolder(folderName) {
+    if (!photos.length) return; const p = photos[currentIndex];
+    if (p.folder === folderName) { showToast(`Already in "${folderName}"`, 'error'); return; }
+    try {
+        const oldFolder = p.folder, oldFolderHandle = p.folderHandle;
+        const targetFolder = await directoryHandle.getDirectoryHandle(folderName, { create: true });
+        const newFileHandle = await targetFolder.getFileHandle(p.name, { create: true });
+        const w = await newFileHandle.createWritable(); const fc = await p.file.arrayBuffer(); await w.write(fc); await w.close();
+        if (oldFolder && oldFolderHandle) await oldFolderHandle.removeEntry(p.name); else await directoryHandle.removeEntry(p.name);
+        const nf = await newFileHandle.getFile(); p.folder = folderName; p.folderHandle = targetFolder; p.handle = newFileHandle; URL.revokeObjectURL(p.url); p.file = nf; p.url = URL.createObjectURL(nf);
+        addToRecentTags(folderName); showPhoto(); closeSidebar();
+        addUndoAction({ type: 'move', photoName: p.name, fromFolder: oldFolder, toFolder: folderName, description: `Moved to ${folderName}` });
+    } catch (err) { showToast('Error: ' + err.message, 'error'); }
+}
+
+async function removeFromFolder() {
+    if (!photos.length) return; const p = photos[currentIndex]; if (!p.folder) return;
+    try {
+        const oldFolder = p.folder, oldFolderHandle = p.folderHandle;
+        const newFileHandle = await directoryHandle.getFileHandle(p.name, { create: true });
+        const w = await newFileHandle.createWritable(); const fc = await p.file.arrayBuffer(); await w.write(fc); await w.close();
+        await oldFolderHandle.removeEntry(p.name);
+        const nf = await newFileHandle.getFile(); p.folder = null; p.folderHandle = null; p.handle = newFileHandle; URL.revokeObjectURL(p.url); p.file = nf; p.url = URL.createObjectURL(nf);
+        showPhoto();
+        addUndoAction({ type: 'move', photoName: p.name, fromFolder: oldFolder, toFolder: null, description: `Removed from ${oldFolder}` });
+    } catch (err) { showToast('Error: ' + err.message, 'error'); }
+}
+
+async function trashPhoto() {
+    if (!photos.length) return; const p = photos[currentIndex];
+    try {
+        const th = await trashFolderHandle.getFileHandle(p.name, { create: true });
+        const w = await th.createWritable(); const fc = await p.file.arrayBuffer(); await w.write(fc); await w.close();
+        if (p.folder && p.folderHandle) await p.folderHandle.removeEntry(p.name); else await directoryHandle.removeEntry(p.name);
+        const tp = { name: p.name, folder: p.folder, size: p.size, type: p.type, lastModified: p.lastModified, fileData: fc };
+        URL.revokeObjectURL(p.url); photos.splice(currentIndex, 1);
+        if (currentIndex >= photos.length && photos.length > 0) currentIndex = photos.length - 1;
+        showPhoto(); showToast('Moved to trash', 'success'); closeSidebar();
+        addUndoAction({ type: 'trash', photo: tp, description: `Trashed "${tp.name}"` });
+    } catch (err) { showToast('Error: ' + err.message, 'error'); }
+}
+
+function addUndoAction(a) { const id = Date.now() + Math.random(); a.id = id; a.timestamp = Date.now(); undoStack.push(a); renderUndoStack(); setTimeout(() => { const i = undoStack.findIndex(x => x.id === id); if (i !== -1) { undoStack.splice(i, 1); renderUndoStack(); } }, UNDO_TIMEOUT); }
+function renderUndoStack() { undoStackEl.innerHTML = undoStack.map(a => { const el = Date.now() - a.timestamp, rem = Math.max(0, Math.ceil((UNDO_TIMEOUT - el) / 1000)), prog = ((UNDO_TIMEOUT - el) / UNDO_TIMEOUT) * 100; return `<div class="undo-item" data-id="${a.id}"><span class="undo-text">${escapeHtml(a.description)}</span><div class="undo-timer" style="--progress: ${prog}%"><span>${rem}</span></div><button class="undo-btn" onclick="undoAction(${a.id})">Undo</button></div>`; }).join(''); if (undoStack.length) requestAnimationFrame(updateTimers); }
+function updateTimers() { let active = false; undoStack.forEach(a => { const el = undoStackEl.querySelector(`[data-id="${a.id}"]`); if (el) { const e = Date.now() - a.timestamp, r = Math.max(0, Math.ceil((UNDO_TIMEOUT - e) / 1000)), p = Math.max(0, ((UNDO_TIMEOUT - e) / UNDO_TIMEOUT) * 100); el.querySelector('.undo-timer').style.setProperty('--progress', `${p}%`); el.querySelector('.undo-timer span').textContent = r; if (r > 0) active = true; } }); if (active) requestAnimationFrame(updateTimers); }
+
+async function undoAction(id) {
+    const i = undoStack.findIndex(a => a.id === id); if (i === -1) return;
+    const a = undoStack[i]; undoStack.splice(i, 1); renderUndoStack();
+    try { if (a.type === 'trash') await undoTrash(a); else if (a.type === 'move') await undoMove(a); } catch (err) { showToast('Undo failed: ' + err.message, 'error'); }
+}
+
+async function undoTrash(a) {
+    const { photo } = a; let targetHandle, folderHandle = null;
+    if (photo.folder) { folderHandle = await directoryHandle.getDirectoryHandle(photo.folder, { create: true }); targetHandle = await folderHandle.getFileHandle(photo.name, { create: true }); }
+    else { targetHandle = await directoryHandle.getFileHandle(photo.name, { create: true }); }
+    const w = await targetHandle.createWritable(); await w.write(photo.fileData); await w.close();
+    await trashFolderHandle.removeEntry(photo.name);
+    const nf = await targetHandle.getFile(), nu = URL.createObjectURL(nf);
+    photos.push({ handle: targetHandle, folderHandle, file: nf, url: nu, name: photo.name, size: nf.size, type: nf.type, lastModified: new Date(nf.lastModified), folder: photo.folder });
+    photos.sort((a, b) => a.name.localeCompare(b.name));
+    currentIndex = photos.findIndex(p => p.name === photo.name); if (currentIndex === -1) currentIndex = 0;
+    showPhoto(); showToast(`Restored "${photo.name}"`, 'success');
+}
+
+async function undoMove(a) {
+    const { photoName, fromFolder, toFolder } = a; const p = photos.find(x => x.name === photoName); if (!p) return;
+    const fc = await p.file.arrayBuffer(); let targetHandle, targetFolderHandle = null;
+    if (fromFolder) { targetFolderHandle = await directoryHandle.getDirectoryHandle(fromFolder, { create: true }); targetHandle = await targetFolderHandle.getFileHandle(photoName, { create: true }); }
+    else { targetHandle = await directoryHandle.getFileHandle(photoName, { create: true }); }
+    const w = await targetHandle.createWritable(); await w.write(fc); await w.close();
+    if (toFolder) { const cf = await directoryHandle.getDirectoryHandle(toFolder); await cf.removeEntry(photoName); } else { await directoryHandle.removeEntry(photoName); }
+    const nf = await targetHandle.getFile(); p.folder = fromFolder; p.folderHandle = targetFolderHandle; p.handle = targetHandle; URL.revokeObjectURL(p.url); p.file = nf; p.url = URL.createObjectURL(nf);
+    showPhoto();
+}
+
+function undoLast() { if (undoStack.length) undoAction(undoStack[undoStack.length - 1].id); }
+function showToast(m, t = '') { toast.textContent = m; toast.className = 'toast' + (t ? ' ' + t : ''); toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 2000); }
+function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+function escapeAttr(t) { return t.replace(/'/g, "\\'").replace(/"/g, '\\"'); }
+
+let touchStartX = 0;
+photoContainer.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
+photoContainer.addEventListener('touchend', e => { const diff = touchStartX - e.changedTouches[0].screenX; if (Math.abs(diff) > 50) { if (diff > 0) nextPhoto(); else prevPhoto(); } }, { passive: true });
+
+document.addEventListener('keydown', e => {
+    if (e.target === tagInput) return;
+    if (e.key === 'ArrowLeft') prevPhoto();
+    else if (e.key === 'ArrowRight') nextPhoto();
+    else if (e.key === 'Delete' || e.key === 'Backspace') trashPhoto();
+    else if (e.key === 't' || e.key === 'T') { if (window.innerWidth <= 768) openSidebar(); tagInput.focus(); e.preventDefault(); }
+    else if ((e.ctrlKey || e.metaKey) && e.key === 'z') { undoLast(); e.preventDefault(); }
+    else if (e.key === 'Escape') closeSidebar();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>HTTP Header Inspector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  color-scheme: dark;
+  --bg: #0a0c0f;
+  --panel: #10131a;
+  --panel-2: #151a22;
+  --line: #232936;
+  --text: #e8eaed;
+  --text-dim: #9aa1ac;
+  --text-muted: #616a78;
+  --accent: #7ceb4b;
+  --font: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --c-redirect: #f45866;
+  --c-stalled: #5c6370;
+  --c-dns: #7ceb4b;
+  --c-tcp: #4bb8eb;
+  --c-tls: #b48bff;
+  --c-request: #f5a623;
+  --c-response: #4beba0;
+  --c-dom: #6f7dff;
+  --c-load: #e8eaed;
+
+  --t-security: #f45866;
+  --t-cors: #b48bff;
+  --t-caching: #4bb8eb;
+  --t-content: #7ceb4b;
+  --t-cookies: #f5a623;
+  --t-server: #4beba0;
+  --t-other: #6b7280;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+
+main {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 32px 16px 96px;
+}
+
+/* ---------- header / toolbar ---------- */
+
+.masthead { margin-bottom: 28px; }
+
+h1 {
+  font: 500 13px/1 var(--mono);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 2.4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+h1::before {
+  content: "";
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+}
+
+.tagline {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 8px;
+  max-width: 62ch;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.probe {
+  display: flex;
+  flex: 1 1 320px;
+  min-width: 0;
+  gap: 8px;
+}
+
+input[type="url"], input[type="search"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font: 400 13px/1.4 var(--mono);
+  padding: 9px 12px;
+}
+input::placeholder { color: var(--text-muted); }
+input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+button {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text-dim);
+  font: 500 12px/1 var(--mono);
+  padding: 10px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s, color .15s, border-color .15s;
+}
+button:hover { background: var(--panel-2); color: var(--text); }
+button:active { transform: translateY(1px); }
+button:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+button[disabled] { opacity: .45; cursor: not-allowed; }
+button.primary { color: var(--bg); background: var(--accent); border-color: var(--accent); font-weight: 700; }
+button.primary:hover { background: #92f766; color: var(--bg); }
+
+/* ---------- sections ---------- */
+
+section {
+  margin-top: 32px;
+  animation: fade-in .28s ease both;
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  section { animation: none; }
+  * { transition-duration: .01ms !important; }
+}
+
+.sec-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+h2 {
+  font: 500 12px/1 var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 1.8px;
+  color: var(--text-dim);
+}
+
+.count {
+  font: 400 11px/1 var(--mono);
+  color: var(--text-muted);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 4px 8px;
+}
+
+.sec-head .spacer { flex: 1 1 auto; }
+.sec-head button { padding: 6px 10px; font-size: 11px; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.note {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  background: #0d1015;
+  line-height: 1.6;
+}
+.note code { font-family: var(--mono); color: var(--text-dim); }
+
+.empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font: 400 13px/1.6 var(--mono);
+}
+
+.error {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+.error-title { color: var(--c-redirect); font: 500 13px/1.4 var(--mono); }
+.error-msg { color: var(--text-dim); font: 400 12px/1.6 var(--mono); word-break: break-word; }
+
+/* ---------- status line ---------- */
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+  font: 400 12px/1 var(--mono);
+  color: var(--text-dim);
+}
+.badge {
+  font: 700 11px/1 var(--mono);
+  padding: 5px 8px;
+  border-radius: 6px;
+  letter-spacing: .5px;
+}
+.badge.ok { background: color-mix(in srgb, var(--c-response) 18%, transparent); color: var(--c-response); }
+.badge.warn { background: color-mix(in srgb, var(--c-request) 18%, transparent); color: var(--c-request); }
+.badge.bad { background: color-mix(in srgb, var(--c-redirect) 18%, transparent); color: var(--c-redirect); }
+.badge.info { background: color-mix(in srgb, var(--c-tcp) 18%, transparent); color: var(--c-tcp); }
+.status .url { color: var(--text); word-break: break-all; }
+
+/* ---------- timeline ---------- */
+
+.tl { padding: 16px 14px 10px; }
+.tl + .tl { border-top: 1px solid var(--line); }
+
+.tl-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.tl-title { font: 500 12px/1 var(--mono); color: var(--text); letter-spacing: .5px; }
+.tl-total { font: 400 12px/1 var(--mono); color: var(--text-muted); }
+
+.tl-row {
+  display: grid;
+  grid-template-columns: 116px 1fr 78px;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+}
+.tl-label {
+  font: 400 11px/1.3 var(--mono);
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; background: var(--sw); }
+.tl-label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.tl-track {
+  position: relative;
+  height: 16px;
+  border-radius: 4px;
+  background: #0c0f14;
+  box-shadow: inset 0 0 0 1px #1a1f28;
+}
+.tl-bar {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: var(--off);
+  width: var(--w);
+  min-width: 3px;
+  background: var(--sw);
+  border-radius: 3px;
+  opacity: .85;
+  transition: opacity .15s, filter .15s;
+}
+.tl-row:hover .tl-bar { opacity: 1; filter: brightness(1.15); }
+.tl-row.na .tl-bar { display: none; }
+.tl-dur {
+  font: 500 11px/1 var(--mono);
+  color: var(--text-dim);
+  text-align: right;
+  white-space: nowrap;
+}
+.tl-row.na .tl-dur, .tl-row.zero .tl-dur { color: var(--text-muted); font-weight: 400; }
+
+.tl-row .tip {
+  position: absolute;
+  left: var(--off);
+  bottom: calc(100% + 7px);
+  transform: translateX(-6px);
+  background: #1b212b;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 7px 10px;
+  font: 400 11px/1.5 var(--mono);
+  color: var(--text);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .12s;
+  z-index: 5;
+  box-shadow: 0 6px 20px rgba(0,0,0,.55);
+  max-width: 90vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tl-row:hover .tip, .tl-row:focus-within .tip { opacity: 1; }
+.tip b { color: var(--text-dim); font-weight: 500; }
+
+.tl-axis {
+  display: grid;
+  grid-template-columns: 116px 1fr 78px;
+  gap: 10px;
+  margin-top: 8px;
+}
+.tl-ticks {
+  grid-column: 2;
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  padding-top: 5px;
+  font: 400 10px/1 var(--mono);
+  color: var(--text-muted);
+}
+.tl-ticks span:first-child { transform: none; }
+.tl-ticks span:last-child { text-align: right; }
+
+@media (max-width: 640px) {
+  .tl-row { grid-template-columns: 1fr auto; grid-template-areas: "label dur" "track track"; row-gap: 4px; padding: 5px 0; }
+  .tl-label { grid-area: label; }
+  .tl-dur { grid-area: dur; }
+  .tl-track { grid-area: track; }
+  .tl-axis { grid-template-columns: 1fr; }
+  .tl-ticks { grid-column: 1; }
+}
+
+/* ---------- metric grid ---------- */
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  background: var(--panel);
+  /* Bleed the trailing rules under the panel border instead of doubling it. */
+  margin: 0 -1px -1px 0;
+}
+.metric {
+  background: var(--panel);
+  padding: 12px 14px;
+  min-width: 0;
+  box-shadow: inset -1px -1px 0 var(--line);
+}
+.metric dt {
+  font: 400 10px/1.3 var(--mono);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.metric dd {
+  font: 500 14px/1.3 var(--mono);
+  color: var(--text);
+  word-break: break-word;
+}
+.metric dd.dim { color: var(--text-muted); font-weight: 400; }
+.metric dd small { font-size: 11px; color: var(--text-muted); font-weight: 400; display: block; margin-top: 3px; }
+
+.group-label {
+  font: 500 10px/1 var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  color: var(--text-muted);
+  padding: 10px 14px;
+  background: #0d1015;
+  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+}
+.panel > .group-label:first-child { border-top: none; }
+
+/* ---------- header rows ---------- */
+
+.rows { display: flex; flex-direction: column; }
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(140px, 232px) 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  transition: background .15s;
+}
+.rows > .row:first-child { border-top: none; }
+.row:hover { background: var(--panel-2); }
+.row.copied { animation: flash .6s ease; }
+@keyframes flash {
+  0% { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+  100% { background: transparent; }
+}
+.row.hidden { display: none; }
+
+.k {
+  font: 500 12px/1.6 var(--mono);
+  color: var(--text);
+  word-break: break-all;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.tag {
+  font: 500 9px/1 var(--mono);
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  padding: 3px 5px;
+  border-radius: 4px;
+  color: var(--tc);
+  background: color-mix(in srgb, var(--tc) 15%, transparent);
+  flex: none;
+}
+.v {
+  font: 400 12px/1.6 var(--mono);
+  color: var(--text-dim);
+  word-break: break-word;
+  white-space: pre-wrap;
+  min-width: 0;
+}
+.v.clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.v.masked { filter: blur(4px); user-select: none; }
+.v em { color: var(--text-muted); font-style: normal; }
+
+.acts { display: flex; gap: 4px; flex: none; }
+.icon-btn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 7px;
+  font: 500 10px/1.4 var(--mono);
+  color: var(--text-muted);
+}
+.icon-btn:hover { background: #1c222c; color: var(--text); border-color: var(--line); }
+
+@media (max-width: 620px) {
+  .row { grid-template-columns: 1fr auto; grid-template-areas: "k acts" "v v"; gap: 6px 12px; }
+  .k { grid-area: k; }
+  .v { grid-area: v; }
+  .acts { grid-area: acts; }
+}
+
+/* ---------- toast ---------- */
+
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translate(-50%, 16px);
+  background: #1b212b;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px 16px;
+  font: 500 12px/1 var(--mono);
+  color: var(--text);
+  box-shadow: 0 10px 34px rgba(0,0,0,.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
+  z-index: 50;
+  max-width: calc(100vw - 32px);
+  text-align: center;
+}
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+#toast.err { border-color: var(--c-redirect); color: var(--c-redirect); }
+
+.skeleton {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font: 400 12px/1 var(--mono);
+  letter-spacing: 1px;
+}
+.skeleton::after {
+  content: "";
+  display: inline-block;
+  width: 1ch;
+  animation: dots 1.2s steps(4, end) infinite;
+}
+@keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+
+footer {
+  margin-top: 40px;
+  font: 400 11px/1.8 var(--mono);
+  color: var(--text-muted);
+}
+footer b { color: var(--text-dim); font-weight: 500; }
+</style>
+</head>
+<body>
+<main>
+  <div class="masthead">
+    <h1>HTTP Header Inspector</h1>
+    <p class="tagline">Everything the browser will tell a page about its own request: response headers, derived request headers, client environment and Performance API timings.</p>
+    <div class="toolbar">
+      <form class="probe" id="probe-form">
+        <input type="url" id="probe-url" placeholder="https://example.com/ — defaults to this page" spellcheck="false" autocomplete="off" aria-label="URL to inspect">
+        <button type="submit" class="primary">Inspect</button>
+      </form>
+      <button type="button" id="reload-btn" title="Re-run the probe request">Refresh</button>
+      <button type="button" id="copy-json">Copy JSON</button>
+    </div>
+  </div>
+
+  <section id="sec-response" aria-labelledby="h-response">
+    <div class="sec-head">
+      <h2 id="h-response">Response</h2>
+      <span class="count" id="count-response">—</span>
+      <span class="spacer"></span>
+      <input type="search" id="filter" placeholder="filter headers…" aria-label="Filter headers" style="flex:0 1 200px">
+      <button type="button" data-copy-section="response">Copy all</button>
+    </div>
+    <div class="panel" id="panel-response"><div class="skeleton">fetching</div></div>
+  </section>
+
+  <section id="sec-timeline" aria-labelledby="h-timeline">
+    <div class="sec-head"><h2 id="h-timeline">Request timeline</h2></div>
+    <div class="panel" id="panel-timeline"><div class="skeleton">measuring</div></div>
+  </section>
+
+  <section id="sec-perf" aria-labelledby="h-perf">
+    <div class="sec-head">
+      <h2 id="h-perf">Performance metrics</h2>
+      <span class="spacer"></span>
+      <button type="button" data-copy-section="performance">Copy all</button>
+    </div>
+    <div class="panel" id="panel-perf"><div class="skeleton">measuring</div></div>
+  </section>
+
+  <section id="sec-request" aria-labelledby="h-request">
+    <div class="sec-head">
+      <h2 id="h-request">Request headers <span style="text-transform:none;letter-spacing:0;color:var(--text-muted)">(derived)</span></h2>
+      <span class="count" id="count-request">—</span>
+      <span class="spacer"></span>
+      <button type="button" data-copy-section="request">Copy all</button>
+    </div>
+    <div class="panel" id="panel-request"><div class="skeleton">reading</div></div>
+  </section>
+
+  <section id="sec-client" aria-labelledby="h-client">
+    <div class="sec-head">
+      <h2 id="h-client">Client info</h2>
+      <span class="spacer"></span>
+      <button type="button" data-copy-section="client">Copy all</button>
+    </div>
+    <div class="panel" id="panel-client"><div class="skeleton">reading</div></div>
+  </section>
+
+  <footer>
+    <b>How this works.</b> Response headers come from a <code>fetch()</code> of the target URL, so this page issues one extra request per inspection.
+    Browsers never expose the real outgoing request headers to script — the request section is reconstructed from <code>navigator</code> and friends and marked accordingly.
+  </footer>
+</main>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module">
+'use strict';
+
+/* ------------------------------------------------------------------ *
+ * helpers
+ * ------------------------------------------------------------------ */
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const el = (tag, props = {}, ...kids) => {
+  const n = Object.assign(document.createElement(tag), props);
+  for (const k of kids) if (k != null) n.append(k);
+  return n;
+};
+const DASH = '—';
+
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+
+/** Milliseconds with sensible precision. */
+function ms(v) {
+  if (!isNum(v)) return DASH;
+  if (v === 0) return '0 ms';
+  if (v < 1) return `${v.toFixed(2)} ms`;
+  if (v < 1000) return `${v.toFixed(1)} ms`;
+  return `${(v / 1000).toFixed(2)} s`;
+}
+
+function bytes(v) {
+  if (!isNum(v)) return DASH;
+  if (v === 0) return '0 B';
+  const units = ['B', 'kB', 'MB', 'GB'];
+  const i = Math.min(Math.floor(Math.log(v) / Math.log(1024)), units.length - 1);
+  const n = v / 1024 ** i;
+  return `${i === 0 ? n : n.toFixed(n < 10 ? 2 : 1)} ${units[i]}`;
+}
+
+/** Positive duration between two Performance timestamps, or null. */
+function span(entry, a, b) {
+  const s = entry?.[a], e = entry?.[b];
+  if (!isNum(s) || !isNum(e) || s <= 0 || e <= 0 || e < s) return null;
+  return { start: s, end: e, dur: e - s };
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // Clipboard API needs a secure context; fall back to the legacy path.
+    const ta = el('textarea', { value: text });
+    Object.assign(ta.style, { position: 'fixed', top: '-1000px', opacity: '0' });
+    document.body.append(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    ta.remove();
+    return ok;
+  }
+}
+
+/** Content-Security-Policy blocks surface as a generic "Failed to fetch". */
+const cspBlocked = new Set();
+addEventListener('securitypolicyviolation', (e) => {
+  if (e.blockedURI) cspBlocked.add(e.blockedURI);
+});
+function wasCspBlocked(target) {
+  try {
+    const u = new URL(target, location.href);
+    for (const blocked of cspBlocked) if (blocked === u.origin || u.href.startsWith(blocked)) return true;
+  } catch { /* fall through */ }
+  return false;
+}
+
+let toastTimer;
+function toast(msg, isError = false) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.toggle('err', isError);
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+async function copyAndConfirm(text, label, rowEl) {
+  const ok = await copyText(text);
+  if (ok) {
+    toast(`Copied ${label}`);
+    if (rowEl) {
+      rowEl.classList.remove('copied');
+      void rowEl.offsetWidth; // restart the flash animation
+      rowEl.classList.add('copied');
+    }
+  } else {
+    toast('Copy failed — clipboard unavailable', true);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * header rows
+ * ------------------------------------------------------------------ */
+
+const CLAMP_AT = 140;
+
+const CATEGORIES = [
+  ['security', /^(strict-transport-security|content-security-policy(-report-only)?|x-frame-options|x-content-type-options|referrer-policy|permissions-policy|feature-policy|cross-origin-(opener|embedder|resource)-policy|x-xss-protection|expect-ct|nel|report-to|integrity-policy.*)$/],
+  ['cors', /^(access-control-.*|timing-allow-origin|origin|vary)$/],
+  ['caching', /^(cache-control|etag|expires|last-modified|age|pragma|if-.*|surrogate-control|x-cache.*|cdn-cache-control)$/],
+  ['content', /^(content-.*|accept.*|transfer-encoding|link|location|refresh)$/],
+  ['cookies', /^(set-cookie2?|cookie)$/],
+  ['server', /^(server|date|via|x-powered-by|x-served-by|alt-svc|connection|keep-alive|upgrade|retry-after|cf-.*|x-amz-.*|x-request-id)$/],
+];
+
+function categorize(name) {
+  const n = name.toLowerCase();
+  for (const [cat, re] of CATEGORIES) if (re.test(n)) return cat;
+  return 'other';
+}
+
+/**
+ * One key/value row. `opts.tag` shows a category chip, `opts.sensitive`
+ * blurs the value behind a reveal toggle, `opts.hint` is shown when empty.
+ */
+function makeRow(name, value, opts = {}) {
+  const row = el('div', { className: 'row' });
+  row.dataset.search = `${name} ${value ?? ''}`.toLowerCase();
+
+  const key = el('div', { className: 'k' }, name);
+  if (opts.tag) {
+    const chip = el('span', { className: 'tag', textContent: opts.tag });
+    chip.style.setProperty('--tc', `var(--t-${opts.tag})`);
+    key.append(chip);
+  }
+
+  const val = el('div', { className: 'v' });
+  const empty = value == null || value === '';
+  if (empty) {
+    val.append(el('em', { textContent: opts.hint || '(empty)' }));
+  } else {
+    val.textContent = value;
+  }
+
+  const acts = el('div', { className: 'acts' });
+
+  if (!empty && opts.sensitive) {
+    val.classList.add('masked');
+    const reveal = el('button', { type: 'button', className: 'icon-btn', textContent: 'reveal', title: 'Show value' });
+    reveal.addEventListener('click', () => {
+      const hidden = val.classList.toggle('masked');
+      reveal.textContent = hidden ? 'reveal' : 'hide';
+    });
+    acts.append(reveal);
+  }
+
+  if (!empty && String(value).length > CLAMP_AT) {
+    val.classList.add('clamped');
+    const more = el('button', { type: 'button', className: 'icon-btn', textContent: 'expand', title: 'Show full value' });
+    more.addEventListener('click', () => {
+      const clamped = val.classList.toggle('clamped');
+      more.textContent = clamped ? 'expand' : 'collapse';
+    });
+    acts.append(more);
+  }
+
+  if (!empty) {
+    const copy = el('button', { type: 'button', className: 'icon-btn', textContent: 'copy', title: `Copy ${name}` });
+    copy.addEventListener('click', () => copyAndConfirm(`${name}: ${value}`, name, row));
+    acts.append(copy);
+  }
+
+  row.append(key, val, acts);
+  return row;
+}
+
+function renderRows(panel, entries, { note, emptyMessage } = {}) {
+  panel.replaceChildren();
+  if (!entries.length) {
+    panel.append(el('div', { className: 'empty', textContent: emptyMessage || 'Nothing to show.' }));
+  } else {
+    const rows = el('div', { className: 'rows' });
+    for (const e of entries) {
+      if (e.group) { rows.append(el('div', { className: 'group-label', textContent: e.group })); continue; }
+      rows.append(makeRow(e.name, e.value, e));
+    }
+    panel.append(rows);
+  }
+  if (note) panel.append(el('div', { className: 'note' }, note));
+}
+
+/* ------------------------------------------------------------------ *
+ * timeline
+ * ------------------------------------------------------------------ */
+
+const PHASES = [
+  { key: 'redirect', label: 'Redirect', from: 'redirectStart', to: 'redirectEnd', color: '--c-redirect', desc: 'Time following HTTP redirects' },
+  { key: 'worker', label: 'Service worker', from: 'workerStart', to: 'fetchStart', color: '--c-stalled', desc: 'Service worker startup before the fetch' },
+  { key: 'stalled', label: 'Stalled / queue', from: 'fetchStart', to: 'domainLookupStart', color: '--c-stalled', desc: 'Queued in the browser before touching the network' },
+  { key: 'dns', label: 'DNS lookup', from: 'domainLookupStart', to: 'domainLookupEnd', color: '--c-dns', desc: 'Resolving the hostname' },
+  { key: 'tcp', label: 'TCP connect', from: 'connectStart', to: 'connectEnd', color: '--c-tcp', desc: 'Opening the transport connection (includes TLS)' },
+  { key: 'tls', label: 'TLS handshake', from: 'secureConnectionStart', to: 'connectEnd', color: '--c-tls', desc: 'Negotiating the secure connection' },
+  { key: 'request', label: 'Request', from: 'requestStart', to: 'responseStart', color: '--c-request', desc: 'Request sent, waiting for the first byte' },
+  { key: 'response', label: 'Response', from: 'responseStart', to: 'responseEnd', color: '--c-response', desc: 'Downloading the response body' },
+  { key: 'dom', label: 'DOM processing', from: 'responseEnd', to: 'domContentLoadedEventEnd', color: '--c-dom', desc: 'Parsing the document up to DOMContentLoaded' },
+  { key: 'load', label: 'Load event', from: 'loadEventStart', to: 'loadEventEnd', color: '--c-load', desc: 'Running load handlers' },
+];
+
+function renderTimeline(entry, title, subtitle) {
+  const box = el('div', { className: 'tl' });
+  const total = Math.max(
+    entry.duration || 0,
+    entry.loadEventEnd || 0,
+    entry.domComplete || 0,
+    entry.responseEnd || 0,
+  ) - (entry.startTime || 0);
+
+  box.append(el('div', { className: 'tl-head' },
+    el('div', { className: 'tl-title', textContent: title }),
+    el('div', { className: 'tl-total', textContent: subtitle ? `${subtitle} · ${ms(total)} total` : `${ms(total)} total` }),
+  ));
+
+  const base = entry.startTime || 0;
+  const scale = total > 0 ? total : 1;
+  let rendered = 0;
+
+  for (const p of PHASES) {
+    // TCP already covers TLS; only split it out when a handshake happened.
+    let s = span(entry, p.from, p.to);
+    if (p.key === 'tcp' && s) {
+      const tls = span(entry, 'secureConnectionStart', 'connectEnd');
+      if (tls) s = { start: s.start, end: tls.start, dur: tls.start - s.start };
+    }
+    // Skip phases the entry type simply does not have (resource timings have no DOM phases).
+    const hasFields = isNum(entry[p.from]) && isNum(entry[p.to]);
+    if (!hasFields) continue;
+
+    const row = el('div', { className: 'tl-row', tabIndex: 0 });
+    const available = s !== null;
+    const dur = available ? s.dur : 0;
+    if (!available) row.classList.add('na');
+    else if (dur === 0) row.classList.add('zero');
+    else rendered++;
+
+    const offset = available ? ((s.start - base) / scale) * 100 : 0;
+    const width = available ? (dur / scale) * 100 : 0;
+
+    const label = el('div', { className: 'tl-label' });
+    const sw = el('div', { className: 'swatch' });
+    sw.style.setProperty('--sw', `var(${p.color})`);
+    label.append(sw, el('span', { textContent: p.label }));
+
+    const track = el('div', { className: 'tl-track' });
+    const bar = el('div', { className: 'tl-bar' });
+    bar.style.setProperty('--sw', `var(${p.color})`);
+    bar.style.setProperty('--off', `${Math.max(0, Math.min(100, offset))}%`);
+    bar.style.setProperty('--w', `${Math.max(0, Math.min(100 - offset, width))}%`);
+
+    const tipText = available
+      ? `${p.label} · ${ms(dur)}  (${ms(s.start - base)} → ${ms(s.end - base)})`
+      : `${p.label} · not available`;
+    const tip = el('div', { className: 'tip' },
+      el('b', { textContent: p.desc }), el('br'), tipText);
+    tip.style.setProperty('--off', `${Math.max(0, Math.min(88, offset))}%`);
+
+    track.append(bar, tip);
+    row.title = `${tipText}\n${p.desc}`;
+    row.append(label, track, el('div', { className: 'tl-dur', textContent: available ? ms(dur) : 'n/a' }));
+    box.append(row);
+  }
+
+  const axis = el('div', { className: 'tl-axis' });
+  const ticks = el('div', { className: 'tl-ticks' });
+  for (const f of [0, 0.25, 0.5, 0.75, 1]) ticks.append(el('span', { textContent: ms(total * f) }));
+  axis.append(ticks);
+  box.append(axis);
+
+  if (isOpaqueTiming(entry)) {
+    box.append(el('div', { className: 'note' },
+      'This resource is cross-origin and did not send a Timing-Allow-Origin header, so the browser withholds ' +
+      'every phase, the protocol and the transfer size. Only the total duration above is real.'));
+  } else if (rendered === 0) {
+    box.append(el('div', { className: 'note' },
+      'All phases measured as zero — the connection was reused or the response came from cache.'));
+  }
+  return box;
+}
+
+/* ------------------------------------------------------------------ *
+ * data collection
+ * ------------------------------------------------------------------ */
+
+const nav = () => performance.getEntriesByType('navigation')[0] || null;
+
+function paint(name) {
+  return performance.getEntriesByType('paint').find((p) => p.name === name)?.startTime ?? null;
+}
+
+let lcp = null;
+try {
+  new PerformanceObserver((list) => {
+    const last = list.getEntries().at(-1);
+    if (last) lcp = last.startTime;
+  }).observe({ type: 'largest-contentful-paint', buffered: true });
+} catch { /* not supported — stays null */ }
+
+/** Wait until the load event has been fully recorded. */
+function whenLoaded() {
+  if (document.readyState === 'complete') return Promise.resolve();
+  return new Promise((r) => addEventListener('load', () => setTimeout(r, 0), { once: true }));
+}
+
+/**
+ * Cross-origin resources report zeros for every detailed timing and size
+ * field unless the server sends Timing-Allow-Origin. Those zeros mean
+ * "withheld", not "instant" — never present them as measurements.
+ */
+function isOpaqueTiming(entry) {
+  if (!entry || entry.entryType !== 'resource') return false;
+  let sameOrigin = true;
+  try { sameOrigin = new URL(entry.name).origin === location.origin; } catch { /* keep true */ }
+  return !sameOrigin && !entry.responseStart && !entry.connectStart && !entry.domainLookupStart;
+}
+
+function resourceEntryFor(url) {
+  const all = performance.getEntriesByType('resource').filter((e) => e.name === url);
+  return all.at(-1) || null;
+}
+
+/**
+ * Resource timing entries only appear once the response has been fully
+ * received, which can be a beat after fetch() resolves. Watch for it.
+ */
+function awaitResourceEntry(url, timeout = 1200) {
+  const existing = resourceEntryFor(url);
+  if (existing) return Promise.resolve(existing);
+  return new Promise((resolve) => {
+    let obs, timer;
+    const done = (v) => { clearTimeout(timer); try { obs?.disconnect(); } catch {} resolve(v); };
+    try {
+      obs = new PerformanceObserver((list) => {
+        const hit = list.getEntries().filter((e) => e.name === url).at(-1);
+        if (hit) done(hit);
+      });
+      obs.observe({ type: 'resource', buffered: true });
+    } catch { return resolve(null); }
+    timer = setTimeout(() => done(resourceEntryFor(url)), timeout);
+  });
+}
+
+function clientHints() {
+  const d = navigator.userAgentData;
+  if (!d) return [];
+  const brands = (d.brands || []).map((b) => `"${b.brand}";v="${b.version}"`).join(', ');
+  return [
+    { name: 'Sec-CH-UA', value: brands, tag: 'other' },
+    { name: 'Sec-CH-UA-Mobile', value: d.mobile ? '?1' : '?0', tag: 'other' },
+    { name: 'Sec-CH-UA-Platform', value: d.platform ? `"${d.platform}"` : '', tag: 'other' },
+  ];
+}
+
+function derivedRequestHeaders(target) {
+  const u = new URL(target, location.href);
+  const langs = navigator.languages?.length ? navigator.languages : [navigator.language].filter(Boolean);
+  const acceptLanguage = langs
+    .map((l, i) => (i === 0 ? l : `${l};q=${Math.max(0.1, 1 - i * 0.1).toFixed(1)}`))
+    .join(',');
+
+  const rows = [
+    { group: 'Sent with the probe request' },
+    { name: 'Host', value: u.host, tag: 'server' },
+    { name: 'Referer', value: location.href, tag: 'other' },
+    { name: 'Origin', value: u.origin === location.origin ? '' : location.origin, tag: 'cors', hint: '(same-origin request — not sent)' },
+    { name: 'User-Agent', value: navigator.userAgent, tag: 'other' },
+    { name: 'Accept-Language', value: acceptLanguage, tag: 'content' },
+    ...clientHints(),
+    { name: 'DNT', value: navigator.doNotTrack === '1' ? '1' : '', tag: 'other', hint: '(not enabled)' },
+    { name: 'Save-Data', value: navigator.connection?.saveData ? 'on' : '', tag: 'other', hint: '(not enabled)' },
+    { group: 'Of the document navigation' },
+    { name: 'Referer', value: document.referrer, tag: 'other', hint: '(no referrer — direct navigation)' },
+    {
+      name: 'Cookie',
+      value: document.cookie,
+      tag: 'cookies',
+      sensitive: true,
+      hint: navigator.cookieEnabled ? '(no readable cookies)' : '(cookies disabled)',
+    },
+  ];
+  return rows;
+}
+
+function clientInfo() {
+  const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  const dpr = devicePixelRatio;
+  return [
+    { group: 'Environment' },
+    { name: 'Location', value: location.href, tag: 'other' },
+    { name: 'Origin', value: location.origin, tag: 'cors' },
+    { name: 'Protocol', value: location.protocol.replace(':', ''), tag: 'server' },
+    { name: 'Secure context', value: String(isSecureContext), tag: 'security' },
+    { name: 'Cookies enabled', value: String(navigator.cookieEnabled), tag: 'cookies' },
+    { name: 'Language', value: (navigator.languages || [navigator.language]).join(', '), tag: 'content' },
+    { name: 'Time zone', value: Intl.DateTimeFormat().resolvedOptions().timeZone || '', tag: 'other', hint: '(unavailable)' },
+    { name: 'UTC offset', value: `${-new Date().getTimezoneOffset() / 60 >= 0 ? '+' : ''}${-new Date().getTimezoneOffset() / 60} h`, tag: 'other' },
+    { group: 'Device' },
+    { name: 'Platform', value: navigator.userAgentData?.platform || navigator.platform || '', tag: 'other', hint: '(unavailable)' },
+    { name: 'Viewport', value: `${innerWidth} × ${innerHeight} px`, tag: 'other' },
+    { name: 'Screen', value: `${screen.width} × ${screen.height} px @ ${dpr}x (${screen.colorDepth}-bit)`, tag: 'other' },
+    { name: 'CPU cores', value: isNum(navigator.hardwareConcurrency) ? String(navigator.hardwareConcurrency) : '', tag: 'other', hint: '(not reported)' },
+    { name: 'Device memory', value: isNum(navigator.deviceMemory) ? `${navigator.deviceMemory} GB (approx.)` : '', tag: 'other', hint: '(not reported)' },
+    { group: 'Network' },
+    { name: 'Online', value: String(navigator.onLine), tag: 'server' },
+    { name: 'Effective type', value: c?.effectiveType || '', tag: 'server', hint: '(Network Information API unavailable)' },
+    { name: 'Downlink', value: isNum(c?.downlink) ? `${c.downlink} Mbps (estimate)` : '', tag: 'server', hint: '(not reported)' },
+    { name: 'Round-trip time', value: isNum(c?.rtt) ? `${c.rtt} ms (estimate)` : '', tag: 'server', hint: '(not reported)' },
+    { name: 'Save-Data', value: c ? String(!!c.saveData) : '', tag: 'server', hint: '(not reported)' },
+  ];
+}
+
+const TAO_HINT = 'withheld — no Timing-Allow-Origin';
+
+function perfGroups(navEntry, probeEntry, probeBody, storage) {
+  const n = navEntry;
+  const probeOpaque = isOpaqueTiming(probeEntry);
+  const mem = performance.memory;
+  const resources = performance.getEntriesByType('resource');
+  const transferred = resources.reduce((sum, r) => sum + (r.transferSize || 0), 0) + (n?.transferSize || 0);
+  const decoded = n?.decodedBodySize;
+  const ratio = isNum(decoded) && decoded > 0 && isNum(n?.encodedBodySize) && n.encodedBodySize > 0
+    ? `${(decoded / n.encodedBodySize).toFixed(2)}×`
+    : null;
+  const ttfb = n && isNum(n.responseStart) && isNum(n.requestStart) ? n.responseStart - n.requestStart : null;
+
+  return [
+    ['Document navigation', [
+      ['Type', n?.type || null, null],
+      ['Protocol', n?.nextHopProtocol || null, 'next-hop'],
+      ['Redirects', isNum(n?.redirectCount) ? String(n.redirectCount) : null, null],
+      ['TTFB', ttfb != null ? ms(ttfb) : null, 'request → first byte'],
+      ['Response end', isNum(n?.responseEnd) ? ms(n.responseEnd) : null, null],
+      ['DOM interactive', isNum(n?.domInteractive) ? ms(n.domInteractive) : null, null],
+      ['DOMContentLoaded', isNum(n?.domContentLoadedEventEnd) ? ms(n.domContentLoadedEventEnd) : null, null],
+      ['DOM complete', isNum(n?.domComplete) ? ms(n.domComplete) : null, null],
+      ['Load event end', isNum(n?.loadEventEnd) ? ms(n.loadEventEnd) : null, null],
+      ['First paint', paint('first-paint') != null ? ms(paint('first-paint')) : null, null],
+      ['First contentful paint', paint('first-contentful-paint') != null ? ms(paint('first-contentful-paint')) : null, null],
+      ['Largest contentful paint', lcp != null ? ms(lcp) : null, null],
+    ]],
+    ['Transfer', [
+      ['Transfer size', isNum(n?.transferSize) ? bytes(n.transferSize) : null,
+        n?.transferSize === 0 && n?.decodedBodySize > 0 ? 'served from cache' : 'document, on the wire'],
+      ['Encoded body', isNum(n?.encodedBodySize) ? bytes(n.encodedBodySize) : null, null],
+      ['Decoded body', isNum(decoded) ? bytes(decoded) : null, ratio ? `${ratio} compression` : null],
+      ['Subresources', String(resources.length), 'entries in the resource buffer'],
+      ['Total transferred', bytes(transferred), 'document + subresources'],
+    ]],
+    ['Probe request', [
+      ['Duration', isNum(probeEntry?.duration) ? ms(probeEntry.duration) : null, 'fetch() of the target URL'],
+      ['Protocol', probeOpaque ? 'not exposed' : (probeEntry?.nextHopProtocol || null), probeOpaque ? TAO_HINT : 'next-hop'],
+      ['TTFB', probeOpaque ? 'not exposed'
+        : (probeEntry && isNum(probeEntry.responseStart) && probeEntry.responseStart > 0
+          ? ms(probeEntry.responseStart - probeEntry.requestStart) : null), probeOpaque ? TAO_HINT : null],
+      ['Transfer size', probeOpaque ? 'not exposed' : (isNum(probeEntry?.transferSize) ? bytes(probeEntry.transferSize) : null),
+        probeOpaque ? TAO_HINT : (probeEntry?.transferSize === 0 && probeEntry?.decodedBodySize > 0 ? 'served from cache' : null)],
+      ['Body size', isNum(probeBody) ? bytes(probeBody) : null, 'bytes read from the response'],
+    ]],
+    ['Runtime', [
+      ['JS heap used', isNum(mem?.usedJSHeapSize) ? bytes(mem.usedJSHeapSize) : null, 'Chromium only'],
+      ['JS heap total', isNum(mem?.totalJSHeapSize) ? bytes(mem.totalJSHeapSize) : null, null],
+      ['Heap limit', isNum(mem?.jsHeapSizeLimit) ? bytes(mem.jsHeapSizeLimit) : null, null],
+      ['Storage used', isNum(storage?.usage) ? bytes(storage.usage) : null, isNum(storage?.quota) ? `of ${bytes(storage.quota)} quota` : null],
+      ['Time origin', isNum(performance.timeOrigin) ? new Date(performance.timeOrigin).toISOString() : null, null],
+    ]],
+  ];
+}
+
+function renderPerf(panel, groups) {
+  panel.replaceChildren();
+  let any = false;
+  for (const [label, items] of groups) {
+    const shown = items.filter(([, v]) => v != null);
+    if (!shown.length) continue;
+    any = true;
+    panel.append(el('div', { className: 'group-label', textContent: label }));
+    const grid = el('dl', { className: 'metrics' });
+    for (const [name, value, sub] of items) {
+      const dd = el('dd', { textContent: value ?? 'not available' });
+      if (value == null) dd.classList.add('dim');
+      else if (sub) dd.append(el('small', { textContent: sub }));
+      grid.append(el('div', { className: 'metric' }, el('dt', { textContent: name }), dd));
+    }
+    panel.append(grid);
+  }
+  if (!any) panel.append(el('div', { className: 'empty', textContent: 'No Performance API data available in this browser.' }));
+}
+
+/* ------------------------------------------------------------------ *
+ * state + orchestration
+ * ------------------------------------------------------------------ */
+
+// location.origin is the string "null" for file:// documents.
+const SELF = location.protocol === 'http:' || location.protocol === 'https:'
+  ? location.origin + location.pathname
+  : location.href;
+const state = { target: SELF, response: [], request: [], client: [], perf: [], status: null };
+
+function readParams() {
+  const p = new URLSearchParams(location.search);
+  const raw = p.get('url');
+  if (raw) {
+    try {
+      const u = new URL(raw, location.href);
+      if (u.protocol === 'http:' || u.protocol === 'https:') state.target = u.href;
+    } catch { /* ignore an unparseable url param */ }
+  }
+  const q = p.get('q');
+  if (q) $('#filter').value = q;
+}
+
+function writeParams() {
+  const p = new URLSearchParams(location.search);
+  if (state.target === SELF) p.delete('url');
+  else p.set('url', state.target);
+  const q = $('#filter').value.trim();
+  if (q) p.set('q', q); else p.delete('q');
+  const qs = p.toString();
+  history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
+}
+
+function renderStatus(res, target, fromCache) {
+  const cls = !res ? 'bad' : res.status < 300 ? 'ok' : res.status < 400 ? 'warn' : 'bad';
+  const bar = el('div', { className: 'status' });
+  bar.append(el('span', { className: `badge ${cls}`, textContent: res ? `${res.status} ${res.statusText || ''}`.trim() : 'no response' }));
+  const sameOrigin = new URL(target, location.href).origin === location.origin;
+  bar.append(el('span', { className: `badge ${sameOrigin ? 'info' : 'warn'}`, textContent: sameOrigin ? 'same-origin' : 'cross-origin' }));
+  if (res?.redirected) bar.append(el('span', { className: 'badge warn', textContent: 'redirected' }));
+  if (fromCache) bar.append(el('span', { className: 'badge info', textContent: 'from cache' }));
+  bar.append(el('span', { className: 'url', textContent: res?.url || target }));
+  return bar;
+}
+
+function renderResponseError(panel, target, err) {
+  panel.replaceChildren();
+  const sameOrigin = (() => { try { return new URL(target, location.href).origin === location.origin; } catch { return false; } })();
+  const box = el('div', { className: 'error' });
+  box.append(el('div', { className: 'error-title', textContent: 'Could not read the response' }));
+  box.append(el('div', { className: 'error-msg', textContent: String(err && err.message ? err.message : err) }));
+  const retry = el('button', { type: 'button', className: 'primary', textContent: 'Retry' });
+  retry.addEventListener('click', () => run());
+  box.append(retry);
+  panel.append(box);
+  panel.append(el('div', { className: 'note' },
+    wasCspBlocked(target)
+      ? 'This page\u2019s own Content-Security-Policy blocked the request before it reached the network — its connect-src directive does not allow that origin. The target server is not at fault.'
+      : location.protocol === 'file:'
+      ? 'This page is open over file:// — fetch() is blocked there. Serve the file over http:// or https:// to inspect headers.'
+      : sameOrigin
+        ? 'The request failed before any headers arrived. Check that the URL is reachable and that no extension blocked it.'
+        : 'Cross-origin requests need CORS. Without an Access-Control-Allow-Origin header the browser hides the whole response from script.'));
+}
+
+async function fetchHeaders(target) {
+  const res = await fetch(target, { cache: 'no-store', redirect: 'follow', credentials: 'same-origin' });
+  const headers = [...res.headers.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, value]) => ({ name, value, tag: categorize(name) }));
+  // Read the body to completion: the resource timing entry (and its transfer
+  // sizes) is only recorded once the response has been fully received.
+  let bodySize = null;
+  try { bodySize = (await res.arrayBuffer()).byteLength; } catch { bodySize = null; }
+  return { res, headers, bodySize };
+}
+
+function responseNote(target, count) {
+  const sameOrigin = new URL(target, location.href).origin === location.origin;
+  const parts = [];
+  if (!sameOrigin) parts.push('Cross-origin: only CORS-safelisted headers (cache-control, content-language, content-length, content-type, expires, last-modified, pragma) are visible unless the server sends Access-Control-Expose-Headers.');
+  parts.push('Set-Cookie is a forbidden response header — browsers never expose it to script, even same-origin.');
+  if (!count) parts.push('The response carried no script-readable headers.');
+  return parts.join(' ');
+}
+
+let running = false;
+
+async function run() {
+  if (running) return;
+  running = true;
+  const btns = [...document.querySelectorAll('#reload-btn, #probe-form button')];
+  btns.forEach((b) => { b.disabled = true; });
+
+  const target = state.target;
+  const panelResponse = $('#panel-response');
+  panelResponse.replaceChildren(el('div', { className: 'skeleton', textContent: 'fetching' }));
+  $('#probe-url').value = target === SELF ? '' : target;
+
+  let probeEntry = null;
+  let probeBody = null;
+  try {
+    const { res, headers, bodySize } = await fetchHeaders(target);
+    state.response = headers;
+    state.status = { status: res.status, statusText: res.statusText, url: res.url, redirected: res.redirected, type: res.type };
+    probeBody = bodySize;
+    probeEntry = await awaitResourceEntry(res.url) || resourceEntryFor(target);
+    const fromCache = probeEntry && !isOpaqueTiming(probeEntry)
+      && probeEntry.transferSize === 0 && probeEntry.decodedBodySize > 0;
+
+    const body = el('div');
+    renderRows(body, headers, {
+      note: responseNote(target, headers.length),
+      emptyMessage: 'No readable response headers.',
+    });
+    panelResponse.replaceChildren(renderStatus(res, target, fromCache), ...body.childNodes);
+    $('#count-response').textContent = `${headers.length} header${headers.length === 1 ? '' : 's'}`;
+  } catch (err) {
+    state.response = [];
+    state.status = { error: String(err && err.message ? err.message : err) };
+    renderResponseError(panelResponse, target, err);
+    $('#count-response').textContent = 'unavailable';
+  }
+
+  // Timelines: the document navigation always, plus the probe when it is a
+  // different resource and the browser gave us timings for it.
+  const navEntry = nav();
+  const tlPanel = $('#panel-timeline');
+  tlPanel.replaceChildren();
+  if (navEntry) {
+    tlPanel.append(renderTimeline(navEntry, 'Document navigation', navEntry.nextHopProtocol || undefined));
+  }
+  if (probeEntry) {
+    tlPanel.append(renderTimeline(probeEntry, 'Probe request',
+      isOpaqueTiming(probeEntry) ? 'timings withheld' : (probeEntry.nextHopProtocol || 'fetch()')));
+  }
+  if (!tlPanel.childElementCount) {
+    tlPanel.append(el('div', { className: 'empty', textContent: 'Navigation Timing is not available in this browser.' }));
+  }
+
+  let storage = null;
+  try { storage = await navigator.storage?.estimate?.(); } catch { /* permission denied — skip */ }
+  state.perf = perfGroups(navEntry, probeEntry, probeBody, storage);
+  renderPerf($('#panel-perf'), state.perf);
+
+  state.request = derivedRequestHeaders(target);
+  renderRows($('#panel-request'), state.request, {
+    note: 'Browsers do not expose outgoing request headers to page scripts. These values are reconstructed from navigator, location and document — the real request may differ, and headers such as Accept, Connection and Sec-Fetch-* are added by the browser and cannot be read here.',
+  });
+  const reqCount = state.request.filter((r) => !r.group).length;
+  $('#count-request').textContent = `${reqCount} value${reqCount === 1 ? '' : 's'}`;
+
+  state.client = clientInfo();
+  renderRows($('#panel-client'), state.client);
+
+  applyFilter();
+  btns.forEach((b) => { b.disabled = false; });
+  running = false;
+}
+
+/* ---------- filtering ---------- */
+
+function applyFilter() {
+  const q = $('#filter').value.trim().toLowerCase();
+  const panel = $('#panel-response');
+  let visible = 0, total = 0;
+  for (const row of panel.querySelectorAll('.row')) {
+    total++;
+    const hit = !q || row.dataset.search.includes(q);
+    row.classList.toggle('hidden', !hit);
+    if (hit) visible++;
+  }
+  if (total) {
+    $('#count-response').textContent = q ? `${visible} / ${total} headers` : `${total} header${total === 1 ? '' : 's'}`;
+  }
+}
+
+/* ---------- copy ---------- */
+
+function sectionText(kind) {
+  if (kind === 'response') {
+    const head = state.status?.status ? `# ${state.status.status} ${state.status.statusText || ''}`.trim() + `\n# ${state.status.url}\n` : '';
+    return head + state.response.map((h) => `${h.name}: ${h.value}`).join('\n');
+  }
+  if (kind === 'request' || kind === 'client') {
+    return state[kind]
+      .map((r) => (r.group ? `\n# ${r.group}` : `${r.name}: ${r.value || '(empty)'}`))
+      .join('\n')
+      .trim();
+  }
+  if (kind === 'performance') {
+    return state.perf
+      .map(([label, items]) => `# ${label}\n` + items.map(([n, v, s]) => `${n}: ${v ?? 'not available'}${s ? ` (${s})` : ''}`).join('\n'))
+      .join('\n\n');
+  }
+  return '';
+}
+
+function snapshotJSON() {
+  return JSON.stringify({
+    inspected: state.target,
+    at: new Date().toISOString(),
+    status: state.status,
+    responseHeaders: Object.fromEntries(state.response.map((h) => [h.name, h.value])),
+    requestHeaders: Object.fromEntries(state.request.filter((r) => !r.group).map((r) => [r.name, r.value])),
+    client: Object.fromEntries(state.client.filter((r) => !r.group).map((r) => [r.name, r.value])),
+    performance: Object.fromEntries(state.perf.map(([label, items]) => [
+      label, Object.fromEntries(items.map(([n, v]) => [n, v])),
+    ])),
+  }, null, 2);
+}
+
+/* ---------- wiring ---------- */
+
+$('#probe-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const raw = $('#probe-url').value.trim();
+  if (!raw) {
+    state.target = SELF;
+  } else {
+    let u;
+    try { u = new URL(raw, location.href); } catch { toast('That is not a valid URL', true); return; }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') { toast('Only http and https URLs can be inspected', true); return; }
+    state.target = u.href;
+  }
+  writeParams();
+  run();
+});
+
+$('#reload-btn').addEventListener('click', () => run());
+
+$('#copy-json').addEventListener('click', () => copyAndConfirm(snapshotJSON(), 'snapshot as JSON'));
+
+for (const btn of document.querySelectorAll('[data-copy-section]')) {
+  btn.addEventListener('click', () => {
+    const kind = btn.dataset.copySection;
+    const text = sectionText(kind);
+    if (!text.trim()) { toast('Nothing to copy', true); return; }
+    copyAndConfirm(text, `${kind} section`);
+  });
+}
+
+let filterTimer;
+$('#filter').addEventListener('input', () => {
+  applyFilter();
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(writeParams, 300);
+});
+
+readParams();
+await whenLoaded();
+await run();
+</script>
+</body>
+</html>

@@ -438,8 +438,8 @@ const GENERIC_ING = {
 
 /* ═══════════════════════════ STATE ═══════════════════════════ */
 
-const KEY = 'family-meals.v1';
-const NOTIFIED_KEY = 'family-meals.notified';
+const KEY = 'food-monitor.v1';
+const NOTIFIED_KEY = 'food-monitor.notified';
 
 const defaults = () => ({
   v: 1,
@@ -1276,7 +1276,7 @@ function reminderDue() {
 }
 function notify(body) {
   try {
-    if ('Notification' in window && Notification.permission === 'granted') { new Notification('Rodinný tanier', { body, tag: 'family-meals' }); return; }
+    if ('Notification' in window && Notification.permission === 'granted') { new Notification('Rodinný tanier', { body, tag: 'food-monitor' }); return; }
   } catch { /* e.g. mobile Chrome requires a service worker – fall back to a toast */ }
   toast('⏰ ' + body);
 }
@@ -1299,7 +1299,7 @@ function downloadIcs() {
   const now = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
   const url = location.origin + location.pathname + '?view=today';
   const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Rodinny tanier//SK', 'BEGIN:VEVENT',
-    `UID:${uid()}@family-meals`, `DTSTAMP:${now}`, `DTSTART:${d}T${h}${m}00`, 'DURATION:PT5M', 'RRULE:FREQ=DAILY',
+    `UID:${uid()}@food-monitor`, `DTSTAMP:${now}`, `DTSTART:${d}T${h}${m}00`, 'DURATION:PT5M', 'RRULE:FREQ=DAILY',
     'SUMMARY:🍽️ Zapísať dnešné jedlá', `DESCRIPTION:Otvor appku: ${url}`, `URL:${url}`,
     'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Zapísať dnešné jedlá', 'TRIGGER:PT0M', 'END:VALARM',
     'END:VEVENT', 'END:VCALENDAR'].join('\r\n');

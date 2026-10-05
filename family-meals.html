@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f6f3ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14161a" media="(prefers-color-scheme: dark)">
+<title>Rodinný tanier</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  color-scheme: light dark;
+  --bg: #f6f3ec;
+  --card: #ffffff;
+  --card-2: #f0ece2;
+  --border: #e3ddd0;
+  --text: #1f2421;
+  --dim: #5f665f;
+  --muted: #8d928b;
+  --accent: #2f8f5b;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcefe3;
+  --warn: #c97a12;
+  --warn-soft: #fbecd3;
+  --bad: #c43d3d;
+  --bad-soft: #f8dede;
+  --gold: #b88a1b;
+  --fake: #d6336c;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 1px 2px rgb(0 0 0 / .05), 0 4px 16px rgb(0 0 0 / .05);
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --card: #1d2025;
+    --card-2: #262a30;
+    --border: #33373e;
+    --text: #eceee9;
+    --dim: #a8ada6;
+    --muted: #7a8078;
+    --accent: #5cc98a;
+    --accent-ink: #0d1a12;
+    --accent-soft: #1f3a2a;
+    --warn: #f0a63c;
+    --warn-soft: #3a2e1a;
+    --bad: #f07373;
+    --bad-soft: #3d2222;
+    --gold: #e5b947;
+    --fake: #ff6b9a;
+    --shadow: none;
+  }
+}
+
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font: 16px/1.45 var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+}
+body.no-nav { padding-bottom: 24px; }
+main { max-width: 640px; margin: 0 auto; padding: 16px 16px 24px; }
+h1 { font-size: 1.6rem; line-height: 1.2; letter-spacing: -.01em; margin-bottom: 6px; }
+h2 { font-size: 1.1rem; margin-bottom: 10px; }
+h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 20px 0 8px; }
+p + p { margin-top: 8px; }
+.lead { color: var(--dim); margin-bottom: 16px; }
+.hint, .note { color: var(--muted); font-size: .85rem; margin-top: 12px; }
+.note { background: var(--card-2); border-radius: var(--radius-sm); padding: 10px 12px; color: var(--dim); }
+.eyebrow { font-size: .8rem; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+a { color: var(--accent); }
+small { color: var(--muted); }
+
+/* FAKE label */
+.fake {
+  display: inline-block; vertical-align: middle;
+  font: 800 .68rem/1 var(--font); letter-spacing: .08em;
+  color: #fff; background: var(--fake);
+  padding: 4px 6px; border-radius: 5px; margin-inline: 4px;
+  transform: rotate(-2deg);
+}
+
+/* buttons */
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 44px; padding: 10px 16px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 999px;
+  font-weight: 600; text-decoration: none; color: var(--text);
+  transition: background .15s, transform .1s;
+}
+.btn:active { transform: scale(.97); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.ghost { background: transparent; }
+.btn.danger { color: var(--bad); border-color: var(--bad); background: transparent; }
+.btn.small { min-height: 36px; padding: 6px 12px; font-size: .9rem; }
+.btn:disabled { opacity: .4; cursor: default; }
+.link { background: none; border: 0; color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; padding: 6px 2px; }
+.icon-btn { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--card-2); border: 0; font-size: 1rem; }
+.row-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+
+/* inputs */
+input[type=text], input[type=time], input[type=date], input[type=number], input:not([type]), select {
+  min-height: 44px; width: 100%;
+  padding: 8px 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset: 2px; }
+.field { display: grid; gap: 4px; font-size: .9rem; color: var(--dim); }
+.inline-form { display: flex; gap: 8px; margin-top: 8px; }
+.inline-form input { flex: 1; }
+.inline-form .emoji-in { flex: 0 0 64px; text-align: center; }
+label.check { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
+
+/* cards */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); margin-bottom: 14px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.card-head h2 { margin: 0; }
+
+/* chips */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 40px;
+  padding: 6px 14px; border-radius: 999px; border: 1.5px solid var(--border);
+  background: var(--card); font-weight: 500;
+}
+.chip[aria-pressed=true] { background: var(--accent-soft); border-color: var(--accent); }
+.chip[aria-pressed=true]::after { content: "✓"; color: var(--accent); font-weight: 800; }
+.chip .x { margin-left: 2px; color: var(--muted); }
+
+/* segmented */
+.seg { display: inline-flex; background: var(--card-2); border-radius: 999px; padding: 3px; gap: 2px; flex: none; }
+.seg button, .seg a { text-decoration: none; display: inline-flex; align-items: center; border: 0; background: transparent; border-radius: 999px; padding: 6px 12px; min-height: 36px; font-size: .9rem; font-weight: 600; color: var(--dim); }
+.seg [aria-pressed=true] { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgb(0 0 0 / .12); }
+
+/* stepper */
+.stepper { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.stepper button { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); background: var(--card); font-size: 1.1rem; font-weight: 700; }
+.stepper output { min-width: 34px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* setup */
+.dots { display: flex; gap: 6px; margin-bottom: 18px; }
+.dots span { height: 6px; flex: 1; border-radius: 3px; background: var(--border); }
+.dots span.done { background: var(--accent); opacity: .5; }
+.dots span.on { background: var(--accent); }
+.wizard-nav { display: flex; justify-content: space-between; gap: 12px; margin-top: 28px; position: sticky; bottom: 12px; }
+.wizard-nav .btn { box-shadow: var(--shadow); }
+.member-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; }
+.member-row input { flex: 1 1 140px; width: auto; }
+.list-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.list-row:last-child { border-bottom: 0; }
+.list-row .grow { flex: 1 1 160px; min-width: 0; }
+.list-row .grow small { display: block; }
+
+/* today */
+.day-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.day-head > div { text-align: center; }
+.day-head strong { display: block; font-size: 1.15rem; }
+.progress { height: 8px; border-radius: 4px; background: var(--card-2); overflow: hidden; margin-bottom: 16px; }
+.progress > i { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width .4s; }
+.progress.warn > i { background: var(--warn); }
+.progress.bad > i { background: var(--bad); }
+
+.q-card {
+  background: var(--card); border-radius: 24px; padding: 20px 16px; box-shadow: var(--shadow); border: 1px solid var(--border);
+  margin-bottom: 16px;
+  transition: opacity .3s, transform .3s;
+  @starting-style { opacity: 0; transform: translateX(24px); }
+}
+.q { font-size: 1.55rem; margin-bottom: 14px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
+.tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  min-height: 104px; padding: 10px 6px; border-radius: var(--radius);
+  background: var(--card-2); border: 2px solid transparent; font-weight: 600; font-size: .92rem; text-align: center; line-height: 1.2;
+  transition: transform .1s, border-color .15s;
+}
+.tile:hover { border-color: var(--accent); }
+.tile:active { transform: scale(.95); }
+.tile .e { font-size: 2rem; line-height: 1; }
+.tile small { font-weight: 500; font-size: .75rem; }
+.tile small.warn { color: var(--warn); font-weight: 700; }
+.tile small.ok { color: var(--accent); font-weight: 700; }
+.tile.none { background: transparent; border: 2px dashed var(--border); color: var(--dim); }
+.shortcuts { display: grid; gap: 8px; margin-bottom: 14px; }
+.shortcut { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 10px 14px; border-radius: var(--radius-sm); border: 1.5px solid var(--accent); background: var(--accent-soft); font-weight: 600; min-height: 48px; }
+.q-foot { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.chosen { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; color: var(--dim); }
+.chosen strong { color: var(--text); }
+.done-card { text-align: center; padding: 28px 16px; }
+.done-card .big { font-size: 3rem; }
+.banner { display: flex; gap: 10px; align-items: center; background: var(--warn-soft); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 14px; font-weight: 500; }
+
+.mini { display: grid; gap: 2px; }
+.mini-row { display: flex; align-items: baseline; gap: 10px; padding: 6px 0; }
+.mini-row .who { font-weight: 600; min-width: 84px; }
+.mini-row .what { color: var(--dim); font-size: .92rem; }
+.entry-pill { display: inline-flex; gap: 2px; align-items: center; background: var(--card-2); border-radius: 999px; padding: 2px 8px; margin: 2px 4px 2px 0; font-size: .85rem; white-space: nowrap; }
+.entry-pill.missing { background: transparent; border: 1px dashed var(--border); color: var(--muted); }
+
+/* week */
+.tabs-line { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; scrollbar-width: none; }
+.tabs-line a { flex: none; padding: 8px 14px; border-radius: 999px; background: var(--card); border: 1px solid var(--border); text-decoration: none; color: var(--text); font-weight: 600; font-size: .9rem; }
+.tabs-line a[aria-current=page] { background: var(--text); color: var(--bg); border-color: var(--text); }
+.goal { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; margin-bottom: 12px; }
+.goal .progress { grid-column: 1 / -1; margin: 0; height: 6px; }
+.goal .val { font-weight: 700; font-variant-numeric: tabular-nums; font-size: .9rem; }
+.goal .val.ok { color: var(--accent); }
+.goal .val.warn { color: var(--warn); }
+.goal .val.bad { color: var(--bad); }
+.day-card { display: block; text-decoration: none; color: inherit; }
+.day-card .dh { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.day-card .dh strong { text-transform: capitalize; }
+.day-card.today { border-color: var(--accent); }
+.meal-line { display: flex; gap: 8px; font-size: .92rem; padding: 2px 0; align-items: baseline; }
+.meal-line > span:first-child { min-width: 78px; color: var(--dim); }
+
+/* day edit */
+.edit-meal { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.edit-meal > strong { grid-column: 1 / -1; font-size: .9rem; color: var(--dim); }
+
+/* premium */
+.feature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.feature { display: flex; gap: 12px; align-items: flex-start; text-decoration: none; color: inherit; margin: 0; }
+.feature .fe { font-size: 1.8rem; line-height: 1; }
+.feature h2 { margin-bottom: 4px; font-size: 1rem; }
+.feature p { font-size: .88rem; color: var(--dim); }
+.premium-hero { background: linear-gradient(135deg, color-mix(in srgb, var(--gold) 22%, var(--card)), var(--card)); }
+.badge { display: inline-block; font-size: .72rem; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--card-2); color: var(--dim); }
+.badge.kid { background: var(--accent-soft); color: var(--accent); }
+.badge.gold { background: color-mix(in srgb, var(--gold) 25%, transparent); color: var(--gold); }
+.recipe h2 { margin-bottom: 6px; }
+.recipe .meta { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.recipe ul { margin: 4px 0 8px 18px; font-size: .9rem; color: var(--dim); }
+.photo-preview { max-width: 100%; max-height: 240px; border-radius: var(--radius-sm); margin-top: 10px; display: block; }
+.file-btn { position: relative; overflow: hidden; }
+.file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.spinner { width: 22px; height: 22px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.plan-day { margin-bottom: 10px; }
+.plan-day strong { text-transform: capitalize; }
+.shop-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.shop-item:last-child { border: 0; }
+.shop-item label { flex: 1; display: flex; gap: 10px; align-items: center; min-height: 40px; }
+.shop-item.done span { text-decoration: line-through; color: var(--muted); }
+.shop-item .qty { color: var(--muted); font-size: .85rem; }
+.locked { text-align: center; padding: 32px 16px; }
+.locked .big { font-size: 3rem; }
+
+/* bottom nav */
+.tab-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+  display: flex; justify-content: center;
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.tab-nav a {
+  flex: 1; max-width: 160px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 4px 10px; text-decoration: none; color: var(--muted); font-size: .72rem; font-weight: 600;
+}
+.tab-nav a span { font-size: 1.35rem; line-height: 1.2; filter: grayscale(1); opacity: .7; }
+.tab-nav a[aria-current=page] { color: var(--accent); }
+.tab-nav a[aria-current=page] span { filter: none; opacity: 1; }
+body.no-nav .tab-nav { display: none; }
+
+/* dialog & toast */
+dialog {
+  margin: auto; width: min(92vw, 440px); max-height: 85dvh;
+  border: 0; border-radius: 20px; padding: 20px;
+  background: var(--card); color: var(--text); box-shadow: 0 20px 60px rgb(0 0 0 / .3);
+}
+dialog::backdrop { background: rgb(0 0 0 / .45); }
+dialog h2 { margin-bottom: 10px; }
+dialog .row-btns { justify-content: flex-end; margin-top: 16px; }
+dialog ul { margin: 8px 0 0 18px; }
+dialog li + li { margin-top: 6px; }
+#toast {
+  position: fixed; left: 50%; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); z-index: 30;
+  transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+  background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 999px;
+  font-weight: 600; font-size: .92rem; max-width: calc(100vw - 32px); text-align: center;
+  transition: opacity .25s, transform .25s;
+}
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+@media (min-width: 700px) {
+  main { padding-top: 32px; }
+  .q { font-size: 1.9rem; }
+  .tiles { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+<main id="app" aria-live="polite"></main>
+
+<nav class="tab-nav" aria-label="Hlavná navigácia">
+  <a href="?view=today" data-tab="today"><span>🍽️</span>Dnes</a>
+  <a href="?view=week" data-tab="week"><span>📅</span>Týždeň</a>
+  <a href="?view=premium" data-tab="premium"><span>⭐</span>Premium</a>
+  <a href="?view=settings" data-tab="settings"><span>⚙️</span>Nastavenia</a>
+</nav>
+
+<dialog id="dlg"></dialog>
+<div id="toast" role="status"></div>
+
+<script type="module">
+/* ═══════════════════════════ CATALOG ═══════════════════════════ */
+
+const PROTEINS = [
+  { id: 'white-meat', name: 'Biele mäso', emoji: '🍗', set: 'classic' },
+  { id: 'red-meat', name: 'Červené mäso', emoji: '🥩', set: 'classic' },
+  { id: 'cheese', name: 'Syry', emoji: '🧀', set: 'classic' },
+  { id: 'eggs', name: 'Vajcia', emoji: '🥚', set: 'classic' },
+  { id: 'legumes', name: 'Strukoviny', emoji: '🫘', set: 'classic' },
+  { id: 'fish', name: 'Ryby', emoji: '🐟', set: 'classic' },
+  { id: 'tofu', name: 'Sója / tofu', emoji: '🌱', set: 'vegan' },
+  { id: 'tempeh', name: 'Tempeh', emoji: '🟫', set: 'vegan' },
+  { id: 'chickpeas', name: 'Cícer', emoji: '🧆', set: 'vegan' },
+  { id: 'lentils', name: 'Šošovica', emoji: '🥣', set: 'vegan' },
+  { id: 'beans', name: 'Fazuľa', emoji: '🫘', set: 'vegan' },
+  { id: 'edamame', name: 'Edamame', emoji: '🫛', set: 'vegan' },
+  { id: 'peas', name: 'Hrášok', emoji: '🟢', set: 'vegan' },
+  { id: 'seitan', name: 'Seitan', emoji: '🌾', set: 'vegan' },
+  { id: 'nuts', name: 'Orechy a semienka', emoji: '🥜', set: 'vegan' },
+];
+
+const CARBS = [
+  { id: 'pasta', name: 'Cestovina', emoji: '🍝' },
+  { id: 'wholepasta', name: 'Celozrnná cestovina', emoji: '🍝', whole: true },
+  { id: 'potatoes', name: 'Zemiaky', emoji: '🥔', whole: true },
+  { id: 'rice', name: 'Ryža', emoji: '🍚' },
+  { id: 'bread', name: 'Chlieb', emoji: '🍞' },
+  { id: 'wholebread', name: 'Celozrnný chlieb', emoji: '🥖', whole: true },
+  { id: 'spelt', name: 'Špalda', emoji: '🌾', whole: true },
+  { id: 'oats', name: 'Ovos', emoji: '🥣', whole: true },
+  { id: 'quinoa', name: 'Quinoa', emoji: '🌰', whole: true },
+  { id: 'bulgur', name: 'Bulgur', emoji: '🌾', whole: true },
+  { id: 'buckwheat', name: 'Pohánka', emoji: '🟤', whole: true },
+  { id: 'couscous', name: 'Kuskus', emoji: '🍚' },
+  { id: 'millet', name: 'Pšeno', emoji: '🟡', whole: true },
+  { id: 'barley', name: 'Jačmeň / krúpy', emoji: '🌾', whole: true },
+  { id: 'sweetpotato', name: 'Batáty', emoji: '🍠', whole: true },
+];
+
+const MEALS = [
+  { id: 'breakfast', name: 'Raňajky', emoji: '🌅' },
+  { id: 'snack1', name: 'Desiata', emoji: '🍎' },
+  { id: 'lunch', name: 'Obed', emoji: '☀️' },
+  { id: 'snack2', name: 'Olovrant', emoji: '🥨' },
+  { id: 'dinner', name: 'Večera', emoji: '🌙' },
+];
+
+// Orientational weekly targets per person (inspired by WHO / European dietary guidelines).
+const REC_GOALS = {
+  legumes: { type: 'min', n: 4 },
+  fish: { type: 'min', n: 2 },
+  'red-meat': { type: 'max', n: 2 },
+  'white-meat': { type: 'max', n: 3 },
+  eggs: { type: 'max', n: 4 },
+  cheese: { type: 'max', n: 3 },
+};
+const REC_ALERTS = { pasta: 4, rice: 4, potatoes: 5, bread: 5 };
+
+const SWEETS = [
+  { name: 'Čokoláda (3 kocky)', emoji: '🍫', g: 15 },
+  { name: 'Sušienka', emoji: '🍪', g: 7 },
+  { name: 'Zmrzlina (kopček)', emoji: '🍦', g: 14 },
+  { name: 'Cukríky (hrsť)', emoji: '🍬', g: 20 },
+  { name: 'Koláč / buchta', emoji: '🍰', g: 22 },
+  { name: 'Džús 200 ml', emoji: '🧃', g: 20 },
+  { name: 'Limonáda 330 ml', emoji: '🥤', g: 35 },
+  { name: 'Ochutený jogurt', emoji: '🍨', g: 12 },
+  { name: 'Sladké cereálie', emoji: '🥣', g: 10 },
+];
+
+const RECIPES = [
+  { name: 'Šošovicové „bolonské“ ragú', p: ['legumes', 'lentils'], c: ['wholepasta', 'pasta'], t: 30, kid: true, ing: ['červená šošovica', 'paradajkový pretlak', 'mrkva', 'cibuľa'], tip: 'Uvar dvojitú dávku a polovicu zamraz na rušný deň.' },
+  { name: 'Kuracie kúsky v jogurtovej marináde', p: ['white-meat'], c: ['rice'], t: 25, kid: true, ing: ['kuracie prsia', 'biely jogurt', 'paprika', 'cesnak'], tip: 'Mäso nakrájaj a zamarinuj večer vopred.' },
+  { name: 'Losos z plechu so zemiakmi a brokolicou', p: ['fish'], c: ['potatoes'], t: 35, kid: true, ing: ['losos', 'brokolica', 'citrón'], tip: 'Všetko na jeden plech = menej riadu.' },
+  { name: 'Jemné cícerové karí', p: ['chickpeas', 'legumes'], c: ['couscous', 'rice'], t: 20, kid: true, ing: ['cícer (konzerva)', 'kokosové mlieko', 'jemné karí', 'baby špenát'], tip: 'Cícer z konzervy ušetrí hodinu varenia.' },
+  { name: 'Hovädzie fašírky s pohánkou', p: ['red-meat'], c: ['buckwheat'], t: 40, kid: true, ing: ['mleté hovädzie', 'vajce', 'cibuľa', 'kyslé uhorky'], tip: 'Surové fašírky zamraz, upečieš ich priamo z mrazáka.' },
+  { name: 'Omeleta so syrom a zeleninou', p: ['eggs'], c: ['wholebread', 'bread'], t: 10, kid: true, ing: ['vajcia', 'syr', 'cherry paradajky'], tip: 'Najrýchlejšia večera – hotová za 10 minút.' },
+  { name: 'Zapekané cestoviny so syrom a brokolicou', p: ['cheese'], c: ['pasta', 'wholepasta'], t: 30, kid: true, ing: ['eidam', 'brokolica', 'smotana na varenie'], tip: 'Brokolicu var spolu s cestovinou v jednom hrnci.' },
+  { name: 'Tofu so zeleninou na woku', p: ['tofu'], c: ['rice'], t: 20, kid: false, ing: ['tofu', 'sójová omáčka', 'mrazená zeleninová zmes', 'zázvor'], tip: 'Mrazená zelenina je rovnako výživná a ušetrí krájanie.' },
+  { name: 'Fazuľa s ryžou po mexicky', p: ['beans', 'legumes'], c: ['rice'], t: 25, kid: true, ing: ['čierna fazuľa (konzerva)', 'kukurica', 'paprika', 'avokádo'], tip: 'Ryžu uvar raz na dva dni – vydrží v chladničke.' },
+  { name: 'Domáce rybie prsty s bulgurom', p: ['fish'], c: ['bulgur'], t: 30, kid: true, ing: ['treska', 'strúhanka', 'vajce', 'citrón'], tip: 'Obaľovanie zvládnu aj deti – zapoj ich.' },
+  { name: 'Ovsená kaša s orechmi a banánom', p: ['nuts'], c: ['oats'], t: 5, kid: true, ing: ['mlieko', 'vlašské orechy', 'banán'], tip: 'Overnight verzia: zalej večer, ráno len jedz.' },
+  { name: 'Krémová hrášková polievka', p: ['peas', 'legumes'], c: ['wholebread'], t: 20, kid: true, ing: ['mrazený hrášok', 'zemiak', 'smotana'], tip: 'Mrazený hrášok netreba rozmrazovať.' },
+  { name: 'Morčacie špaldové rizoto', p: ['white-meat'], c: ['spelt'], t: 40, kid: true, ing: ['morčacie prsia', 'pór', 'parmezán', 'vývar'], tip: 'Uvar v tlakovom hrnci za 15 minút.' },
+  { name: 'Šošovicové placky s jogurtovým dipom', p: ['lentils', 'legumes'], c: ['potatoes'], t: 30, kid: true, ing: ['uvarená šošovica', 'vajce', 'biely jogurt', 'kôpor'], tip: 'Placky sa dajú upiecť naraz na plechu.' },
+  { name: 'Quinoa šalát s edamame', p: ['edamame'], c: ['quinoa'], t: 15, kid: false, ing: ['edamame (mrazené)', 'uhorka', 'sezam', 'citrón'], tip: 'Hodí sa aj ako desiata do krabičky na zajtra.' },
+];
+
+const SCHOOL_DISHES = [
+  { name: 'Kurací plátok na prírodno, ryža', p: ['white-meat'], c: ['rice'] },
+  { name: 'Šošovicový prívarok, vajce, chlieb', p: ['legumes', 'lentils'], c: ['bread'] },
+  { name: 'Rybie filé, zemiaková kaša', p: ['fish'], c: ['potatoes'] },
+  { name: 'Špagety po bolonsky', p: ['red-meat'], c: ['pasta'] },
+  { name: 'Vyprážaný syr, varené zemiaky', p: ['cheese'], c: ['potatoes'] },
+  { name: 'Morčacie rizoto', p: ['white-meat'], c: ['rice'] },
+  { name: 'Bravčový guláš, knedľa', p: ['red-meat'], c: ['bread'] },
+  { name: 'Fazuľový guláš, chlieb', p: ['legumes', 'beans'], c: ['bread'] },
+  { name: 'Zapekané cestoviny so syrom', p: ['cheese'], c: ['pasta'] },
+  { name: 'Cícerové karí s kuskusom', p: ['legumes', 'chickpeas'], c: ['couscous'] },
+  { name: 'Kuracie stehno, dusená ryža', p: ['white-meat'], c: ['rice'] },
+  { name: 'Ryžový nákyp s ovocím', p: ['eggs'], c: ['rice'] },
+];
+
+const TIME_TIPS = [
+  'Nedeľný „meal prep“: uvar naraz ryžu/strukoviny na 2–3 dni.',
+  'Strukoviny z konzervy (opláchnuté) sú rovnako hodnotné ako varené doma.',
+  'Mrazená zelenina a ryby šetria krájanie a nekazia sa.',
+  'Plechové jedlá (mäso + zelenina + zemiaky naraz) = jeden riad.',
+  'Varte dvojité porcie a druhú zamrazte s dátumom.',
+  'Deti zapojte do jednoduchých úloh – umývanie, miešanie, obaľovanie.',
+];
+
+const FREEZER_POOL = ['Kuracie prsia 500 g', 'Mrazený hrášok', 'Rybie filé (treska)', 'Zeleninová zmes', 'Domáci vývar 1 l', 'Mleté hovädzie 400 g', 'Listový špinát', 'Brokolica', 'Celozrnné pečivo', 'Zmrzlina', 'Lesné ovocie', 'Šošovicové ragú (porcia)'];
+
+const DEFAULT_MUST_HAVE = ['Mlieko', 'Vajcia', 'Maslo', 'Cibuľa', 'Cesnak', 'Olivový olej', 'Ovsené vločky', 'Ryža', 'Cestovina', 'Paradajky v konzerve', 'Strukoviny v konzerve', 'Mrazená zelenina'];
+
+const GENERIC_ING = {
+  'white-meat': 'kuracie / morčacie mäso', 'red-meat': 'hovädzie / bravčové mäso', cheese: 'syr', eggs: 'vajcia',
+  legumes: 'strukoviny (konzerva / suché)', fish: 'ryba', tofu: 'tofu', tempeh: 'tempeh', chickpeas: 'cícer',
+  lentils: 'šošovica', beans: 'fazuľa', edamame: 'edamame', peas: 'hrášok', seitan: 'seitan', nuts: 'orechy',
+};
+
+/* ═══════════════════════════ STATE ═══════════════════════════ */
+
+const KEY = 'family-meals.v1';
+const NOTIFIED_KEY = 'family-meals.notified';
+
+const defaults = () => ({
+  v: 1,
+  settings: {
+    setupDone: false,
+    members: [{ id: uid(), name: '', g: 'm' }],
+    proteins: PROTEINS.filter(p => p.set === 'classic').map(p => p.id),
+    carbs: CARBS.map(c => c.id),
+    custom: { p: [], c: [] },
+    meals: ['lunch', 'dinner'],
+    goals: structuredClone(REC_GOALS),
+    alerts: { ...REC_ALERTS },
+    reminder: { on: false, time: '19:00' },
+    premium: false,
+    sugar: { on: true, limits: {} },
+  },
+  log: {},
+  freezer: [],
+  shopping: [],
+  mustHave: DEFAULT_MUST_HAVE.map(name => ({ id: uid(), name, home: true })),
+  plan: null,
+});
+
+function uid() { return Math.random().toString(36).slice(2, 9); }
+
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s?.v === 1) {
+      const d = defaults();
+      return { ...d, ...s, settings: { ...d.settings, ...s.settings, custom: { ...d.settings.custom, ...s.settings?.custom }, sugar: { ...d.settings.sugar, ...s.settings?.sugar } } };
+    }
+  } catch { /* corrupted storage → start fresh */ }
+  return defaults();
+}
+
+let state = load();
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); }
+  catch { toast('⚠️ Nepodarilo sa uložiť dáta (úložisko prehliadača je nedostupné)'); }
+}
+const S = () => state.settings;
+
+/* ═══════════════════════════ HELPERS ═══════════════════════════ */
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = n => String(n).padStart(2, '0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseDate = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDays = (s, n) => { const d = parseDate(s); d.setDate(d.getDate() + n); return iso(d); };
+const todayIso = () => iso(new Date());
+const weekStart = s => { const d = parseDate(s); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return iso(d); };
+const weekDays = s => { const st = weekStart(s); return Array.from({ length: 7 }, (_, i) => addDays(st, i)); };
+const DAY_NAMES = ['pondelok', 'utorok', 'streda', 'štvrtok', 'piatok', 'sobota', 'nedeľa'];
+const dayName = s => DAY_NAMES[(parseDate(s).getDay() + 6) % 7];
+const fmtDate = s => { const d = parseDate(s); return `${d.getDate()}. ${d.getMonth() + 1}.`; };
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const validDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s ?? '') && !isNaN(parseDate(s)) ? s : null;
+function dateLabel(s) {
+  const t = todayIso();
+  if (s === t) return `Dnes, ${dayName(s)} ${fmtDate(s)}`;
+  if (s === addDays(t, -1)) return `Včera, ${dayName(s)} ${fmtDate(s)}`;
+  return `${cap(dayName(s))} ${fmtDate(s)}`;
+}
+const param = k => new URLSearchParams(location.search).get(k);
+const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+
+function mulberry32(a) {
+  return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+function weighted(pool, weight, rnd) {
+  const ws = pool.map(weight); let r = rnd() * ws.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < pool.length; i++) { r -= ws[i]; if (r <= 0) return pool[i]; }
+  return pool.at(-1);
+}
+function shuffle(a, rnd) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+const FAKE = '<span class="fake" title="Simulované – v prototype nie je napojené na skutočnú službu">FAKE</span>';
+
+/* catalog access */
+const allItems = kind => [...(kind === 'p' ? PROTEINS : CARBS), ...S().custom[kind]];
+const NONE = { p: { id: 'none', name: 'Bez bielkovín', emoji: '🚫' }, c: { id: 'none', name: 'Bez sacharidov', emoji: '🚫' } };
+function item(kind, id) {
+  if (id === 'none') return NONE[kind];
+  return allItems(kind).find(x => x.id === id) ?? { id, name: 'Neznáme', emoji: '❔' };
+}
+const selectedIds = kind => S()[kind === 'p' ? 'proteins' : 'carbs'];
+const selected = kind => allItems(kind).filter(x => selectedIds(kind).includes(x.id));
+const activeMeals = () => MEALS.filter(m => S().meals.includes(m.id));
+const mealById = id => MEALS.find(m => m.id === id);
+const member = id => S().members.find(m => m.id === id);
+
+/* log access: log[date][memberId] = { meals: { lunch: {p, c} }, sweets: [{name, emoji, g}] } */
+const entry = (date, mid, meal) => state.log[date]?.[mid]?.meals?.[meal];
+function dayRec(date, mid) {
+  const d = state.log[date] ??= {};
+  const r = d[mid] ??= { meals: {}, sweets: [] };
+  r.meals ??= {}; r.sweets ??= [];
+  return r;
+}
+function setEntry(date, mid, meal, val) {
+  const r = dayRec(date, mid);
+  if (val) r.meals[meal] = val; else delete r.meals[meal];
+}
+function countWeek(mid, date, kind, id) {
+  let n = 0;
+  for (const d of weekDays(date)) for (const e of Object.values(state.log[d]?.[mid]?.meals ?? {})) if (e[kind] === id) n++;
+  return n;
+}
+function pending(date) {
+  const out = [];
+  for (const meal of activeMeals()) for (const m of S().members) if (!entry(date, m.id, meal.id)) out.push({ mid: m.id, meal: meal.id });
+  return out;
+}
+const hasData = mid => Object.values(state.log).some(d => d[mid] && (Object.keys(d[mid].meals ?? {}).length || d[mid].sweets?.length));
+
+/* grammar: "Čo dnes obedoval Timeo?", "Čo dnes obedovala Alma?", "Čo dnes obedovali rodičia?" */
+const SUFFIX = { m: '', f: 'a', pl: 'i' };
+function question(m, meal, date) {
+  const s = SUFFIX[m.g] ?? '';
+  const t = todayIso();
+  const when = date === t ? 'dnes' : date === addDays(t, -1) ? 'včera' : `v ${dayName(date) === 'nedeľa' ? 'nedeľu' : dayName(date).replace(/a$/, 'u')}`;
+  const name = m.g === 'pl' && /^rodičia$/i.test(m.name) ? 'rodičia' : m.name;
+  const verb = { breakfast: 'raňajkoval', lunch: 'obedoval', dinner: 'večeral' }[meal];
+  if (verb) return `Čo ${when} ${verb}${s} ${name}?`;
+  return `Čo mal${s} ${name} ${when} na ${meal === 'snack1' ? 'desiatu' : 'olovrant'}?`;
+}
+
+/* ═══════════════════════════ UI PRIMITIVES ═══════════════════════════ */
+
+const $app = document.getElementById('app');
+const $dlg = document.getElementById('dlg');
+const $toast = document.getElementById('toast');
+
+let toastTimer;
+function toast(msg) {
+  $toast.textContent = msg;
+  $toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => $toast.classList.remove('show'), 3200);
+}
+
+function dialog(html) {
+  $dlg.innerHTML = html;
+  $dlg.showModal();
+}
+$dlg.addEventListener('click', e => { if (e.target === $dlg) $dlg.close(); });
+
+function go(href, replace = false) {
+  history[replace ? 'replaceState' : 'pushState'](null, '', href);
+  render();
+  window.scrollTo(0, 0);
+}
+const qs = obj => '?' + new URLSearchParams(Object.entries(obj).filter(([, v]) => v != null && v !== '')).toString();
+
+const stepper = (act, id, n) =>
+  `<div class="stepper"><button data-act="${act}" data-id="${esc(id)}" data-d="-1" aria-label="Menej">−</button><output>${n}×</output><button data-act="${act}" data-id="${esc(id)}" data-d="1" aria-label="Viac">+</button></div>`;
+const bar = (val, max, cls = '') => `<div class="progress ${cls}"><i style="width:${max ? clamp(val / max * 100, 0, 100) : 0}%"></i></div>`;
+const pill = (kind, id) => { const it = item(kind, id); return `<span class="entry-pill">${it.emoji} ${esc(it.name)}</span>`; };
+
+/* ═══════════════════════════ ROUTER ═══════════════════════════ */
+
+function render() {
+  let view = param('view') || 'today';
+  if (!S().setupDone && view !== 'setup') { history.replaceState(null, '', qs({ view: 'setup', step: 1 })); view = 'setup'; }
+  const views = { setup: viewSetup, today: viewToday, week: viewWeek, day: viewDay, settings: viewSettings, premium: viewPremium };
+  const fn = views[view] ?? viewToday;
+  $app.innerHTML = fn();
+  document.body.classList.toggle('no-nav', view === 'setup' && param('edit') !== '1');
+  const tab = { day: 'week', setup: 'settings' }[view] ?? view;
+  document.querySelectorAll('.tab-nav a').forEach(a => a.dataset.tab === tab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+  afterRender?.(); afterRender = null;
+}
+let afterRender = null;
+addEventListener('popstate', render);
+
+/* ═══════════════════════════ SETUP WIZARD ═══════════════════════════ */
+
+const STEPS = ['Rodina', 'Bielkoviny', 'Sacharidy', 'Jedlá', 'Ciele', 'Alerty', 'Pripomienka'];
+
+function viewSetup() {
+  const step = clamp(parseInt(param('step')) || 1, 1, STEPS.length);
+  const edit = param('edit') === '1';
+  const body = [stepMembers, stepProteins, stepCarbs, stepMeals, stepGoals, stepAlerts, stepReminder][step - 1]();
+  return `<section>
+    ${edit ? '' : `<div class="dots">${STEPS.map((_, i) => `<span class="${i + 1 === step ? 'on' : i + 1 < step ? 'done' : ''}"></span>`).join('')}</div>`}
+    <p class="eyebrow">${edit ? 'Nastavenia' : `Krok ${step} z ${STEPS.length}`} · ${STEPS[step - 1]}</p>
+    ${body}
+    <div class="wizard-nav">
+      ${edit
+        ? `<a class="btn" href="?view=settings">← Späť</a><button class="btn primary" data-act="setup-save" data-step="${step}">Uložiť</button>`
+        : `${step > 1 ? `<button class="btn" data-act="setup-go" data-step="${step - 1}">← Späť</button>` : '<span></span>'}
+           <button class="btn primary" data-act="setup-go" data-step="${step + 1}">${step === STEPS.length ? 'Hotovo, začať 🎉' : 'Ďalej →'}</button>`}
+    </div>
+  </section>`;
+}
+
+function stepMembers() {
+  const genders = [['m', 'On'], ['f', 'Ona'], ['pl', 'Viacerí']];
+  return `<h1>Kto je v rodine?</h1>
+  <p class="lead">Pridaj členov, ktorých jedlo chceš sledovať. Viac ľudí, ktorí jedia rovnako, môžeš zlúčiť do jedného (napr. „Rodičia“).</p>
+  <div>${S().members.map(m => `
+    <div class="member-row">
+      <input type="text" value="${esc(m.name)}" placeholder="Meno, napr. Timeo" maxlength="30" data-input="member-name" data-id="${m.id}" aria-label="Meno">
+      <div class="seg" role="group" aria-label="Rod (pre gramatiku otázok)">
+        ${genders.map(([g, l]) => `<button aria-pressed="${m.g === g}" data-act="member-g" data-id="${m.id}" data-g="${g}">${l}</button>`).join('')}
+      </div>
+      <button class="icon-btn" data-act="member-del" data-id="${m.id}" aria-label="Odstrániť ${esc(m.name)}">✕</button>
+    </div>`).join('')}
+  </div>
+  <div class="row-btns">
+    <button class="btn" data-act="member-add">+ Pridať člena</button>
+    <button class="btn ghost" data-act="member-add" data-name="Rodičia" data-g="pl">+ Rodičia</button>
+  </div>
+  <p class="hint">On / Ona / Viacerí používame len na správnu gramatiku otázok – „Čo dnes obedoval<b>a</b> Alma?“</p>`;
+}
+
+function chipList(kind, list) {
+  const ids = selectedIds(kind);
+  return `<div class="chips">${list.map(it => `<button class="chip" aria-pressed="${ids.includes(it.id)}" data-act="toggle-item" data-kind="${kind}" data-id="${esc(it.id)}">${it.emoji} ${esc(it.name)}</button>`).join('')}</div>`;
+}
+function customBlock(kind) {
+  const list = S().custom[kind];
+  return `<h3>Vlastné</h3>
+  ${list.length ? chipList(kind, list) : ''}
+  <form class="inline-form" data-submit="add-custom" data-kind="${kind}">
+    <input name="name" placeholder="${kind === 'p' ? 'napr. Tvaroh' : 'napr. Tortilla'}" maxlength="30" required aria-label="Názov">
+    <input name="emoji" class="emoji-in" placeholder="🍽️" maxlength="4" aria-label="Emoji">
+    <button class="btn small">Pridať</button>
+  </form>`;
+}
+
+function stepProteins() {
+  return `<h1>Zdroje bielkovín</h1>
+  <p class="lead">Čo bežne jete? Toto budeš pri zapisovaní jedla vyberať jedným ťuknutím.</p>
+  <div class="row-btns">
+    <button class="btn" data-act="preset" data-kind="p" data-set="classic">✨ Automatický výber</button>
+    <button class="btn" data-act="preset" data-kind="p" data-set="vegan">🌱 Vegánska diéta</button>
+    <button class="btn ghost" data-act="preset" data-kind="p" data-set="none">Zrušiť výber</button>
+  </div>
+  <h3>Klasické</h3>${chipList('p', PROTEINS.filter(p => p.set === 'classic'))}
+  <h3>Vegánske alternatívy</h3>${chipList('p', PROTEINS.filter(p => p.set === 'vegan'))}
+  ${customBlock('p')}`;
+}
+
+function stepCarbs() {
+  return `<h1>Zdroje sacharidov</h1>
+  <p class="lead">Prílohy a obilniny, ktoré sa u vás objavujú. Po výbere bielkoviny sa spýtam aj na ne.</p>
+  <div class="row-btns">
+    <button class="btn" data-act="preset" data-kind="c" data-set="all">✨ Automatický výber</button>
+    <button class="btn" data-act="preset" data-kind="c" data-set="whole">🌾 Len celozrnné / komplexné</button>
+    <button class="btn ghost" data-act="preset" data-kind="c" data-set="none">Zrušiť výber</button>
+  </div>
+  <h3>Ponuka</h3>${chipList('c', CARBS)}
+  ${customBlock('c')}`;
+}
+
+function stepMeals() {
+  const presets = [['Obed a večera', ['lunch', 'dinner']], ['Raňajky, obed, večera', ['breakfast', 'lunch', 'dinner']], ['Všetko', MEALS.map(m => m.id)]];
+  return `<h1>Ktoré jedlá sledovať?</h1>
+  <p class="lead">Čím menej jedál, tým rýchlejšie zapisovanie. Väčšine rodín stačí obed a večera.</p>
+  <div class="row-btns">${presets.map(([l, ids]) => `<button class="btn" data-act="meal-preset" data-ids="${ids.join(',')}">${l}</button>`).join('')}</div>
+  <h3>Vlastný výber</h3>
+  <div class="chips">${MEALS.map(m => `<button class="chip" aria-pressed="${S().meals.includes(m.id)}" data-act="toggle-meal" data-id="${m.id}">${m.emoji} ${m.name}</button>`).join('')}</div>
+  <p class="hint">Denne to bude ${S().members.filter(m => m.name.trim()).length || 1} × ${S().meals.length} = ${(S().members.filter(m => m.name.trim()).length || 1) * S().meals.length} rýchlych otázok.</p>`;
+}
+
+function stepGoals() {
+  const rows = selected('p').map(it => {
+    const g = S().goals[it.id];
+    const rec = REC_GOALS[it.id];
+    return `<div class="list-row">
+      <div class="grow"><strong>${it.emoji} ${esc(it.name)}</strong>
+        <small>${rec ? `Odporúčané: ${rec.type === 'min' ? 'aspoň' : 'najviac'} ${rec.n}× týždenne` : 'Bez odporúčania'}</small></div>
+      <div class="seg" role="group" aria-label="Typ cieľa">
+        ${[['', 'Nesledovať'], ['min', 'Aspoň'], ['max', 'Najviac']].map(([t, l]) => `<button aria-pressed="${(g?.type ?? '') === t}" data-act="goal-type" data-id="${esc(it.id)}" data-type="${t}">${l}</button>`).join('')}
+      </div>
+      ${g ? stepper('goal-n', it.id, g.n) : ''}
+    </div>`;
+  }).join('');
+  return `<h1>Týždenné ciele</h1>
+  <p class="lead">Koľkokrát týždenne na osobu? Predvyplnil som odporúčania – stačí potvrdiť alebo upraviť.</p>
+  <div class="row-btns"><button class="btn" data-act="goals-rec">✔ Použiť odporúčané</button></div>
+  <div class="card">${rows || '<p class="hint">Najprv vyber zdroje bielkovín.</p>'}</div>
+  <p class="note">Odporúčania sú orientačné, inšpirované WHO (OMS) a európskymi výživovými smernicami (viac strukovín a rýb, menej červeného mäsa). Nie sú lekárskou radou.</p>`;
+}
+
+function stepAlerts() {
+  const rows = selected('c').map(it => {
+    const a = S().alerts[it.id];
+    return `<div class="list-row">
+      <label class="check grow"><input type="checkbox" data-change="alert-on" data-id="${esc(it.id)}" ${a ? 'checked' : ''}> <span><strong>${it.emoji} ${esc(it.name)}</strong>
+        <small>${a ? `Upozorním pri ${a + 1}. raze v týždni` : 'Bez upozornenia'}</small></span></label>
+      ${a ? stepper('alert-n', it.id, a) : ''}
+    </div>`;
+  }).join('');
+  return `<h1>Upozornenia na sacharidy</h1>
+  <p class="lead">Nastav limit na týždeň. Keď ho niekto prekročí, appka ťa upozorní – napr. pri 5. klasickej cestovine v týždni.</p>
+  <div class="row-btns"><button class="btn" data-act="alerts-rec">✔ Použiť navrhované</button><button class="btn ghost" data-act="alerts-none">Vypnúť všetky</button></div>
+  <div class="card">${rows || '<p class="hint">Najprv vyber zdroje sacharidov.</p>'}</div>`;
+}
+
+function stepReminder() {
+  const r = S().reminder;
+  const perm = 'Notification' in window ? Notification.permission : 'unsupported';
+  return `<h1>Denná pripomienka</h1>
+  <p class="lead">Kedy ti mám pripomenúť, že treba zapísať jedlá? Zapísanie celej rodiny zaberie menej ako minútu.</p>
+  <div class="card">
+    <label class="check"><input type="checkbox" data-change="rem-on" ${r.on ? 'checked' : ''}> <strong>Pripomínať každý deň</strong></label>
+    <label class="field" style="margin-top:8px">Čas pripomienky <input type="time" value="${esc(r.time)}" data-change="rem-time"></label>
+    <div class="row-btns" style="margin-top:12px">
+      <button class="btn small" data-act="notif-perm" ${perm === 'granted' || perm === 'unsupported' ? 'disabled' : ''}>🔔 ${perm === 'granted' ? 'Notifikácie povolené' : perm === 'unsupported' ? 'Notifikácie nepodporované' : 'Povoliť notifikácie'}</button>
+      <button class="btn small" data-act="notif-test">Vyskúšať</button>
+      <button class="btn small" data-act="ics">📅 Pridať do kalendára</button>
+    </div>
+  </div>
+  <p class="note">${FAKE} Skutočné push notifikácie aj pri zatvorenej appke potrebujú push server. V prototype pripomienka vyskočí, len keď je appka otvorená. Spoľahlivú dennú pripomienku už teraz zabezpečí opakovaná udalosť v kalendári (.ics).</p>`;
+}
+
+function validateStep(step) {
+  const s = S();
+  if (step === 1) {
+    s.members = s.members.map(m => ({ ...m, name: m.name.trim() })).filter(m => m.name);
+    if (!s.members.length) { s.members = [{ id: uid(), name: '', g: 'm' }]; return 'Pridaj aspoň jedného člena rodiny.'; }
+  }
+  if (step === 2 && !s.proteins.length) return 'Vyber aspoň jeden zdroj bielkovín.';
+  if (step === 3 && !s.carbs.length) return 'Vyber aspoň jeden zdroj sacharidov.';
+  if (step === 4 && !s.meals.length) return 'Vyber aspoň jedno jedlo.';
+  return null;
+}
+
+/* ═══════════════════════════ TODAY (quick entry) ═══════════════════════════ */
+
+let flow = null;            // { date, mid, meal, step: 'p'|'c', p, all }
+const skipped = new Set();  // "date|mid|meal" skipped in this session
+const skey = (d, mid, meal) => `${d}|${mid}|${meal}`;
+
+function viewToday() {
+  const t = todayIso();
+  let date = validDate(param('date')) ?? t;
+  if (date > t) date = t;
+  const pend = pending(date);
+  const total = S().members.length * activeMeals().length;
+  const done = total - pend.length;
+
+  if (!flow || flow.date !== date || entry(date, flow.mid, flow.meal) || !member(flow.mid)) {
+    const next = pend.find(x => !skipped.has(skey(date, x.mid, x.meal)));
+    flow = next ? { date, mid: next.mid, meal: next.meal, step: 'p', p: null, all: false } : null;
+  }
+
+  return `
+  <div class="day-head">
+    <a class="icon-btn" href="${qs({ view: 'today', date: addDays(date, -1) })}" aria-label="Predchádzajúci deň">‹</a>
+    <div><strong>${dateLabel(date)}</strong><small>${done} z ${total} zapísaných</small></div>
+    ${date < t ? `<a class="icon-btn" href="${qs({ view: 'today', date: addDays(date, 1) })}" aria-label="Nasledujúci deň">›</a>` : '<span class="icon-btn" style="visibility:hidden"></span>'}
+  </div>
+  ${bar(done, total)}
+  ${reminderDue() && date === t && pend.length ? `<div class="banner">⏰ Je čas zapísať dnešné jedlá.</div>` : ''}
+  ${flow ? questionCard() : doneCard(date, pend)}
+  ${todaySummary(date)}
+  ${S().premium && S().sugar.on ? sweetsCard(date) : ''}`;
+}
+
+function tile(act, kind, it, mid, date) {
+  let hint = '';
+  if (it.id !== 'none') {
+    const n = countWeek(mid, date, kind, it.id);
+    const g = kind === 'p' ? S().goals[it.id] : S().alerts[it.id] ? { type: 'max', n: S().alerts[it.id] } : null;
+    if (g?.type === 'min') hint = `<small class="${n >= g.n ? 'ok' : ''}">${n}/${g.n} tento týždeň</small>`;
+    else if (g?.type === 'max') hint = `<small class="${n >= g.n ? 'warn' : ''}">${n}/${g.n} max</small>`;
+    else if (n) hint = `<small>${n}× tento týždeň</small>`;
+  }
+  return `<button class="tile ${it.id === 'none' ? 'none' : ''}" data-act="${act}" data-id="${esc(it.id)}"><span class="e">${it.emoji}</span>${esc(it.name)}${hint}</button>`;
+}
+
+function questionCard() {
+  const { date, mid, meal, step } = flow;
+  const m = member(mid), ml = mealById(meal);
+  const head = `<p class="eyebrow">${ml.emoji} ${ml.name} · ${esc(m.name)}</p>`;
+
+  if (step === 'p') {
+    const others = S().members.filter(o => o.id !== mid && entry(date, o.id, meal));
+    const shortcuts = others.map(o => {
+      const e = entry(date, o.id, meal);
+      return `<button class="shortcut" data-act="same-as" data-id="${o.id}">↺ Rovnako ako ${esc(o.name)}: ${item('p', e.p).emoji} ${esc(item('p', e.p).name)} + ${item('c', e.c).emoji} ${esc(item('c', e.c).name)}</button>`;
+    }).join('');
+    return `<article class="q-card" data-key="${skey(date, mid, meal)}p">
+      ${head}
+      <h1 class="q">${esc(question(m, meal, date))}</h1>
+      ${shortcuts ? `<div class="shortcuts">${shortcuts}</div>` : ''}
+      <div class="tiles">${selected('p').map(it => tile('pick-p', 'p', it, mid, date)).join('')}${tile('pick-p', 'p', NONE.p, mid, date)}</div>
+      <div class="q-foot"><button class="link" data-act="skip">Preskočiť zatiaľ</button></div>
+    </article>`;
+  }
+
+  const p = item('p', flow.p);
+  const restPending = S().members.filter(o => o.id !== mid && !entry(date, o.id, meal));
+  return `<article class="q-card" data-key="${skey(date, mid, meal)}c">
+    ${head}
+    <h1 class="q">A k tomu? 🍽️</h1>
+    <p class="chosen">Bielkoviny: <strong>${p.emoji} ${esc(p.name)}</strong> <button class="link" data-act="back-p">zmeniť</button></p>
+    <div class="tiles">${selected('c').map(it => tile('pick-c', 'c', it, mid, date)).join('')}${tile('pick-c', 'c', NONE.c, mid, date)}</div>
+    ${restPending.length ? `<div class="q-foot"><label class="check"><input type="checkbox" data-change="flow-all" ${flow.all ? 'checked' : ''}> Rovnaké jedlo zapísať aj pre: ${restPending.map(o => esc(o.name)).join(', ')}</label></div>` : ''}
+  </article>`;
+}
+
+function doneCard(date, pend) {
+  if (!pend.length) return `<article class="q-card done-card"><div class="big">🎉</div><h1>Hotovo!</h1><p class="lead">Všetky jedlá za ${date === todayIso() ? 'dnešok' : 'tento deň'} sú zapísané.</p>
+    <div class="row-btns" style="justify-content:center"><a class="btn" href="${qs({ view: 'week', date })}">📅 Týždenný prehľad</a></div></article>`;
+  return `<article class="q-card done-card"><div class="big">⏭️</div><h1>Zvyšok neskôr</h1><p class="lead">Preskočil si ${pend.length} ${pend.length === 1 ? 'otázku' : pend.length < 5 ? 'otázky' : 'otázok'}.</p>
+    <div class="row-btns" style="justify-content:center"><button class="btn primary" data-act="unskip" data-date="${date}">Pokračovať v zapisovaní</button></div></article>`;
+}
+
+function todaySummary(date) {
+  const rows = S().members.map(m => `<div class="mini-row"><span class="who">${esc(m.name)}</span><span class="what">${activeMeals().map(ml => {
+    const e = entry(date, m.id, ml.id);
+    return e ? `<span class="entry-pill" title="${ml.name}">${ml.emoji} ${item('p', e.p).emoji}${item('c', e.c).emoji}</span>` : `<span class="entry-pill missing" title="${ml.name}">${ml.emoji} ?</span>`;
+  }).join('')}</span></div>`).join('');
+  return `<section class="card"><div class="card-head"><h2>Zapísané</h2><a class="btn small" href="${qs({ view: 'day', date })}">✏️ Upraviť deň</a></div><div class="mini">${rows}</div></section>`;
+}
+
+function saveFlowEntry(cId) {
+  const { date, mid, meal, p, all } = flow;
+  const targets = [mid, ...(all ? S().members.filter(o => o.id !== mid && !entry(date, o.id, meal)).map(o => o.id) : [])];
+  for (const t of targets) setEntry(date, t, meal, { p, c: cId });
+  save();
+  flow = null;
+  notifyChecks(date, targets, { p, c: cId });
+}
+
+function notifyChecks(date, mids, e) {
+  const warns = [], wins = [];
+  for (const mid of mids) {
+    const m = member(mid);
+    const g = S().goals[e.p];
+    if (g && e.p !== 'none') {
+      const n = countWeek(mid, date, 'p', e.p), it = item('p', e.p);
+      if (g.type === 'max' && n > g.n) warns.push(`${esc(m.name)}: ${it.emoji} ${esc(it.name)} už ${n}× tento týždeň (limit ${g.n}×).`);
+      if (g.type === 'min' && n === g.n) wins.push(`${m.name}: ${it.emoji} cieľ ${g.n}× splnený!`);
+    }
+    const a = S().alerts[e.c];
+    if (a && e.c !== 'none') {
+      const n = countWeek(mid, date, 'c', e.c), it = item('c', e.c);
+      if (n > a) warns.push(`${esc(m.name)}: ${it.emoji} ${esc(it.name)} už ${n}. raz tento týždeň (limit ${a}×).`);
+    }
+  }
+  if (warns.length) dialog(`<h2>⚠️ Upozornenie</h2><ul>${warns.map(w => `<li>${w}</li>`).join('')}</ul>
+    <p class="hint">Limity si upravíš v Nastaveniach.</p><div class="row-btns"><button class="btn primary" data-act="dlg-close">Rozumiem</button></div>`);
+  else if (wins.length) toast('🎉 ' + wins.join(' · '));
+  else toast('✓ Uložené');
+}
+
+/* sweets (premium) */
+function sweetTotal(date, mid) { return (state.log[date]?.[mid]?.sweets ?? []).reduce((a, s) => a + s.g, 0); }
+const sugarLimit = mid => S().sugar.limits[mid] ?? 25;
+
+function sweetsCard(date) {
+  return `<section class="card"><div class="card-head"><h2>🍬 Sladké a cukor</h2><span class="badge gold">⭐ Premium</span></div>
+    ${S().members.map(m => {
+      const sw = state.log[date]?.[m.id]?.sweets ?? [], tot = sweetTotal(date, m.id), lim = sugarLimit(m.id);
+      return `<div style="margin-bottom:12px">
+        <div class="goal"><strong>${esc(m.name)}</strong><span class="val ${tot > lim ? 'bad' : tot > lim * .8 ? 'warn' : 'ok'}">${tot} / ${lim} g</span>${bar(tot, lim, tot > lim ? 'bad' : tot > lim * .8 ? 'warn' : '')}</div>
+        <div class="chips">${sw.map((s, i) => `<button class="chip" data-act="sweet-del" data-mid="${m.id}" data-i="${i}" data-date="${date}" aria-label="Odstrániť ${esc(s.name)}">${s.emoji} ${esc(s.name)} <small>${s.g} g</small><span class="x">✕</span></button>`).join('')}
+        <button class="chip" data-act="sweet-add" data-mid="${m.id}" data-date="${date}">+ Pridať sladké</button></div>
+      </div>`;
+    }).join('')}
+    <p class="hint">Gramy cukru sú orientačné odhady na bežnú porciu.</p></section>`;
+}
+
+function sweetDialog(mid, date) {
+  dialog(`<h2>Sladké – ${esc(member(mid).name)}</h2>
+    <div class="tiles">${SWEETS.map((s, i) => `<button class="tile" data-act="sweet-pick" data-i="${i}" data-mid="${mid}" data-date="${date}"><span class="e">${s.emoji}</span>${esc(s.name)}<small>~${s.g} g cukru</small></button>`).join('')}</div>
+    <h3>Vlastné</h3>
+    <form class="inline-form" data-submit="sweet-custom" data-mid="${mid}" data-date="${date}">
+      <input name="name" placeholder="napr. Palacinka" required maxlength="30" aria-label="Názov">
+      <input name="g" type="number" min="0" max="200" placeholder="g" required class="emoji-in" aria-label="Gramy cukru">
+      <button class="btn small">Pridať</button>
+    </form>
+    <div class="row-btns"><button class="btn" data-act="dlg-close">Zavrieť</button></div>`);
+}
+
+/* ═══════════════════════════ WEEK OVERVIEW ═══════════════════════════ */
+
+function viewWeek() {
+  const t = todayIso();
+  const date = validDate(param('date')) ?? t;
+  const mid = member(param('member'))?.id ?? S().members[0]?.id;
+  const days = weekDays(date);
+  const m = member(mid);
+
+  const goalRows = selected('p').map(it => {
+    const n = countWeek(mid, date, 'p', it.id), g = S().goals[it.id];
+    if (!g) return n ? `<div class="goal"><span>${it.emoji} ${esc(it.name)}</span><span class="val">${n}×</span></div>` : '';
+    const cls = g.type === 'min' ? (n >= g.n ? 'ok' : '') : (n > g.n ? 'bad' : n === g.n ? 'warn' : 'ok');
+    return `<div class="goal"><span>${it.emoji} ${esc(it.name)} <small>${g.type === 'min' ? 'aspoň' : 'najviac'} ${g.n}×</small></span><span class="val ${cls}">${n} / ${g.n}</span>${bar(n, g.n, cls === 'bad' ? 'bad' : cls === 'warn' ? 'warn' : '')}</div>`;
+  }).join('');
+  const carbRows = selected('c').map(it => {
+    const n = countWeek(mid, date, 'c', it.id), a = S().alerts[it.id];
+    if (!n && !a) return '';
+    const cls = a ? (n > a ? 'bad' : n === a ? 'warn' : 'ok') : '';
+    return `<div class="goal"><span>${it.emoji} ${esc(it.name)} ${a ? `<small>limit ${a}×</small>` : ''}</span><span class="val ${cls}">${a ? `${n} / ${a}` : `${n}×`}</span>${a ? bar(n, a, cls === 'bad' ? 'bad' : cls === 'warn' ? 'warn' : '') : ''}</div>`;
+  }).join('');
+
+  let sugar = '';
+  if (S().premium && S().sugar.on) {
+    const tot = days.map(d => sweetTotal(d, mid));
+    sugar = `<section class="card"><div class="card-head"><h2>🍬 Cukor zo sladkostí</h2><span class="badge gold">⭐ Premium</span></div>
+      ${days.map((d, i) => `<div class="goal"><span>${cap(dayName(d))}</span><span class="val ${tot[i] > sugarLimit(mid) ? 'bad' : ''}">${tot[i]} g</span>${bar(tot[i], sugarLimit(mid), tot[i] > sugarLimit(mid) ? 'bad' : '')}</div>`).join('')}</section>`;
+  }
+
+  return `
+  <div class="day-head">
+    <a class="icon-btn" href="${qs({ view: 'week', date: addDays(days[0], -7), member: mid })}" aria-label="Predchádzajúci týždeň">‹</a>
+    <div><strong>${fmtDate(days[0])} – ${fmtDate(days[6])} ${parseDate(days[6]).getFullYear()}</strong><small>Týždenný prehľad</small></div>
+    <a class="icon-btn" href="${qs({ view: 'week', date: addDays(days[0], 7), member: mid })}" aria-label="Nasledujúci týždeň">›</a>
+  </div>
+  <nav class="tabs-line" aria-label="Člen rodiny">${S().members.map(o => `<a href="${qs({ view: 'week', date, member: o.id })}" ${o.id === mid ? 'aria-current="page"' : ''}>${esc(o.name)}</a>`).join('')}</nav>
+  <section class="card"><h2>Bielkoviny – ${esc(m?.name)}</h2>${goalRows || '<p class="hint">Zatiaľ žiadne záznamy.</p>'}</section>
+  <section class="card"><h2>Sacharidy</h2>${carbRows || '<p class="hint">Zatiaľ žiadne záznamy.</p>'}</section>
+  ${sugar}
+  <h3>Dni – ťukni pre opravu</h3>
+  ${days.map(d => `<a class="card day-card ${d === t ? 'today' : ''}" href="${qs({ view: 'day', date: d, member: mid })}">
+    <div class="dh"><strong>${dayName(d)} ${fmtDate(d)}</strong><small>${d > t ? 'budúcnosť' : 'upraviť ›'}</small></div>
+    ${activeMeals().map(ml => { const e = entry(d, mid, ml.id);
+      return `<div class="meal-line"><span>${ml.emoji} ${ml.name}</span><span>${e ? `${item('p', e.p).emoji} ${esc(item('p', e.p).name)} · ${item('c', e.c).emoji} ${esc(item('c', e.c).name)}` : '<small>—</small>'}</span></div>`; }).join('')}
+  </a>`).join('')}`;
+}
+
+/* ═══════════════════════════ DAY EDIT ═══════════════════════════ */
+
+function viewDay() {
+  const date = validDate(param('date')) ?? todayIso();
+  const opts = (kind, cur) => {
+    const list = selected(kind);
+    if (cur && cur !== 'none' && !list.some(x => x.id === cur)) list.push(item(kind, cur));
+    return `<option value="">— nezapísané —</option>${list.map(it => `<option value="${esc(it.id)}" ${cur === it.id ? 'selected' : ''}>${it.emoji} ${esc(it.name)}</option>`).join('')}<option value="none" ${cur === 'none' ? 'selected' : ''}>🚫 ${NONE[kind].name}</option>`;
+  };
+  return `
+  <div class="day-head">
+    <a class="icon-btn" href="${qs({ view: 'day', date: addDays(date, -1), member: param('member') })}" aria-label="Predchádzajúci deň">‹</a>
+    <div><strong>${dateLabel(date)}</strong><small>Úprava dňa</small></div>
+    <a class="icon-btn" href="${qs({ view: 'day', date: addDays(date, 1), member: param('member') })}" aria-label="Nasledujúci deň">›</a>
+  </div>
+  ${S().members.map(m => `<section class="card"><h2>${esc(m.name)}</h2>
+    ${activeMeals().map(ml => { const e = entry(date, m.id, ml.id);
+      return `<div class="edit-meal"><strong>${ml.emoji} ${ml.name}</strong>
+        <select data-change="edit-entry" data-date="${date}" data-mid="${m.id}" data-meal="${ml.id}" data-kind="p" aria-label="${ml.name} – bielkoviny">${opts('p', e?.p)}</select>
+        <select data-change="edit-entry" data-date="${date}" data-mid="${m.id}" data-meal="${ml.id}" data-kind="c" aria-label="${ml.name} – sacharidy">${opts('c', e?.c)}</select>
+      </div>`; }).join('')}
+  </section>`).join('')}
+  ${S().premium && S().sugar.on ? sweetsCard(date) : ''}
+  <div class="row-btns"><a class="btn" href="${qs({ view: 'week', date, member: param('member') })}">← Týždeň</a><a class="btn primary" href="${qs({ view: 'today', date: date > todayIso() ? '' : date })}">Rýchle zapisovanie</a></div>`;
+}
+
+/* ═══════════════════════════ SETTINGS ═══════════════════════════ */
+
+function viewSettings() {
+  const s = S();
+  const link = (step, title, desc) => `<a class="list-row" style="text-decoration:none;color:inherit" href="${qs({ view: 'setup', step, edit: 1 })}"><div class="grow"><strong>${title}</strong><small>${desc}</small></div><span>›</span></a>`;
+  return `<h1>Nastavenia</h1>
+  <section class="card">
+    ${link(1, '👨‍👩‍👧 Rodina', s.members.map(m => m.name).join(', '))}
+    ${link(2, '🍗 Zdroje bielkovín', selected('p').map(x => x.emoji).join(' '))}
+    ${link(3, '🍚 Zdroje sacharidov', selected('c').map(x => x.emoji).join(' '))}
+    ${link(4, '🍽️ Sledované jedlá', activeMeals().map(m => m.name).join(', '))}
+    ${link(5, '🎯 Týždenné ciele', `${Object.keys(s.goals).filter(id => s.proteins.includes(id)).length} cieľov`)}
+    ${link(6, '⚠️ Alerty na sacharidy', `${Object.keys(s.alerts).filter(id => s.carbs.includes(id)).length} limitov`)}
+    ${link(7, '⏰ Denná pripomienka', s.reminder.on ? `každý deň o ${s.reminder.time}` : 'vypnutá')}
+  </section>
+  <section class="card"><h2>⭐ Premium</h2>
+    <label class="check"><input type="checkbox" data-change="premium" ${s.premium ? 'checked' : ''}> Premium aktívne ${FAKE}</label>
+    <p class="hint">Bez platby – v prototype sa Premium len prepína.</p>
+  </section>
+  <section class="card"><h2>💾 Dáta</h2>
+    <p class="hint" style="margin:0 0 8px">Všetko je uložené len v tomto prehliadači (localStorage).</p>
+    <div class="row-btns">
+      <button class="btn small" data-act="demo">🧪 Doplniť ukážkové dáta</button>
+      <button class="btn small" data-act="export">⬇️ Export JSON</button>
+      <label class="btn small file-btn">⬆️ Import JSON<input type="file" accept="application/json,.json" data-change="import"></label>
+      <button class="btn small danger" data-act="reset">🗑️ Vymazať všetko</button>
+    </div>
+  </section>`;
+}
+
+/* ═══════════════════════════ PREMIUM ═══════════════════════════ */
+
+const FEATURES = [
+  { f: 'school', emoji: '📸', title: 'Školské menu z fotky', desc: 'Odfoť jedálny lístok a appka vyplní celý týždeň/mesiac obedov.', fake: true },
+  { f: 'recipes', emoji: '👩‍🍳', title: 'Recepty a tipy', desc: 'Recepty pre deti, rýchle jedlá a nápady, ako ušetriť čas v kuchyni.', fake: true },
+  { f: 'planner', emoji: '🤖', title: 'AI jedálniček', desc: 'Z histórie vašich jedál vytvorí týždenné alebo mesačné menu.', fake: true },
+  { f: 'freezer', emoji: '🧊', title: 'Inventár mrazničky', desc: 'Prehľad, čo máte v mrazničke. Pomôže aj fotka obsahu.', fake: true },
+  { f: 'shopping', emoji: '🛒', title: 'Nákupný zoznam', desc: 'Z menu vytvorí nákup + zoznam „must“ produktov, ktoré majú byť doma.' },
+  { f: 'sugar', emoji: '🍬', title: 'Sladké a cukor', desc: 'Zapisuj sladkosti a sleduj gramy cukru za deň.' },
+];
+
+function viewPremium() {
+  const f = param('f');
+  const feat = FEATURES.find(x => x.f === f);
+  if (feat) {
+    if (!S().premium) return `<a class="link" href="?view=premium">← Premium</a><div class="card locked"><div class="big">🔒</div><h1>${feat.emoji} ${feat.title}</h1><p class="lead">${feat.desc}</p><button class="btn primary" data-act="premium-on">⭐ Aktivovať Premium ${FAKE}</button></div>`;
+    return `<a class="link" href="?view=premium">← Premium</a>` + { school: viewSchool, recipes: viewRecipes, planner: viewPlanner, freezer: viewFreezer, shopping: viewShopping, sugar: viewSugar }[f]();
+  }
+  return `<section class="card premium-hero">
+    <h1>⭐ Premium</h1>
+    <p class="lead" style="margin:0 0 12px">${S().premium ? 'Premium je aktívne. Ďakujeme!' : 'Odomkni chytré funkcie, ktoré ušetria čas pri plánovaní a varení.'}</p>
+    ${S().premium ? `<button class="btn small" data-act="premium-off">Deaktivovať</button>` : `<button class="btn primary" data-act="premium-on">Aktivovať za 0 € ${FAKE}</button>`}
+    <p class="hint">Platba je v prototype ${FAKE} – nič sa neúčtuje.</p>
+  </section>
+  <div class="feature-grid">${FEATURES.map(x => `<a class="card feature" href="${qs({ view: 'premium', f: x.f })}"><span class="fe">${x.emoji}</span><div><h2>${x.title} ${x.fake ? FAKE : ''}</h2><p>${x.desc}</p></div></a>`).join('')}</div>`;
+}
+
+/* ── School menu from photo (FAKE AI) ── */
+let school = { photo: null, busy: false, rows: null, mid: null, range: 'week', overwrite: false };
+
+function viewSchool() {
+  const mid = member(school.mid)?.id ?? S().members[0].id;
+  school.mid = mid;
+  const noLunch = !S().meals.includes('lunch');
+  const opts = (kind, cur) => [...new Map([...selected(kind), item(kind, cur)].map(x => [x.id, x])).values()].map(it => `<option value="${esc(it.id)}" ${it.id === cur ? 'selected' : ''}>${it.emoji} ${esc(it.name)}</option>`).join('');
+  return `<h1>📸 Školské menu ${FAKE}</h1>
+  <p class="lead">Odfoť jedálny lístok zo školy. Appka rozpozná jedlá a vyplní obedy na celý týždeň alebo mesiac.</p>
+  <section class="card">
+    <label class="field">Pre koho<select data-change="school-mid">${S().members.map(m => `<option value="${m.id}" ${m.id === mid ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></label>
+    <div class="seg" style="margin-top:12px" role="group" aria-label="Obdobie">${[['week', 'Tento týždeň'], ['month', '4 týždne']].map(([v, l]) => `<button aria-pressed="${school.range === v}" data-act="school-range" data-v="${v}">${l}</button>`).join('')}</div>
+    <div class="row-btns" style="margin-top:12px">
+      <label class="btn file-btn">📷 Odfotiť / vybrať fotku<input type="file" accept="image/*" capture="environment" data-change="school-photo"></label>
+      <button class="btn primary" data-act="school-scan" ${school.photo && !school.busy ? '' : 'disabled'}>${school.busy ? '<span class="spinner"></span> Rozpoznávam…' : '🔍 Rozpoznať'}</button>
+    </div>
+    ${school.photo ? `<img class="photo-preview" src="${school.photo}" alt="Náhľad jedálneho lístka">` : ''}
+    ${noLunch ? '<p class="note">Obed nie je medzi sledovanými jedlami – po uložení ho uvidíš až keď ho zapneš v nastaveniach.</p>' : ''}
+  </section>
+  ${school.rows ? `<section class="card"><div class="card-head"><h2>Rozpoznané obedy ${FAKE}</h2></div>
+    <p class="hint" style="margin:0 0 8px">Výsledok je simulovaný. Skontroluj a prípadne oprav pred uložením.</p>
+    ${school.rows.map((r, i) => `<div class="edit-meal"><strong>${cap(dayName(r.date))} ${fmtDate(r.date)} – ${esc(r.name)}${entry(r.date, mid, 'lunch') ? ' <span class="badge">už zapísané</span>' : ''}</strong>
+      <select data-change="school-row" data-i="${i}" data-kind="p" aria-label="Bielkoviny">${opts('p', r.p)}</select>
+      <select data-change="school-row" data-i="${i}" data-kind="c" aria-label="Sacharidy">${opts('c', r.c)}</select></div>`).join('')}
+    <label class="check"><input type="checkbox" data-change="school-overwrite" ${school.overwrite ? 'checked' : ''}> Prepísať už zapísané dni</label>
+    <div class="row-btns"><button class="btn" data-act="school-discard">Zahodiť</button><button class="btn primary" data-act="school-save">Uložiť do prehľadu</button></div>
+  </section>` : ''}`;
+}
+
+function fakeSchoolScan(seed) {
+  const rnd = mulberry32(seed);
+  const P = selectedIds('p'), C = selectedIds('c');
+  const pickId = (ids, sel) => ids.find(id => sel.includes(id)) ?? ids[0];
+  const start = weekStart(todayIso());
+  const weeks = school.range === 'month' ? 4 : 1;
+  const rows = [];
+  for (let w = 0; w < weeks; w++) {
+    const dishes = shuffle([...SCHOOL_DISHES], rnd);
+    for (let d = 0; d < 5; d++) {
+      const dish = dishes[d];
+      rows.push({ date: addDays(start, w * 7 + d), name: dish.name, p: pickId(dish.p, P), c: pickId(dish.c, C) });
+    }
+  }
+  return rows;
+}
+
+/* ── Recipes (FAKE AI) ── */
+function viewRecipes() {
+  const kid = param('kid') === '1', quick = param('quick') === '1', need = param('need') === '1';
+  const P = selectedIds('p');
+  const mid = S().members[0]?.id;
+  const behind = new Set(Object.entries(S().goals).filter(([id, g]) => g.type === 'min' && P.includes(id) && countWeek(mid, todayIso(), 'p', id) < g.n).map(([id]) => id));
+  let list = RECIPES.filter(r => r.p.some(p => P.includes(p)));
+  if (kid) list = list.filter(r => r.kid);
+  if (quick) list = list.filter(r => r.t <= 20);
+  if (need) list = list.filter(r => r.p.some(p => behind.has(p)));
+  const toggle = (k, v, l) => `<a class="chip" aria-pressed="${v}" href="${qs({ view: 'premium', f: 'recipes', kid: k === 'kid' ? (v ? '' : 1) : kid ? 1 : '', quick: k === 'quick' ? (v ? '' : 1) : quick ? 1 : '', need: k === 'need' ? (v ? '' : 1) : need ? 1 : '' })}" style="text-decoration:none;color:inherit">${l}</a>`;
+  return `<h1>👩‍🍳 Recepty ${FAKE}</h1>
+  <p class="lead">Návrhy podľa vašich zdrojov bielkovín a sacharidov. V prototype je to pevný zoznam, nie AI.</p>
+  <div class="chips" style="margin-bottom:14px">${toggle('kid', kid, '🧒 Pre deti')}${toggle('quick', quick, '⚡ Do 20 min')}${toggle('need', need, `🎯 Chýba do cieľa${behind.size ? ` (${[...behind].map(id => item('p', id).emoji).join('')})` : ''}`)}</div>
+  ${list.map(r => {
+    const p = item('p', r.p.find(x => P.includes(x)) ?? r.p[0]), c = item('c', r.c.find(x => selectedIds('c').includes(x)) ?? r.c[0]);
+    return `<article class="card recipe"><h2>${esc(r.name)}</h2>
+      <div class="meta"><span class="badge">⏱ ${r.t} min</span><span class="badge">${p.emoji} ${esc(p.name)}</span><span class="badge">${c.emoji} ${esc(c.name)}</span>${r.kid ? '<span class="badge kid">🧒 pre deti</span>' : ''}</div>
+      <ul>${[...r.ing, c.name.toLowerCase()].map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+      <p class="hint" style="margin:0">💡 ${esc(r.tip)}</p></article>`;
+  }).join('') || '<p class="card hint">Žiadny recept nevyhovuje filtrom.</p>'}
+  <section class="card"><h2>⏱️ Ako ušetriť čas v kuchyni</h2><ul style="margin-left:18px">${TIME_TIPS.map(t => `<li>${esc(t)}</li>`).join('')}</ul></section>`;
+}
+
+/* ── AI planner (FAKE AI – local heuristic) ── */
+let plannerBusy = false;
+
+function viewPlanner() {
+  const hist = [7, 14, 30].includes(+param('hist')) ? +param('hist') : 14;
+  const range = param('range') === 'month' ? 'month' : 'week';
+  const t = todayIso();
+  let analyzed = 0;
+  for (let i = 1; i <= hist; i++) for (const r of Object.values(state.log[addDays(t, -i)] ?? {})) analyzed += Object.keys(r.meals ?? {}).length;
+  const plan = state.plan;
+  const byDay = {};
+  for (const s of plan?.slots ?? []) (byDay[s.date] ??= []).push(s);
+
+  return `<h1>🤖 AI jedálniček ${FAKE}</h1>
+  <p class="lead">Analyzuje, čo u vás chutí, a navrhne menu, ktoré spĺňa týždenné ciele aj limity. V prototype to robí jednoduchý algoritmus priamo v prehliadači, nie skutočná AI.</p>
+  <section class="card">
+    <label class="field">Monitorované obdobie<select data-change="planner-hist">${[7, 14, 30].map(n => `<option value="${n}" ${n === hist ? 'selected' : ''}>posledných ${n} dní</option>`).join('')}</select></label>
+    <p class="hint">Nájdených ${analyzed} záznamov.${analyzed < 10 ? ' Pre lepšie návrhy zapisuj aspoň týždeň (alebo doplň ukážkové dáta v Nastaveniach).' : ''}</p>
+    <div class="seg" style="margin-top:12px" role="group" aria-label="Rozsah menu">${[['week', 'Týždenné'], ['month', 'Mesačné']].map(([v, l]) => `<a href="${qs({ view: 'premium', f: 'planner', hist, range: v })}" aria-pressed="${range === v}">${l}</a>`).join('')}</div>
+    <div class="row-btns" style="margin-top:12px"><button class="btn primary" data-act="plan-make" data-hist="${hist}" data-range="${range}" ${plannerBusy ? 'disabled' : ''}>${plannerBusy ? '<span class="spinner"></span> Generujem…' : '✨ Vytvoriť menu'}</button></div>
+  </section>
+  ${plan ? `<section class="card"><div class="card-head"><h2>Menu od ${fmtDate(plan.slots[0].date)}</h2><span class="badge">${plan.analyzed} záznamov</span></div>
+    ${Object.entries(byDay).map(([d, slots]) => `<div class="plan-day"><strong>${dayName(d)} ${fmtDate(d)}</strong>
+      ${slots.map(s => `<div class="meal-line"><span>${mealById(s.meal).emoji} ${mealById(s.meal).name}</span><span>${s.name ? `${esc(s.name)} ` : ''}<small>${item('p', s.p).emoji} ${esc(item('p', s.p).name)} · ${item('c', s.c).emoji} ${esc(item('c', s.c).name)}</small></span></div>`).join('')}</div>`).join('')}
+    <div class="row-btns"><button class="btn" data-act="plan-clear">Zahodiť</button><button class="btn primary" data-act="plan-shop">🛒 Vytvoriť nákupný zoznam</button></div>
+  </section>` : ''}`;
+}
+
+function makePlan(hist, weeks) {
+  const t = todayIso();
+  const freq = { p: {}, c: {} };
+  let analyzed = 0;
+  for (let i = 1; i <= hist; i++) for (const r of Object.values(state.log[addDays(t, -i)] ?? {})) for (const e of Object.values(r.meals ?? {})) {
+    analyzed++;
+    if (e.p !== 'none') freq.p[e.p] = (freq.p[e.p] ?? 0) + 1;
+    if (e.c !== 'none') freq.c[e.c] = (freq.c[e.c] ?? 0) + 1;
+  }
+  const main = activeMeals().filter(m => ['lunch', 'dinner'].includes(m.id));
+  const meals = main.length ? main : activeMeals();
+  const P = selectedIds('p'), C = selectedIds('c');
+  const { goals, alerts } = S();
+  const rnd = mulberry32(Date.now() % 2147483647);
+  let start = weekStart(t);
+  if (start !== t) start = addDays(start, 7);
+  const slots = [];
+
+  for (let w = 0; w < weeks; w++) {
+    const week = [];
+    for (let d = 0; d < 7; d++) for (const m of meals) week.push({ date: addDays(start, w * 7 + d), meal: m.id });
+    // proteins: satisfy minimums first, then fill by family preference within maximums
+    const cnt = {}, seq = [];
+    for (const id of P) { const g = goals[id]; if (g?.type === 'min') for (let k = 0; k < g.n && seq.length < week.length; k++) seq.push(id); }
+    seq.forEach(id => cnt[id] = (cnt[id] ?? 0) + 1);
+    while (seq.length < week.length) {
+      const ok = P.filter(id => !(goals[id]?.type === 'max' && (cnt[id] ?? 0) >= goals[id].n));
+      const id = weighted(ok.length ? ok : P, id => 1 + (freq.p[id] ?? 0), rnd);
+      seq.push(id); cnt[id] = (cnt[id] ?? 0) + 1;
+    }
+    shuffle(seq, rnd);
+    for (let i = 1; i < seq.length; i++) if (seq[i] === seq[i - 1]) {
+      const j = seq.findIndex((x, k) => k > i && x !== seq[i]);
+      if (j > 0) [seq[i], seq[j]] = [seq[j], seq[i]];
+    }
+    // carbs: prefer a matching recipe, stay within alert limits
+    const cc = {};
+    const underLimit = id => !(alerts[id] && (cc[id] ?? 0) >= alerts[id]);
+    week.forEach((s, i) => {
+      s.p = seq[i];
+      const recs = RECIPES.filter(r => r.p.includes(s.p) && r.c.some(c => C.includes(c) && underLimit(c)));
+      if (recs.length && rnd() < .7) {
+        const r = recs[Math.floor(rnd() * recs.length)];
+        s.c = r.c.find(c => C.includes(c) && underLimit(c)); s.name = r.name; s.ing = r.ing;
+      } else {
+        const ok = C.filter(underLimit);
+        s.c = weighted(ok.length ? ok : C, id => 1 + (freq.c[id] ?? 0), rnd);
+      }
+      cc[s.c] = (cc[s.c] ?? 0) + 1;
+    });
+    slots.push(...week);
+  }
+  return { created: t, analyzed, slots };
+}
+
+/* ── Freezer ── */
+let freezerScan = { busy: false, found: null };
+
+function viewFreezer() {
+  return `<h1>🧊 Mraznička</h1>
+  <p class="lead">Čo máte v mrazničke – aby nič nezostalo zabudnuté.</p>
+  <section class="card">
+    <form class="inline-form" data-submit="freezer-add" style="margin-top:0">
+      <input name="name" placeholder="napr. Kuracie prsia 500 g" required maxlength="50" aria-label="Položka">
+      <button class="btn small">Pridať</button>
+    </form>
+    <div class="row-btns"><label class="btn small file-btn">📷 Odfotiť obsah ${FAKE}<input type="file" accept="image/*" capture="environment" data-change="freezer-photo"></label>${freezerScan.busy ? '<span class="spinner"></span>' : ''}</div>
+  </section>
+  ${freezerScan.found ? `<section class="card"><h2>Rozpoznané na fotke ${FAKE}</h2><p class="hint" style="margin:0 0 8px">Simulovaný výsledok – odškrtni, čo naozaj máš.</p>
+    ${freezerScan.found.map((n, i) => `<label class="check"><input type="checkbox" checked data-i="${i}" class="fz-found"> ${esc(n)}</label>`).join('')}
+    <div class="row-btns"><button class="btn" data-act="freezer-scan-discard">Zahodiť</button><button class="btn primary" data-act="freezer-scan-add">Pridať vybrané</button></div></section>` : ''}
+  <section class="card"><h2>V mrazničke (${state.freezer.length})</h2>
+    ${state.freezer.length ? state.freezer.map(it => `<div class="list-row"><div class="grow"><strong>${esc(it.name)}</strong><small>od ${fmtDate(it.added)}</small></div>${stepper('freezer-qty', it.id, it.qty)}<button class="icon-btn" data-act="freezer-del" data-id="${it.id}" aria-label="Odstrániť">✕</button></div>`).join('') : '<p class="hint">Mraznička je prázdna.</p>'}
+  </section>`;
+}
+
+/* ── Shopping list ── */
+function viewShopping() {
+  const missing = state.mustHave.filter(m => !m.home).length;
+  return `<h1>🛒 Nákup</h1>
+  <section class="card"><div class="card-head"><h2>Nákupný zoznam</h2>${state.plan ? '<button class="btn small" data-act="plan-shop">+ Z menu</button>' : `<a class="btn small" href="${qs({ view: 'premium', f: 'planner' })}">Vytvoriť menu</a>`}</div>
+    <form class="inline-form" data-submit="shop-add" style="margin:0 0 8px"><input name="name" placeholder="Pridať položku" required maxlength="50" aria-label="Položka"><button class="btn small">Pridať</button></form>
+    ${state.shopping.map(it => `<div class="shop-item ${it.done ? 'done' : ''}"><label><input type="checkbox" data-change="shop-done" data-id="${it.id}" ${it.done ? 'checked' : ''}><span>${esc(it.name)}</span>${it.qty > 1 ? `<span class="qty">× ${it.qty}</span>` : ''}</label><button class="icon-btn" data-act="shop-del" data-id="${it.id}" aria-label="Odstrániť">✕</button></div>`).join('') || '<p class="hint">Zoznam je prázdny.</p>'}
+    ${state.shopping.some(i => i.done) ? '<div class="row-btns"><button class="btn small ghost" data-act="shop-clear">Odstrániť kúpené</button></div>' : ''}
+  </section>
+  <section class="card"><div class="card-head"><h2>Must-have doma</h2>${missing ? `<button class="btn small primary" data-act="must-to-shop">+ Chýbajúce (${missing}) do nákupu</button>` : ''}</div>
+    <p class="hint" style="margin:0 0 8px">Veci, ktoré má byť stále doma. Odškrtni, keď dochádzajú.</p>
+    ${state.mustHave.map(it => `<div class="shop-item"><label><input type="checkbox" data-change="must-home" data-id="${it.id}" ${it.home ? 'checked' : ''}><span>${esc(it.name)}</span>${it.home ? '' : '<span class="badge" style="color:var(--warn)">chýba</span>'}</label><button class="icon-btn" data-act="must-del" data-id="${it.id}" aria-label="Odstrániť">✕</button></div>`).join('')}
+    <form class="inline-form" data-submit="must-add"><input name="name" placeholder="Pridať must-have" required maxlength="50" aria-label="Must-have položka"><button class="btn small">Pridať</button></form>
+  </section>`;
+}
+
+function addToShopping(names) {
+  for (const raw of names) {
+    const name = raw.trim(); if (!name) continue;
+    const ex = state.shopping.find(i => i.name.toLowerCase() === name.toLowerCase() && !i.done);
+    if (ex) ex.qty++; else state.shopping.push({ id: uid(), name, qty: 1, done: false });
+  }
+  save();
+}
+
+/* ── Sugar settings ── */
+function viewSugar() {
+  return `<h1>🍬 Sladké a cukor</h1>
+  <p class="lead">Zapisuj sladkosti na obrazovke Dnes. Appka spočíta gramy cukru za deň.</p>
+  <section class="card">
+    <label class="check"><input type="checkbox" data-change="sugar-on" ${S().sugar.on ? 'checked' : ''}> <strong>Sledovať sladké</strong></label>
+    <h3>Denný limit cukru na osobu</h3>
+    ${S().members.map(m => `<div class="list-row"><span class="grow"><strong>${esc(m.name)}</strong></span><div class="stepper"><button data-act="sugar-lim" data-id="${m.id}" data-d="-5" aria-label="Menej">−</button><output>${sugarLimit(m.id)} g</output><button data-act="sugar-lim" data-id="${m.id}" data-d="5" aria-label="Viac">+</button></div></div>`).join('')}
+    <p class="note">WHO (OMS) odporúča obmedziť voľné cukry pod 10 % energie, ideálne pod 5 % – to je približne 25 g denne pre dospelého. Pre menšie deti je vhodný ešte nižší limit.</p>
+  </section>
+  <a class="btn primary" href="?view=today">Zapisovať sladké →</a>`;
+}
+
+/* ═══════════════════════════ REMINDER ═══════════════════════════ */
+
+function reminderDue() {
+  const r = S().reminder;
+  if (!r.on) return false;
+  const [h, m] = r.time.split(':').map(Number);
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes() >= h * 60 + m;
+}
+function notify(body) {
+  try {
+    if ('Notification' in window && Notification.permission === 'granted') { new Notification('Rodinný tanier', { body, tag: 'family-meals' }); return; }
+  } catch { /* e.g. mobile Chrome requires a service worker – fall back to a toast */ }
+  toast('⏰ ' + body);
+}
+function reminderTick() {
+  if (!S().setupDone || !reminderDue()) return;
+  const t = todayIso();
+  const pend = pending(t);
+  if (!pend.length) return;
+  let last; try { last = localStorage.getItem(NOTIFIED_KEY); } catch { /* ignore */ }
+  if (last === t) return;
+  try { localStorage.setItem(NOTIFIED_KEY, t); } catch { /* ignore */ }
+  notify(question(member(pend[0].mid), pend[0].meal, t));
+  if ((param('view') ?? 'today') === 'today') render();
+}
+setInterval(reminderTick, 30_000);
+
+function downloadIcs() {
+  const [h, m] = S().reminder.time.split(':');
+  const d = todayIso().replaceAll('-', '');
+  const now = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+  const url = location.origin + location.pathname + '?view=today';
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Rodinny tanier//SK', 'BEGIN:VEVENT',
+    `UID:${uid()}@family-meals`, `DTSTAMP:${now}`, `DTSTART:${d}T${h}${m}00`, 'DURATION:PT5M', 'RRULE:FREQ=DAILY',
+    'SUMMARY:🍽️ Zapísať dnešné jedlá', `DESCRIPTION:Otvor appku: ${url}`, `URL:${url}`,
+    'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Zapísať dnešné jedlá', 'TRIGGER:PT0M', 'END:VALARM',
+    'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+  download('pripomienka-jedla.ics', ics, 'text/calendar');
+}
+function download(name, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/* ═══════════════════════════ DEMO DATA ═══════════════════════════ */
+
+function fillDemo() {
+  const rnd = mulberry32(42);
+  const P = selectedIds('p'), C = selectedIds('c');
+  const t = todayIso();
+  let n = 0;
+  for (let i = 1; i <= 14; i++) {
+    const d = addDays(t, -i);
+    for (const ml of activeMeals()) {
+      const family = { p: P[Math.floor(rnd() * P.length)], c: C[Math.floor(rnd() * C.length)] };
+      for (const m of S().members) {
+        if (entry(d, m.id, ml.id) || rnd() < .1) continue;
+        const e = rnd() < .7 ? family : { p: P[Math.floor(rnd() * P.length)], c: C[Math.floor(rnd() * C.length)] };
+        setEntry(d, m.id, ml.id, { ...e }); n++;
+      }
+    }
+    if (S().premium) for (const m of S().members) if (rnd() < .6) {
+      const r = dayRec(d, m.id);
+      if (!r.sweets.length) r.sweets.push({ ...SWEETS[Math.floor(rnd() * SWEETS.length)] });
+    }
+  }
+  save();
+  return n;
+}
+
+/* ═══════════════════════════ EVENTS ═══════════════════════════ */
+
+const ACT = {
+  /* setup */
+  'setup-go'(el) {
+    const cur = clamp(parseInt(param('step')) || 1, 1, STEPS.length), next = +el.dataset.step;
+    if (next > cur) { const err = validateStep(cur); save(); if (err) { toast(err); render(); return; } }
+    if (next > STEPS.length) { S().setupDone = true; save(); requestNotifIfNeeded(); go('?view=today'); return; }
+    go(qs({ view: 'setup', step: next }));
+  },
+  'setup-save'(el) {
+    const err = validateStep(+el.dataset.step); save();
+    if (err) { toast(err); render(); return; }
+    toast('✓ Uložené'); go('?view=settings');
+  },
+  'member-add'(el) { S().members.push({ id: uid(), name: el.dataset.name ?? '', g: el.dataset.g ?? 'm' }); save(); render(); afterFocusLast(); },
+  'member-g'(el) { member(el.dataset.id).g = el.dataset.g; save(); render(); },
+  'member-del'(el) {
+    const m = member(el.dataset.id);
+    if (hasData(m.id) && !confirm(`${m.name} má zapísané jedlá. Odstrániť aj s nimi?`)) return;
+    S().members = S().members.filter(x => x.id !== m.id);
+    for (const d of Object.values(state.log)) delete d[m.id];
+    save(); render();
+  },
+  'toggle-item'(el) {
+    const key = el.dataset.kind === 'p' ? 'proteins' : 'carbs', id = el.dataset.id;
+    S()[key] = S()[key].includes(id) ? S()[key].filter(x => x !== id) : [...S()[key], id];
+    save(); render();
+  },
+  preset(el) {
+    const { kind, set } = el.dataset;
+    if (kind === 'p') S().proteins = set === 'none' ? [] : PROTEINS.filter(p => p.set === set).map(p => p.id);
+    else S().carbs = set === 'none' ? [] : CARBS.filter(c => set === 'all' || c.whole).map(c => c.id);
+    save(); render();
+  },
+  'meal-preset'(el) { S().meals = el.dataset.ids.split(','); save(); render(); },
+  'toggle-meal'(el) { const id = el.dataset.id; S().meals = S().meals.includes(id) ? S().meals.filter(x => x !== id) : MEALS.map(m => m.id).filter(x => x === id || S().meals.includes(x)); save(); render(); },
+  'goal-type'(el) {
+    const { id, type } = el.dataset;
+    if (!type) delete S().goals[id];
+    else S().goals[id] = { type, n: S().goals[id]?.n ?? REC_GOALS[id]?.n ?? 2 };
+    save(); render();
+  },
+  'goal-n'(el) { const g = S().goals[el.dataset.id]; g.n = clamp(g.n + +el.dataset.d, 1, 21); save(); render(); },
+  'goals-rec'() { S().goals = Object.fromEntries(S().proteins.map(id => [id, REC_GOALS[id]]).filter(([, g]) => g).map(([id, g]) => [id, { ...g }])); save(); render(); toast('✓ Odporúčané ciele nastavené'); },
+  'alert-n'(el) { const id = el.dataset.id; S().alerts[id] = clamp(S().alerts[id] + +el.dataset.d, 1, 21); save(); render(); },
+  'alerts-rec'() { S().alerts = { ...REC_ALERTS }; save(); render(); },
+  'alerts-none'() { S().alerts = {}; save(); render(); },
+  async 'notif-perm'() {
+    if (!('Notification' in window)) return;
+    const p = await Notification.requestPermission();
+    toast(p === 'granted' ? '✓ Notifikácie povolené' : 'Notifikácie nie sú povolené');
+    render();
+  },
+  'notif-test'() { const m = S().members[0]; notify(m?.name ? question(m, activeMeals()[0]?.id ?? 'lunch', todayIso()) : 'Čas zapísať jedlá!'); },
+  ics() { downloadIcs(); },
+
+  /* today */
+  'pick-p'(el) { flow.p = el.dataset.id; flow.step = 'c'; render(); },
+  'back-p'() { flow.step = 'p'; render(); },
+  'pick-c'(el) { saveFlowEntry(el.dataset.id); render(); },
+  'same-as'(el) {
+    const e = entry(flow.date, el.dataset.id, flow.meal);
+    const { date, mid, meal } = flow;
+    setEntry(date, mid, meal, { ...e }); save(); flow = null;
+    notifyChecks(date, [mid], e); render();
+  },
+  skip() { skipped.add(skey(flow.date, flow.mid, flow.meal)); flow = null; render(); },
+  unskip(el) { for (const k of [...skipped]) if (k.startsWith(el.dataset.date)) skipped.delete(k); render(); },
+  'dlg-close'() { $dlg.close(); },
+  'sweet-add'(el) { sweetDialog(el.dataset.mid, el.dataset.date); },
+  'sweet-pick'(el) { addSweet(el.dataset.mid, el.dataset.date, { ...SWEETS[+el.dataset.i] }); },
+  'sweet-del'(el) { dayRec(el.dataset.date, el.dataset.mid).sweets.splice(+el.dataset.i, 1); save(); render(); },
+
+  /* settings */
+  demo() {
+    if (!confirm('Doplniť náhodné ukážkové jedlá za posledných 14 dní? Existujúce záznamy sa neprepíšu.')) return;
+    toast(`🧪 Pridaných ${fillDemo()} ukážkových záznamov`); render();
+  },
+  export() { download(`rodinny-tanier-${todayIso()}.json`, JSON.stringify(state, null, 2), 'application/json'); },
+  reset() {
+    if (!confirm('Naozaj vymazať všetky nastavenia a zapísané jedlá? Túto akciu nie je možné vrátiť.')) return;
+    state = defaults(); save(); flow = null; skipped.clear(); go('?view=setup&step=1');
+  },
+  'premium-on'() { S().premium = true; save(); toast('⭐ Premium aktivované (FAKE)'); render(); },
+  'premium-off'() { S().premium = false; save(); render(); },
+
+  /* premium: school */
+  'school-range'(el) { school.range = el.dataset.v; school.rows = null; render(); },
+  async 'school-scan'() {
+    school.busy = true; render();
+    await wait(1600);
+    school.busy = false; school.rows = fakeSchoolScan(school.seed ?? 1); render();
+  },
+  'school-discard'() { school = { ...school, rows: null, photo: null }; render(); },
+  'school-save'() {
+    let n = 0, kept = 0;
+    for (const r of school.rows) {
+      if (entry(r.date, school.mid, 'lunch') && !school.overwrite) { kept++; continue; }
+      setEntry(r.date, school.mid, 'lunch', { p: r.p, c: r.c }); n++;
+    }
+    save();
+    toast(`✓ Uložených ${n} obedov${kept ? `, ${kept} ponechaných` : ''}`);
+    school = { ...school, rows: null, photo: null };
+    go(qs({ view: 'week', member: school.mid }));
+  },
+
+  /* premium: planner */
+  async 'plan-make'(el) {
+    if (state.plan && !confirm('Nahradiť existujúce menu novým?')) return;
+    plannerBusy = true; render();
+    await wait(1200);
+    state.plan = makePlan(+el.dataset.hist, el.dataset.range === 'month' ? 4 : 1);
+    plannerBusy = false; save(); render();
+  },
+  'plan-clear'() { if (confirm('Zahodiť menu?')) { state.plan = null; save(); render(); } },
+  'plan-shop'() {
+    if (!state.plan) return;
+    const names = [];
+    for (const s of state.plan.slots) {
+      names.push(...(s.ing ?? [GENERIC_ING[s.p] ?? item('p', s.p).name]));
+      if (s.c !== 'none') names.push(item('c', s.c).name.toLowerCase());
+    }
+    addToShopping(names.filter((n, i) => n !== 'none'));
+    toast('✓ Pridané do nákupného zoznamu');
+    go(qs({ view: 'premium', f: 'shopping' }));
+  },
+
+  /* premium: freezer */
+  'freezer-qty'(el) {
+    const it = state.freezer.find(x => x.id === el.dataset.id);
+    it.qty = it.qty + +el.dataset.d;
+    if (it.qty <= 0) { if (!confirm(`Odstrániť „${it.name}“ z mrazničky?`)) { it.qty = 1; render(); return; } state.freezer = state.freezer.filter(x => x !== it); }
+    save(); render();
+  },
+  'freezer-del'(el) { const it = state.freezer.find(x => x.id === el.dataset.id); if (!confirm(`Odstrániť „${it.name}“?`)) return; state.freezer = state.freezer.filter(x => x !== it); save(); render(); },
+  'freezer-scan-discard'() { freezerScan.found = null; render(); },
+  'freezer-scan-add'() {
+    const picked = [...document.querySelectorAll('.fz-found:checked')].map(i => freezerScan.found[+i.dataset.i]);
+    for (const name of picked) state.freezer.push({ id: uid(), name, qty: 1, added: todayIso() });
+    freezerScan.found = null; save(); toast(`✓ Pridaných ${picked.length} položiek`); render();
+  },
+
+  /* premium: shopping */
+  'shop-del'(el) { state.shopping = state.shopping.filter(x => x.id !== el.dataset.id); save(); render(); },
+  'shop-clear'() { state.shopping = state.shopping.filter(x => !x.done); save(); render(); },
+  'must-del'(el) { const it = state.mustHave.find(x => x.id === el.dataset.id); if (!confirm(`Odstrániť „${it.name}“ z must-have?`)) return; state.mustHave = state.mustHave.filter(x => x !== it); save(); render(); },
+  'must-to-shop'() { addToShopping(state.mustHave.filter(m => !m.home).map(m => m.name)); toast('✓ Pridané do nákupu'); render(); },
+
+  /* premium: sugar */
+  'sugar-lim'(el) { S().sugar.limits[el.dataset.id] = clamp(sugarLimit(el.dataset.id) + +el.dataset.d, 5, 100); save(); render(); },
+};
+
+const CHANGE = {
+  'alert-on'(el) { if (el.checked) S().alerts[el.dataset.id] = REC_ALERTS[el.dataset.id] ?? 4; else delete S().alerts[el.dataset.id]; save(); render(); },
+  'rem-on'(el) { S().reminder.on = el.checked; save(); render(); },
+  'rem-time'(el) { if (el.value) { S().reminder.time = el.value; save(); try { localStorage.removeItem(NOTIFIED_KEY); } catch { /* ignore */ } } },
+  'flow-all'(el) { flow.all = el.checked; },
+  'edit-entry'(el) {
+    const { date, mid, meal, kind } = el.dataset;
+    const cur = entry(date, mid, meal) ?? {};
+    const next = { p: cur.p ?? 'none', c: cur.c ?? 'none', [kind]: el.value };
+    if (!el.value) {
+      // clearing one half clears the whole meal record
+      setEntry(date, mid, meal, null); save(); render(); toast('Záznam odstránený'); return;
+    }
+    setEntry(date, mid, meal, next); save(); render();
+    notifyChecks(date, [mid], next);
+  },
+  premium(el) { S().premium = el.checked; save(); render(); },
+  async import(el) {
+    const file = el.files[0]; if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (data?.v !== 1 || !data.settings) throw new Error('format');
+      if (!confirm('Import nahradí všetky súčasné dáta. Pokračovať?')) return;
+      state = data; save(); flow = null; toast('✓ Dáta importované'); render();
+    } catch { toast('⚠️ Neplatný súbor'); }
+  },
+  'school-mid'(el) { school.mid = el.value; render(); },
+  'school-photo'(el) {
+    const f = el.files[0]; if (!f) return;
+    if (school.photo) URL.revokeObjectURL(school.photo);
+    school.photo = URL.createObjectURL(f); school.seed = f.size + f.lastModified; school.rows = null; render();
+  },
+  'school-row'(el) { school.rows[+el.dataset.i][el.dataset.kind] = el.value; },
+  'school-overwrite'(el) { school.overwrite = el.checked; },
+  'planner-hist'(el) { go(qs({ view: 'premium', f: 'planner', hist: el.value, range: param('range') }), true); },
+  async 'freezer-photo'(el) {
+    const f = el.files[0]; if (!f) return;
+    freezerScan = { busy: true, found: null }; render();
+    await wait(1400);
+    const rnd = mulberry32(f.size + f.lastModified);
+    freezerScan = { busy: false, found: shuffle([...FREEZER_POOL], rnd).slice(0, 4 + Math.floor(rnd() * 3)) };
+    render();
+  },
+  'shop-done'(el) { state.shopping.find(x => x.id === el.dataset.id).done = el.checked; save(); render(); },
+  'must-home'(el) { state.mustHave.find(x => x.id === el.dataset.id).home = el.checked; save(); render(); },
+  'sugar-on'(el) { S().sugar.on = el.checked; save(); render(); },
+};
+
+const SUBMIT = {
+  'add-custom'(form) {
+    const kind = form.dataset.kind;
+    const name = form.name.value.trim(); if (!name) return;
+    if (allItems(kind).some(x => x.name.toLowerCase() === name.toLowerCase())) { toast('Táto položka už existuje'); return; }
+    const it = { id: 'x-' + uid(), name, emoji: form.emoji.value.trim() || '🍽️' };
+    S().custom[kind].push(it);
+    S()[kind === 'p' ? 'proteins' : 'carbs'].push(it.id);
+    save(); render();
+  },
+  'sweet-custom'(form) {
+    addSweet(form.dataset.mid, form.dataset.date, { name: form.name.value.trim(), emoji: '🍭', g: clamp(+form.g.value || 0, 0, 200) });
+  },
+  'freezer-add'(form) { state.freezer.unshift({ id: uid(), name: form.name.value.trim(), qty: 1, added: todayIso() }); save(); render(); },
+  'shop-add'(form) { addToShopping([form.name.value]); render(); },
+  'must-add'(form) { state.mustHave.push({ id: uid(), name: form.name.value.trim(), home: true }); save(); render(); },
+};
+
+function addSweet(mid, date, sweet) {
+  dayRec(date, mid).sweets.push(sweet);
+  save(); $dlg.close();
+  const tot = sweetTotal(date, mid), lim = sugarLimit(mid);
+  if (tot > lim) toast(`⚠️ ${member(mid).name}: ${tot} g cukru – nad denným limitom ${lim} g`);
+  else toast(`✓ ${sweet.emoji} ${sweet.name} (${tot}/${lim} g)`);
+  render();
+}
+
+function afterFocusLast() { const ins = $app.querySelectorAll('[data-input=member-name]'); ins[ins.length - 1]?.focus(); }
+function requestNotifIfNeeded() {
+  if (S().reminder.on && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+}
+
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[href^="?"]');
+  if (a && !e.metaKey && !e.ctrlKey && !e.shiftKey) { e.preventDefault(); go(a.getAttribute('href')); return; }
+  const el = e.target.closest('[data-act]');
+  if (el && ACT[el.dataset.act]) { e.preventDefault(); ACT[el.dataset.act](el, e); }
+});
+document.addEventListener('change', e => { const el = e.target.closest('[data-change]'); if (el) CHANGE[el.dataset.change]?.(el, e); });
+document.addEventListener('input', e => {
+  const el = e.target.closest('[data-input=member-name]');
+  if (el) { member(el.dataset.id).name = el.value; save(); }
+});
+document.addEventListener('submit', e => {
+  const form = e.target.closest('[data-submit]');
+  if (!form) return;
+  e.preventDefault();
+  SUBMIT[form.dataset.submit]?.(form);
+});
+
+render();
+reminderTick();
+</script>
+</body>
+</html>

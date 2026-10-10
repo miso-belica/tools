@@ -354,11 +354,12 @@ const CARBS = [
 ];
 
 const MEALS = [
-  { id: 'breakfast', name: 'Raňajky', emoji: '🌅' },
-  { id: 'snack1', name: 'Desiata', emoji: '🍎' },
-  { id: 'lunch', name: 'Obed', emoji: '☀️' },
-  { id: 'snack2', name: 'Olovrant', emoji: '🥨' },
-  { id: 'dinner', name: 'Večera', emoji: '🌙' },
+  // start = earliest time of day when it makes sense to ask about the meal
+  { id: 'breakfast', name: 'Raňajky', emoji: '🌅', start: '06:00' },
+  { id: 'snack1', name: 'Desiata', emoji: '🍎', start: '09:30' },
+  { id: 'lunch', name: 'Obed', emoji: '☀️', start: '11:30' },
+  { id: 'snack2', name: 'Olovrant', emoji: '🥨', start: '15:00' },
+  { id: 'dinner', name: 'Večera', emoji: '🌙', start: '17:30' },
 ];
 
 // Orientational weekly targets per person (inspired by WHO / European dietary guidelines).
@@ -450,6 +451,7 @@ const defaults = () => ({
     carbs: CARBS.map(c => c.id),
     custom: { p: [], c: [] },
     meals: ['lunch', 'dinner'],
+    mealTimes: {},
     goals: structuredClone(REC_GOALS),
     alerts: { ...REC_ALERTS },
     reminder: { on: false, time: '19:00' },
@@ -531,6 +533,17 @@ const selectedIds = kind => S()[kind === 'p' ? 'proteins' : 'carbs'];
 const selected = kind => allItems(kind).filter(x => selectedIds(kind).includes(x.id));
 const activeMeals = () => MEALS.filter(m => S().meals.includes(m.id));
 const mealById = id => MEALS.find(m => m.id === id);
+const mealStart = id => S().mealTimes?.[id] ?? mealById(id).start;
+const toMin = hhmm => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
+const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+/* Meals it is reasonable to ask about: all for past days, only already-started ones for today. */
+function askableMeals(date) {
+  const t = todayIso();
+  if (date < t) return activeMeals();
+  if (date > t) return [];
+  return activeMeals().filter(m => nowMin() >= toMin(mealStart(m.id)));
+}
+const laterMeals = date => date === todayIso() ? activeMeals().filter(m => !askableMeals(date).includes(m)) : [];
 const member = id => S().members.find(m => m.id === id);
 
 /* log access: log[date][memberId] = { meals: { lunch: {p, c} }, sweets: [{name, emoji, g}] } */
@@ -552,7 +565,7 @@ function countWeek(mid, date, kind, id) {
 }
 function pending(date) {
   const out = [];
-  for (const meal of activeMeals()) for (const m of S().members) if (!entry(date, m.id, meal.id)) out.push({ mid: m.id, meal: meal.id });
+  for (const meal of askableMeals(date)) for (const m of S().members) if (!entry(date, m.id, meal.id)) out.push({ mid: m.id, meal: meal.id });
   return out;
 }
 const hasData = mid => Object.values(state.log).some(d => d[mid] && (Object.keys(d[mid].meals ?? {}).length || d[mid].sweets?.length));
@@ -705,6 +718,8 @@ function stepMeals() {
   <div class="row-btns">${presets.map(([l, ids]) => `<button class="btn" data-act="meal-preset" data-ids="${ids.join(',')}">${l}</button>`).join('')}</div>
   <h3>Vlastný výber</h3>
   <div class="chips">${MEALS.map(m => `<button class="chip" aria-pressed="${S().meals.includes(m.id)}" data-act="toggle-meal" data-id="${m.id}">${m.emoji} ${m.name}</button>`).join('')}</div>
+  ${activeMeals().length ? `<h3>Odkedy sa pýtať</h3>
+  <div class="card">${activeMeals().map(m => `<label class="list-row"><span class="grow"><strong>${m.emoji} ${m.name}</strong><small>Skôr sa na ${m.name.toLowerCase()} nepýtam.</small></span><input type="time" style="width:auto" value="${mealStart(m.id)}" data-change="meal-time" data-id="${m.id}"></label>`).join('')}</div>` : ''}
   <p class="hint">Denne to bude ${S().members.filter(m => m.name.trim()).length || 1} × ${S().meals.length} = ${(S().members.filter(m => m.name.trim()).length || 1) * S().meals.length} rýchlych otázok.</p>`;
 }
 
@@ -783,8 +798,9 @@ function viewToday() {
   let date = validDate(param('date')) ?? t;
   if (date > t) date = t;
   const pend = pending(date);
-  const total = S().members.length * activeMeals().length;
+  const total = S().members.length * askableMeals(date).length;
   const done = total - pend.length;
+  lastAskable = `${date}|${total}`;
 
   if (!flow || flow.date !== date || entry(date, flow.mid, flow.meal) || !member(flow.mid)) {
     const next = pend.find(x => !skipped.has(skey(date, x.mid, x.meal)));
@@ -794,7 +810,7 @@ function viewToday() {
   return `
   <div class="day-head">
     <a class="icon-btn" href="${qs({ view: 'today', date: addDays(date, -1) })}" aria-label="Predchádzajúci deň">‹</a>
-    <div><strong>${dateLabel(date)}</strong><small>${done} z ${total} zapísaných</small></div>
+    <div><strong>${dateLabel(date)}</strong><small>${total ? `${done} z ${total} zapísaných` : 'Zatiaľ nie je čo zapisovať'}</small></div>
     ${date < t ? `<a class="icon-btn" href="${qs({ view: 'today', date: addDays(date, 1) })}" aria-label="Nasledujúci deň">›</a>` : '<span class="icon-btn" style="visibility:hidden"></span>'}
   </div>
   ${bar(done, total)}
@@ -848,6 +864,12 @@ function questionCard() {
 }
 
 function doneCard(date, pend) {
+  const later = laterMeals(date);
+  const next = later[0] && `${later[0].emoji} ${later[0].name.toLowerCase()} sa spýtam po ${mealStart(later[0].id)}.`;
+  if (!pend.length && later.length === activeMeals().length) return `<article class="q-card done-card"><div class="big">☕</div><h1>Zatiaľ nič</h1><p class="lead">Na ${next}</p>
+    <div class="row-btns" style="justify-content:center"><a class="btn" href="${qs({ view: 'today', date: addDays(date, -1) })}">Doplniť včerajšok</a></div></article>`;
+  if (!pend.length && later.length) return `<article class="q-card done-card"><div class="big">👍</div><h1>Zatiaľ hotovo</h1><p class="lead">Na ${next}</p>
+    <div class="row-btns" style="justify-content:center"><a class="btn" href="${qs({ view: 'week', date })}">📅 Týždenný prehľad</a></div></article>`;
   if (!pend.length) return `<article class="q-card done-card"><div class="big">🎉</div><h1>Hotovo!</h1><p class="lead">Všetky jedlá za ${date === todayIso() ? 'dnešok' : 'tento deň'} sú zapísané.</p>
     <div class="row-btns" style="justify-content:center"><a class="btn" href="${qs({ view: 'week', date })}">📅 Týždenný prehľad</a></div></article>`;
   return `<article class="q-card done-card"><div class="big">⏭️</div><h1>Zvyšok neskôr</h1><p class="lead">Preskočil si ${pend.length} ${pend.length === 1 ? 'otázku' : pend.length < 5 ? 'otázky' : 'otázok'}.</p>
@@ -857,7 +879,9 @@ function doneCard(date, pend) {
 function todaySummary(date) {
   const rows = S().members.map(m => `<div class="mini-row"><span class="who">${esc(m.name)}</span><span class="what">${activeMeals().map(ml => {
     const e = entry(date, m.id, ml.id);
-    return e ? `<span class="entry-pill" title="${ml.name}">${ml.emoji} ${item('p', e.p).emoji}${item('c', e.c).emoji}</span>` : `<span class="entry-pill missing" title="${ml.name}">${ml.emoji} ?</span>`;
+    if (e) return `<span class="entry-pill" title="${ml.name}">${ml.emoji} ${item('p', e.p).emoji}${item('c', e.c).emoji}</span>`;
+    if (laterMeals(date).includes(ml)) return `<span class="entry-pill missing" title="${ml.name} – neskôr">${ml.emoji} <small>${mealStart(ml.id)}</small></span>`;
+    return `<span class="entry-pill missing" title="${ml.name}">${ml.emoji} ?</span>`;
   }).join('')}</span></div>`).join('');
   return `<section class="card"><div class="card-head"><h2>Zapísané</h2><a class="btn small" href="${qs({ view: 'day', date })}">✏️ Upraviť deň</a></div><div class="mini">${rows}</div></section>`;
 }
@@ -1291,7 +1315,13 @@ function reminderTick() {
   notify(question(member(pend[0].mid), pend[0].meal, t));
   if ((param('view') ?? 'today') === 'today') render();
 }
-setInterval(reminderTick, 30_000);
+let lastAskable = null;
+function mealClockTick() {
+  if (!S().setupDone || (param('view') ?? 'today') !== 'today' || flow?.step === 'c') return;
+  const date = validDate(param('date')) ?? todayIso();
+  if (lastAskable !== null && lastAskable !== `${date}|${S().members.length * askableMeals(date).length}`) render();
+}
+setInterval(() => { reminderTick(); mealClockTick(); }, 30_000);
 
 function downloadIcs() {
   const [h, m] = S().reminder.time.split(':');
@@ -1493,6 +1523,7 @@ const ACT = {
 
 const CHANGE = {
   'alert-on'(el) { if (el.checked) S().alerts[el.dataset.id] = REC_ALERTS[el.dataset.id] ?? 4; else delete S().alerts[el.dataset.id]; save(); render(); },
+  'meal-time'(el) { if (el.value) { S().mealTimes = { ...S().mealTimes, [el.dataset.id]: el.value }; save(); } },
   'rem-on'(el) { S().reminder.on = el.checked; save(); render(); },
   'rem-time'(el) { if (el.value) { S().reminder.time = el.value; save(); try { localStorage.removeItem(NOTIFIED_KEY); } catch { /* ignore */ } } },
   'flow-all'(el) { flow.all = el.checked; },

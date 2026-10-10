@@ -6,3 +6,4 @@ This repo contains small HTML apps. HTML app is a minimalistic self-contained si
 5. Use the File System Access API (`window.showDirectoryPicker()`) to let the user select a folder, then read and/or write image files - principle of least privilege.
 6. Make the app mobile friendly - responsive design with progressive enhancements.
 7. Code should follow well-known best practices: Verify before you act. Ask for permission, not forgiveness. When in doubt, don't. Minimize blast radius. Principle of least astonishment.
+8. Commit finished changes and push them directly to `main` (fast-forward, no PR needed).

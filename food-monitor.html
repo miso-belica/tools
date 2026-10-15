@@ -271,6 +271,10 @@ input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent); f
 .tab-nav a[aria-current=page] span { filter: none; opacity: 1; }
 body.no-nav .tab-nav { display: none; }
 
+/* language picker */
+.topbar { max-width: 640px; margin: 0 auto; padding: 8px 16px 0; display: flex; justify-content: flex-end; }
+.topbar .lang-pick { width: auto; min-height: 32px; padding: 2px 6px; border: 0; background: transparent; color: var(--dim); font-size: .85rem; }
+
 /* dialog & toast */
 dialog {
   margin: auto; width: min(92vw, 440px); max-height: 85dvh;
@@ -302,6 +306,7 @@ dialog li + li { margin-top: 6px; }
 </style>
 </head>
 <body>
+<header class="topbar"><select class="lang-pick" data-change="lang"></select></header>
 <main id="app" aria-live="polite"></main>
 
 <nav class="tab-nav" aria-label="Hlavná navigácia">
@@ -315,51 +320,71 @@ dialog li + li { margin-top: 6px; }
 <div id="toast" role="status"></div>
 
 <script type="module">
+/* ═══════════════════════════ LANGUAGE ═══════════════════════════ */
+
+const LANG_KEY = 'food-monitor.lang';
+const LANGS = { sk: '🇸🇰', en: '🇬🇧', it: '🇮🇹' };
+// First supported entry of the browser's preferred languages; Czech speakers get Slovak.
+function detectLang() {
+  for (const l of navigator.languages ?? [navigator.language]) {
+    const hit = { sk: 'sk', cs: 'sk', it: 'it', en: 'en' }[String(l).split('-')[0].toLowerCase()];
+    if (hit) return hit;
+  }
+  return 'en';
+}
+let lang = null;
+try { lang = localStorage.getItem(LANG_KEY); } catch { /* storage blocked → detect every time */ }
+if (!LANGS[lang]) lang = detectLang();
+const LOCALE = { sk: 'sk', en: 'en-GB', it: 'it' }[lang];
+document.documentElement.lang = lang;
+// Catalog text: L(sk, en, it). Resolved once at load – switching language reloads the page.
+const L = (...v) => v[Object.keys(LANGS).indexOf(lang)];
+
 /* ═══════════════════════════ CATALOG ═══════════════════════════ */
 
 const PROTEINS = [
-  { id: 'white-meat', name: 'Biele mäso', emoji: '🍗', set: 'classic' },
-  { id: 'red-meat', name: 'Červené mäso', emoji: '🥩', set: 'classic' },
-  { id: 'cheese', name: 'Syry', emoji: '🧀', set: 'classic' },
-  { id: 'eggs', name: 'Vajcia', emoji: '🥚', set: 'classic' },
-  { id: 'legumes', name: 'Strukoviny', emoji: '🫘', set: 'classic' },
-  { id: 'fish', name: 'Ryby', emoji: '🐟', set: 'classic' },
-  { id: 'tofu', name: 'Sója / tofu', emoji: '🌱', set: 'vegan' },
+  { id: 'white-meat', name: L('Biele mäso', 'White meat', 'Carne bianca'), emoji: '🍗', set: 'classic' },
+  { id: 'red-meat', name: L('Červené mäso', 'Red meat', 'Carne rossa'), emoji: '🥩', set: 'classic' },
+  { id: 'cheese', name: L('Syry', 'Cheese', 'Formaggi'), emoji: '🧀', set: 'classic' },
+  { id: 'eggs', name: L('Vajcia', 'Eggs', 'Uova'), emoji: '🥚', set: 'classic' },
+  { id: 'legumes', name: L('Strukoviny', 'Legumes', 'Legumi'), emoji: '🫘', set: 'classic' },
+  { id: 'fish', name: L('Ryby', 'Fish', 'Pesce'), emoji: '🐟', set: 'classic' },
+  { id: 'tofu', name: L('Sója / tofu', 'Soy / tofu', 'Soia / tofu'), emoji: '🌱', set: 'vegan' },
   { id: 'tempeh', name: 'Tempeh', emoji: '🟫', set: 'vegan' },
-  { id: 'chickpeas', name: 'Cícer', emoji: '🧆', set: 'vegan' },
-  { id: 'lentils', name: 'Šošovica', emoji: '🥣', set: 'vegan' },
-  { id: 'beans', name: 'Fazuľa', emoji: '🫘', set: 'vegan' },
+  { id: 'chickpeas', name: L('Cícer', 'Chickpeas', 'Ceci'), emoji: '🧆', set: 'vegan' },
+  { id: 'lentils', name: L('Šošovica', 'Lentils', 'Lenticchie'), emoji: '🥣', set: 'vegan' },
+  { id: 'beans', name: L('Fazuľa', 'Beans', 'Fagioli'), emoji: '🫘', set: 'vegan' },
   { id: 'edamame', name: 'Edamame', emoji: '🫛', set: 'vegan' },
-  { id: 'peas', name: 'Hrášok', emoji: '🟢', set: 'vegan' },
+  { id: 'peas', name: L('Hrášok', 'Peas', 'Piselli'), emoji: '🟢', set: 'vegan' },
   { id: 'seitan', name: 'Seitan', emoji: '🌾', set: 'vegan' },
-  { id: 'nuts', name: 'Orechy a semienka', emoji: '🥜', set: 'vegan' },
+  { id: 'nuts', name: L('Orechy a semienka', 'Nuts & seeds', 'Frutta secca e semi'), emoji: '🥜', set: 'vegan' },
 ];
 
 const CARBS = [
-  { id: 'pasta', name: 'Cestovina', emoji: '🍝' },
-  { id: 'wholepasta', name: 'Celozrnná cestovina', emoji: '🍝', whole: true },
-  { id: 'potatoes', name: 'Zemiaky', emoji: '🥔', whole: true },
-  { id: 'rice', name: 'Ryža', emoji: '🍚' },
-  { id: 'bread', name: 'Chlieb', emoji: '🍞' },
-  { id: 'wholebread', name: 'Celozrnný chlieb', emoji: '🥖', whole: true },
-  { id: 'spelt', name: 'Špalda', emoji: '🌾', whole: true },
-  { id: 'oats', name: 'Ovos', emoji: '🥣', whole: true },
+  { id: 'pasta', name: L('Cestovina', 'Pasta', 'Pasta'), emoji: '🍝' },
+  { id: 'wholepasta', name: L('Celozrnná cestovina', 'Wholegrain pasta', 'Pasta integrale'), emoji: '🍝', whole: true },
+  { id: 'potatoes', name: L('Zemiaky', 'Potatoes', 'Patate'), emoji: '🥔', whole: true },
+  { id: 'rice', name: L('Ryža', 'Rice', 'Riso'), emoji: '🍚' },
+  { id: 'bread', name: L('Chlieb', 'Bread', 'Pane'), emoji: '🍞' },
+  { id: 'wholebread', name: L('Celozrnný chlieb', 'Wholegrain bread', 'Pane integrale'), emoji: '🥖', whole: true },
+  { id: 'spelt', name: L('Špalda', 'Spelt', 'Farro'), emoji: '🌾', whole: true },
+  { id: 'oats', name: L('Ovos', 'Oats', 'Avena'), emoji: '🥣', whole: true },
   { id: 'quinoa', name: 'Quinoa', emoji: '🌰', whole: true },
   { id: 'bulgur', name: 'Bulgur', emoji: '🌾', whole: true },
-  { id: 'buckwheat', name: 'Pohánka', emoji: '🟤', whole: true },
-  { id: 'couscous', name: 'Kuskus', emoji: '🍚' },
-  { id: 'millet', name: 'Pšeno', emoji: '🟡', whole: true },
-  { id: 'barley', name: 'Jačmeň / krúpy', emoji: '🌾', whole: true },
-  { id: 'sweetpotato', name: 'Batáty', emoji: '🍠', whole: true },
+  { id: 'buckwheat', name: L('Pohánka', 'Buckwheat', 'Grano saraceno'), emoji: '🟤', whole: true },
+  { id: 'couscous', name: L('Kuskus', 'Couscous', 'Cuscus'), emoji: '🍚' },
+  { id: 'millet', name: L('Pšeno', 'Millet', 'Miglio'), emoji: '🟡', whole: true },
+  { id: 'barley', name: L('Jačmeň / krúpy', 'Barley', 'Orzo'), emoji: '🌾', whole: true },
+  { id: 'sweetpotato', name: L('Batáty', 'Sweet potatoes', 'Patate dolci'), emoji: '🍠', whole: true },
 ];
 
 const MEALS = [
   // start = earliest time of day when it makes sense to ask about the meal
-  { id: 'breakfast', name: 'Raňajky', emoji: '🌅', start: '06:00' },
-  { id: 'snack1', name: 'Desiata', emoji: '🍎', start: '09:30' },
-  { id: 'lunch', name: 'Obed', emoji: '☀️', start: '11:30' },
-  { id: 'snack2', name: 'Olovrant', emoji: '🥨', start: '15:00' },
-  { id: 'dinner', name: 'Večera', emoji: '🌙', start: '17:30' },
+  { id: 'breakfast', name: L('Raňajky', 'Breakfast', 'Colazione'), emoji: '🌅', start: '06:00' },
+  { id: 'snack1', name: L('Desiata', 'Morning snack', 'Spuntino'), emoji: '🍎', start: '09:30' },
+  { id: 'lunch', name: L('Obed', 'Lunch', 'Pranzo'), emoji: '☀️', start: '11:30' },
+  { id: 'snack2', name: L('Olovrant', 'Afternoon snack', 'Merenda'), emoji: '🥨', start: '15:00' },
+  { id: 'dinner', name: L('Večera', 'Dinner', 'Cena'), emoji: '🌙', start: '17:30' },
 ];
 
 // Orientational weekly targets per person (inspired by WHO / European dietary guidelines).
@@ -374,68 +399,443 @@ const REC_GOALS = {
 const REC_ALERTS = { pasta: 4, rice: 4, potatoes: 5, bread: 5 };
 
 const SWEETS = [
-  { name: 'Čokoláda (3 kocky)', emoji: '🍫', g: 15 },
-  { name: 'Sušienka', emoji: '🍪', g: 7 },
-  { name: 'Zmrzlina (kopček)', emoji: '🍦', g: 14 },
-  { name: 'Cukríky (hrsť)', emoji: '🍬', g: 20 },
-  { name: 'Koláč / buchta', emoji: '🍰', g: 22 },
-  { name: 'Džús 200 ml', emoji: '🧃', g: 20 },
-  { name: 'Limonáda 330 ml', emoji: '🥤', g: 35 },
-  { name: 'Ochutený jogurt', emoji: '🍨', g: 12 },
-  { name: 'Sladké cereálie', emoji: '🥣', g: 10 },
+  { name: L('Čokoláda (3 kocky)', 'Chocolate (3 squares)', 'Cioccolato (3 quadretti)'), emoji: '🍫', g: 15 },
+  { name: L('Sušienka', 'Biscuit', 'Biscotto'), emoji: '🍪', g: 7 },
+  { name: L('Zmrzlina (kopček)', 'Ice cream (scoop)', 'Gelato (pallina)'), emoji: '🍦', g: 14 },
+  { name: L('Cukríky (hrsť)', 'Sweets (handful)', 'Caramelle (manciata)'), emoji: '🍬', g: 20 },
+  { name: L('Koláč / buchta', 'Cake / bun', 'Torta / dolce'), emoji: '🍰', g: 22 },
+  { name: L('Džús 200 ml', 'Juice 200 ml', 'Succo 200 ml'), emoji: '🧃', g: 20 },
+  { name: L('Limonáda 330 ml', 'Soft drink 330 ml', 'Bibita 330 ml'), emoji: '🥤', g: 35 },
+  { name: L('Ochutený jogurt', 'Flavoured yoghurt', 'Yogurt alla frutta'), emoji: '🍨', g: 12 },
+  { name: L('Sladké cereálie', 'Sweet cereal', 'Cereali zuccherati'), emoji: '🥣', g: 10 },
 ];
 
 const RECIPES = [
-  { name: 'Šošovicové „bolonské“ ragú', p: ['legumes', 'lentils'], c: ['wholepasta', 'pasta'], t: 30, kid: true, ing: ['červená šošovica', 'paradajkový pretlak', 'mrkva', 'cibuľa'], tip: 'Uvar dvojitú dávku a polovicu zamraz na rušný deň.' },
-  { name: 'Kuracie kúsky v jogurtovej marináde', p: ['white-meat'], c: ['rice'], t: 25, kid: true, ing: ['kuracie prsia', 'biely jogurt', 'paprika', 'cesnak'], tip: 'Mäso nakrájaj a zamarinuj večer vopred.' },
-  { name: 'Losos z plechu so zemiakmi a brokolicou', p: ['fish'], c: ['potatoes'], t: 35, kid: true, ing: ['losos', 'brokolica', 'citrón'], tip: 'Všetko na jeden plech = menej riadu.' },
-  { name: 'Jemné cícerové karí', p: ['chickpeas', 'legumes'], c: ['couscous', 'rice'], t: 20, kid: true, ing: ['cícer (konzerva)', 'kokosové mlieko', 'jemné karí', 'baby špenát'], tip: 'Cícer z konzervy ušetrí hodinu varenia.' },
-  { name: 'Hovädzie fašírky s pohánkou', p: ['red-meat'], c: ['buckwheat'], t: 40, kid: true, ing: ['mleté hovädzie', 'vajce', 'cibuľa', 'kyslé uhorky'], tip: 'Surové fašírky zamraz, upečieš ich priamo z mrazáka.' },
-  { name: 'Omeleta so syrom a zeleninou', p: ['eggs'], c: ['wholebread', 'bread'], t: 10, kid: true, ing: ['vajcia', 'syr', 'cherry paradajky'], tip: 'Najrýchlejšia večera – hotová za 10 minút.' },
-  { name: 'Zapekané cestoviny so syrom a brokolicou', p: ['cheese'], c: ['pasta', 'wholepasta'], t: 30, kid: true, ing: ['eidam', 'brokolica', 'smotana na varenie'], tip: 'Brokolicu var spolu s cestovinou v jednom hrnci.' },
-  { name: 'Tofu so zeleninou na woku', p: ['tofu'], c: ['rice'], t: 20, kid: false, ing: ['tofu', 'sójová omáčka', 'mrazená zeleninová zmes', 'zázvor'], tip: 'Mrazená zelenina je rovnako výživná a ušetrí krájanie.' },
-  { name: 'Fazuľa s ryžou po mexicky', p: ['beans', 'legumes'], c: ['rice'], t: 25, kid: true, ing: ['čierna fazuľa (konzerva)', 'kukurica', 'paprika', 'avokádo'], tip: 'Ryžu uvar raz na dva dni – vydrží v chladničke.' },
-  { name: 'Domáce rybie prsty s bulgurom', p: ['fish'], c: ['bulgur'], t: 30, kid: true, ing: ['treska', 'strúhanka', 'vajce', 'citrón'], tip: 'Obaľovanie zvládnu aj deti – zapoj ich.' },
-  { name: 'Ovsená kaša s orechmi a banánom', p: ['nuts'], c: ['oats'], t: 5, kid: true, ing: ['mlieko', 'vlašské orechy', 'banán'], tip: 'Overnight verzia: zalej večer, ráno len jedz.' },
-  { name: 'Krémová hrášková polievka', p: ['peas', 'legumes'], c: ['wholebread'], t: 20, kid: true, ing: ['mrazený hrášok', 'zemiak', 'smotana'], tip: 'Mrazený hrášok netreba rozmrazovať.' },
-  { name: 'Morčacie špaldové rizoto', p: ['white-meat'], c: ['spelt'], t: 40, kid: true, ing: ['morčacie prsia', 'pór', 'parmezán', 'vývar'], tip: 'Uvar v tlakovom hrnci za 15 minút.' },
-  { name: 'Šošovicové placky s jogurtovým dipom', p: ['lentils', 'legumes'], c: ['potatoes'], t: 30, kid: true, ing: ['uvarená šošovica', 'vajce', 'biely jogurt', 'kôpor'], tip: 'Placky sa dajú upiecť naraz na plechu.' },
-  { name: 'Quinoa šalát s edamame', p: ['edamame'], c: ['quinoa'], t: 15, kid: false, ing: ['edamame (mrazené)', 'uhorka', 'sezam', 'citrón'], tip: 'Hodí sa aj ako desiata do krabičky na zajtra.' },
+  { name: L('Šošovicové „bolonské“ ragú', 'Lentil “bolognese”', 'Ragù di lenticchie “alla bolognese”'), p: ['legumes', 'lentils'], c: ['wholepasta', 'pasta'], t: 30, kid: true,
+    ing: L(['červená šošovica', 'paradajkový pretlak', 'mrkva', 'cibuľa'], ['red lentils', 'tomato passata', 'carrot', 'onion'], ['lenticchie rosse', 'passata di pomodoro', 'carota', 'cipolla']),
+    tip: L('Uvar dvojitú dávku a polovicu zamraz na rušný deň.', 'Cook a double batch and freeze half for a busy day.', 'Prepara una doppia dose e congelane metà per una giornata piena.') },
+  { name: L('Kuracie kúsky v jogurtovej marináde', 'Chicken bites in yoghurt marinade', 'Bocconcini di pollo marinati allo yogurt'), p: ['white-meat'], c: ['rice'], t: 25, kid: true,
+    ing: L(['kuracie prsia', 'biely jogurt', 'paprika', 'cesnak'], ['chicken breast', 'plain yoghurt', 'bell pepper', 'garlic'], ['petto di pollo', 'yogurt bianco', 'peperone', 'aglio']),
+    tip: L('Mäso nakrájaj a zamarinuj večer vopred.', 'Cut and marinate the meat the evening before.', 'Taglia e marina la carne la sera prima.') },
+  { name: L('Losos z plechu so zemiakmi a brokolicou', 'Sheet-pan salmon with potatoes and broccoli', 'Salmone in teglia con patate e broccoli'), p: ['fish'], c: ['potatoes'], t: 35, kid: true,
+    ing: L(['losos', 'brokolica', 'citrón'], ['salmon', 'broccoli', 'lemon'], ['salmone', 'broccoli', 'limone']),
+    tip: L('Všetko na jeden plech = menej riadu.', 'Everything on one tray = fewer dishes.', 'Tutto in una teglia = meno piatti da lavare.') },
+  { name: L('Jemné cícerové karí', 'Mild chickpea curry', 'Curry delicato di ceci'), p: ['chickpeas', 'legumes'], c: ['couscous', 'rice'], t: 20, kid: true,
+    ing: L(['cícer (konzerva)', 'kokosové mlieko', 'jemné karí', 'baby špenát'], ['chickpeas (tinned)', 'coconut milk', 'mild curry powder', 'baby spinach'], ['ceci (in scatola)', 'latte di cocco', 'curry dolce', 'spinacino']),
+    tip: L('Cícer z konzervy ušetrí hodinu varenia.', 'Tinned chickpeas save an hour of cooking.', 'I ceci in scatola fanno risparmiare un’ora di cottura.') },
+  { name: L('Hovädzie fašírky s pohánkou', 'Beef meatballs with buckwheat', 'Polpette di manzo con grano saraceno'), p: ['red-meat'], c: ['buckwheat'], t: 40, kid: true,
+    ing: L(['mleté hovädzie', 'vajce', 'cibuľa', 'kyslé uhorky'], ['minced beef', 'egg', 'onion', 'pickles'], ['macinato di manzo', 'uovo', 'cipolla', 'cetriolini sottaceto']),
+    tip: L('Surové fašírky zamraz, upečieš ich priamo z mrazáka.', 'Freeze them raw and bake straight from the freezer.', 'Congela le polpette crude e cuocile direttamente dal freezer.') },
+  { name: L('Omeleta so syrom a zeleninou', 'Cheese and vegetable omelette', 'Frittata con formaggio e verdure'), p: ['eggs'], c: ['wholebread', 'bread'], t: 10, kid: true,
+    ing: L(['vajcia', 'syr', 'cherry paradajky'], ['eggs', 'cheese', 'cherry tomatoes'], ['uova', 'formaggio', 'pomodorini']),
+    tip: L('Najrýchlejšia večera – hotová za 10 minút.', 'The fastest dinner – ready in 10 minutes.', 'La cena più veloce: pronta in 10 minuti.') },
+  { name: L('Zapekané cestoviny so syrom a brokolicou', 'Baked pasta with cheese and broccoli', 'Pasta al forno con formaggio e broccoli'), p: ['cheese'], c: ['pasta', 'wholepasta'], t: 30, kid: true,
+    ing: L(['eidam', 'brokolica', 'smotana na varenie'], ['Edam', 'broccoli', 'cooking cream'], ['edamer', 'broccoli', 'panna da cucina']),
+    tip: L('Brokolicu var spolu s cestovinou v jednom hrnci.', 'Cook the broccoli with the pasta in one pot.', 'Cuoci i broccoli insieme alla pasta in un’unica pentola.') },
+  { name: L('Tofu so zeleninou na woku', 'Tofu and vegetable stir-fry', 'Tofu saltato con verdure'), p: ['tofu'], c: ['rice'], t: 20, kid: false,
+    ing: L(['tofu', 'sójová omáčka', 'mrazená zeleninová zmes', 'zázvor'], ['tofu', 'soy sauce', 'frozen mixed vegetables', 'ginger'], ['tofu', 'salsa di soia', 'verdure miste surgelate', 'zenzero']),
+    tip: L('Mrazená zelenina je rovnako výživná a ušetrí krájanie.', 'Frozen vegetables are just as nutritious and save chopping.', 'Le verdure surgelate sono altrettanto nutrienti e risparmi il taglio.') },
+  { name: L('Fazuľa s ryžou po mexicky', 'Mexican-style beans and rice', 'Fagioli e riso alla messicana'), p: ['beans', 'legumes'], c: ['rice'], t: 25, kid: true,
+    ing: L(['čierna fazuľa (konzerva)', 'kukurica', 'paprika', 'avokádo'], ['black beans (tinned)', 'sweetcorn', 'bell pepper', 'avocado'], ['fagioli neri (in scatola)', 'mais', 'peperone', 'avocado']),
+    tip: L('Ryžu uvar raz na dva dni – vydrží v chladničke.', 'Cook rice once for two days – it keeps in the fridge.', 'Cuoci il riso per due giorni: in frigo si conserva.') },
+  { name: L('Domáce rybie prsty s bulgurom', 'Homemade fish fingers with bulgur', 'Bastoncini di pesce fatti in casa con bulgur'), p: ['fish'], c: ['bulgur'], t: 30, kid: true,
+    ing: L(['treska', 'strúhanka', 'vajce', 'citrón'], ['cod', 'breadcrumbs', 'egg', 'lemon'], ['merluzzo', 'pangrattato', 'uovo', 'limone']),
+    tip: L('Obaľovanie zvládnu aj deti – zapoj ich.', 'Kids can do the breading – get them involved.', 'Anche i bambini sanno impanare: coinvolgili.') },
+  { name: L('Ovsená kaša s orechmi a banánom', 'Porridge with nuts and banana', 'Porridge con frutta secca e banana'), p: ['nuts'], c: ['oats'], t: 5, kid: true,
+    ing: L(['mlieko', 'vlašské orechy', 'banán'], ['milk', 'walnuts', 'banana'], ['latte', 'noci', 'banana']),
+    tip: L('Overnight verzia: zalej večer, ráno len jedz.', 'Overnight version: soak it in the evening, just eat in the morning.', 'Versione overnight: preparalo la sera, al mattino è pronto.') },
+  { name: L('Krémová hrášková polievka', 'Creamy pea soup', 'Vellutata di piselli'), p: ['peas', 'legumes'], c: ['wholebread'], t: 20, kid: true,
+    ing: L(['mrazený hrášok', 'zemiak', 'smotana'], ['frozen peas', 'potato', 'cream'], ['piselli surgelati', 'patata', 'panna']),
+    tip: L('Mrazený hrášok netreba rozmrazovať.', 'No need to thaw the frozen peas.', 'Non serve scongelare i piselli.') },
+  { name: L('Morčacie špaldové rizoto', 'Turkey and spelt risotto', 'Farrotto con tacchino'), p: ['white-meat'], c: ['spelt'], t: 40, kid: true,
+    ing: L(['morčacie prsia', 'pór', 'parmezán', 'vývar'], ['turkey breast', 'leek', 'parmesan', 'stock'], ['petto di tacchino', 'porro', 'parmigiano', 'brodo']),
+    tip: L('Uvar v tlakovom hrnci za 15 minút.', 'Cook it in a pressure cooker in 15 minutes.', 'Cuocilo in pentola a pressione in 15 minuti.') },
+  { name: L('Šošovicové placky s jogurtovým dipom', 'Lentil patties with yoghurt dip', 'Polpette di lenticchie con salsa allo yogurt'), p: ['lentils', 'legumes'], c: ['potatoes'], t: 30, kid: true,
+    ing: L(['uvarená šošovica', 'vajce', 'biely jogurt', 'kôpor'], ['cooked lentils', 'egg', 'plain yoghurt', 'dill'], ['lenticchie cotte', 'uovo', 'yogurt bianco', 'aneto']),
+    tip: L('Placky sa dajú upiecť naraz na plechu.', 'Bake all the patties at once on a tray.', 'Puoi cuocere tutte le polpette insieme in teglia.') },
+  { name: L('Quinoa šalát s edamame', 'Quinoa salad with edamame', 'Insalata di quinoa con edamame'), p: ['edamame'], c: ['quinoa'], t: 15, kid: false,
+    ing: L(['edamame (mrazené)', 'uhorka', 'sezam', 'citrón'], ['edamame (frozen)', 'cucumber', 'sesame', 'lemon'], ['edamame (surgelati)', 'cetriolo', 'sesamo', 'limone']),
+    tip: L('Hodí sa aj ako desiata do krabičky na zajtra.', 'Also works as a packed snack for tomorrow.', 'Ottima anche come spuntino da portare domani.') },
 ];
 
 const SCHOOL_DISHES = [
-  { name: 'Kurací plátok na prírodno, ryža', p: ['white-meat'], c: ['rice'] },
-  { name: 'Šošovicový prívarok, vajce, chlieb', p: ['legumes', 'lentils'], c: ['bread'] },
-  { name: 'Rybie filé, zemiaková kaša', p: ['fish'], c: ['potatoes'] },
-  { name: 'Špagety po bolonsky', p: ['red-meat'], c: ['pasta'] },
-  { name: 'Vyprážaný syr, varené zemiaky', p: ['cheese'], c: ['potatoes'] },
-  { name: 'Morčacie rizoto', p: ['white-meat'], c: ['rice'] },
-  { name: 'Bravčový guláš, knedľa', p: ['red-meat'], c: ['bread'] },
-  { name: 'Fazuľový guláš, chlieb', p: ['legumes', 'beans'], c: ['bread'] },
-  { name: 'Zapekané cestoviny so syrom', p: ['cheese'], c: ['pasta'] },
-  { name: 'Cícerové karí s kuskusom', p: ['legumes', 'chickpeas'], c: ['couscous'] },
-  { name: 'Kuracie stehno, dusená ryža', p: ['white-meat'], c: ['rice'] },
-  { name: 'Ryžový nákyp s ovocím', p: ['eggs'], c: ['rice'] },
+  { name: L('Kurací plátok na prírodno, ryža', 'Plain chicken fillet, rice', 'Petto di pollo al naturale, riso'), p: ['white-meat'], c: ['rice'] },
+  { name: L('Šošovicový prívarok, vajce, chlieb', 'Lentil stew, egg, bread', 'Lenticchie in umido, uovo, pane'), p: ['legumes', 'lentils'], c: ['bread'] },
+  { name: L('Rybie filé, zemiaková kaša', 'Fish fillet, mashed potatoes', 'Filetto di pesce, purè di patate'), p: ['fish'], c: ['potatoes'] },
+  { name: L('Špagety po bolonsky', 'Spaghetti bolognese', 'Spaghetti alla bolognese'), p: ['red-meat'], c: ['pasta'] },
+  { name: L('Vyprážaný syr, varené zemiaky', 'Fried cheese, boiled potatoes', 'Formaggio impanato, patate lesse'), p: ['cheese'], c: ['potatoes'] },
+  { name: L('Morčacie rizoto', 'Turkey risotto', 'Risotto al tacchino'), p: ['white-meat'], c: ['rice'] },
+  { name: L('Bravčový guláš, knedľa', 'Pork goulash, dumpling', 'Gulasch di maiale, canederli'), p: ['red-meat'], c: ['bread'] },
+  { name: L('Fazuľový guláš, chlieb', 'Bean goulash, bread', 'Gulasch di fagioli, pane'), p: ['legumes', 'beans'], c: ['bread'] },
+  { name: L('Zapekané cestoviny so syrom', 'Baked pasta with cheese', 'Pasta al forno con formaggio'), p: ['cheese'], c: ['pasta'] },
+  { name: L('Cícerové karí s kuskusom', 'Chickpea curry with couscous', 'Curry di ceci con cuscus'), p: ['legumes', 'chickpeas'], c: ['couscous'] },
+  { name: L('Kuracie stehno, dusená ryža', 'Chicken thigh, steamed rice', 'Coscia di pollo, riso in bianco'), p: ['white-meat'], c: ['rice'] },
+  { name: L('Ryžový nákyp s ovocím', 'Rice pudding with fruit', 'Budino di riso con frutta'), p: ['eggs'], c: ['rice'] },
 ];
 
-const TIME_TIPS = [
+const TIME_TIPS = L([
   'Nedeľný „meal prep“: uvar naraz ryžu/strukoviny na 2–3 dni.',
   'Strukoviny z konzervy (opláchnuté) sú rovnako hodnotné ako varené doma.',
   'Mrazená zelenina a ryby šetria krájanie a nekazia sa.',
   'Plechové jedlá (mäso + zelenina + zemiaky naraz) = jeden riad.',
   'Varte dvojité porcie a druhú zamrazte s dátumom.',
   'Deti zapojte do jednoduchých úloh – umývanie, miešanie, obaľovanie.',
-];
+], [
+  'Sunday meal prep: cook rice/legumes for 2–3 days at once.',
+  'Tinned legumes (rinsed) are just as good as home-cooked ones.',
+  'Frozen vegetables and fish save chopping and don’t go off.',
+  'Sheet-pan meals (meat + vegetables + potatoes at once) = one dish to wash.',
+  'Cook double portions and freeze the second one with a date.',
+  'Get kids involved in simple tasks – washing, stirring, breading.',
+], [
+  'Meal prep della domenica: cuoci riso/legumi per 2–3 giorni in una volta.',
+  'I legumi in scatola (sciacquati) valgono quanto quelli cotti in casa.',
+  'Verdure e pesce surgelati evitano di tagliare e non si guastano.',
+  'Piatti in teglia (carne + verdure + patate insieme) = una sola teglia da lavare.',
+  'Cucina porzioni doppie e congela la seconda con la data.',
+  'Coinvolgi i bambini in compiti semplici: lavare, mescolare, impanare.',
+]);
 
-const FREEZER_POOL = ['Kuracie prsia 500 g', 'Mrazený hrášok', 'Rybie filé (treska)', 'Zeleninová zmes', 'Domáci vývar 1 l', 'Mleté hovädzie 400 g', 'Listový špinát', 'Brokolica', 'Celozrnné pečivo', 'Zmrzlina', 'Lesné ovocie', 'Šošovicové ragú (porcia)'];
+const FREEZER_POOL = L(
+  ['Kuracie prsia 500 g', 'Mrazený hrášok', 'Rybie filé (treska)', 'Zeleninová zmes', 'Domáci vývar 1 l', 'Mleté hovädzie 400 g', 'Listový špinát', 'Brokolica', 'Celozrnné pečivo', 'Zmrzlina', 'Lesné ovocie', 'Šošovicové ragú (porcia)'],
+  ['Chicken breast 500 g', 'Frozen peas', 'Fish fillet (cod)', 'Mixed vegetables', 'Homemade stock 1 l', 'Minced beef 400 g', 'Leaf spinach', 'Broccoli', 'Wholegrain rolls', 'Ice cream', 'Forest berries', 'Lentil ragù (portion)'],
+  ['Petto di pollo 500 g', 'Piselli surgelati', 'Filetto di pesce (merluzzo)', 'Verdure miste', 'Brodo fatto in casa 1 l', 'Macinato di manzo 400 g', 'Spinaci in foglia', 'Broccoli', 'Panini integrali', 'Gelato', 'Frutti di bosco', 'Ragù di lenticchie (porzione)']);
 
-const DEFAULT_MUST_HAVE = ['Mlieko', 'Vajcia', 'Maslo', 'Cibuľa', 'Cesnak', 'Olivový olej', 'Ovsené vločky', 'Ryža', 'Cestovina', 'Paradajky v konzerve', 'Strukoviny v konzerve', 'Mrazená zelenina'];
+const DEFAULT_MUST_HAVE = L(
+  ['Mlieko', 'Vajcia', 'Maslo', 'Cibuľa', 'Cesnak', 'Olivový olej', 'Ovsené vločky', 'Ryža', 'Cestovina', 'Paradajky v konzerve', 'Strukoviny v konzerve', 'Mrazená zelenina'],
+  ['Milk', 'Eggs', 'Butter', 'Onions', 'Garlic', 'Olive oil', 'Rolled oats', 'Rice', 'Pasta', 'Tinned tomatoes', 'Tinned legumes', 'Frozen vegetables'],
+  ['Latte', 'Uova', 'Burro', 'Cipolle', 'Aglio', 'Olio d’oliva', 'Fiocchi d’avena', 'Riso', 'Pasta', 'Pomodori pelati', 'Legumi in scatola', 'Verdure surgelate']);
 
-const GENERIC_ING = {
+const GENERIC_ING = L({
   'white-meat': 'kuracie / morčacie mäso', 'red-meat': 'hovädzie / bravčové mäso', cheese: 'syr', eggs: 'vajcia',
   legumes: 'strukoviny (konzerva / suché)', fish: 'ryba', tofu: 'tofu', tempeh: 'tempeh', chickpeas: 'cícer',
   lentils: 'šošovica', beans: 'fazuľa', edamame: 'edamame', peas: 'hrášok', seitan: 'seitan', nuts: 'orechy',
+}, {
+  'white-meat': 'chicken / turkey', 'red-meat': 'beef / pork', cheese: 'cheese', eggs: 'eggs',
+  legumes: 'legumes (tinned / dried)', fish: 'fish', tofu: 'tofu', tempeh: 'tempeh', chickpeas: 'chickpeas',
+  lentils: 'lentils', beans: 'beans', edamame: 'edamame', peas: 'peas', seitan: 'seitan', nuts: 'nuts',
+}, {
+  'white-meat': 'pollo / tacchino', 'red-meat': 'manzo / maiale', cheese: 'formaggio', eggs: 'uova',
+  legumes: 'legumi (in scatola / secchi)', fish: 'pesce', tofu: 'tofu', tempeh: 'tempeh', chickpeas: 'ceci',
+  lentils: 'lenticchie', beans: 'fagioli', edamame: 'edamame', peas: 'piselli', seitan: 'seitan', nuts: 'frutta secca',
+});
+
+/* ═══════════════════════════ UI TEXT ═══════════════════════════ */
+
+const I18N = {
+  sk: {
+    app: 'Rodinný tanier', fileSlug: 'rodinny-tanier', language: 'Jazyk', mainNav: 'Hlavná navigácia',
+    today: 'Dnes', yesterday: 'Včera', week: 'Týždeň', premium: 'Premium', settings: 'Nastavenia',
+    saveFail: '⚠️ Nepodarilo sa uložiť dáta (úložisko prehliadača je nedostupné)',
+    fakeTitle: 'Simulované – v prototype nie je napojené na skutočnú službu',
+    question: (m, meal, when, day) => {
+      // "Čo dnes obedoval Timeo?", "Čo dnes obedovala Alma?", "Čo dnes obedovali rodičia?"
+      const s = { m: '', f: 'a', pl: 'i' }[m.g] ?? '';
+      const w = when === 'today' ? 'dnes' : when === 'yesterday' ? 'včera' : `v ${day === 'nedeľa' ? 'nedeľu' : day.replace(/a$/, 'u')}`;
+      const name = m.g === 'pl' && /^rodičia$/i.test(m.name) ? 'rodičia' : m.name;
+      const verb = { breakfast: 'raňajkoval', lunch: 'obedoval', dinner: 'večeral' }[meal];
+      if (verb) return `Čo ${w} ${verb}${s} ${name}?`;
+      return `Čo mal${s} ${name} ${w} na ${meal === 'snack1' ? 'desiatu' : 'olovrant'}?`;
+    },
+    less: 'Menej', more: 'Viac', back: '← Späť', save: 'Uložiť', next: 'Ďalej →', finish: 'Hotovo, začať 🎉',
+    stepOf: (a, b) => `Krok ${a} z ${b}`,
+    he: 'On', she: 'Ona', several: 'Viacerí', parents: 'Rodičia',
+    membersTitle: 'Kto je v rodine?',
+    membersLead: 'Pridaj členov, ktorých jedlo chceš sledovať. Viac ľudí, ktorí jedia rovnako, môžeš zlúčiť do jedného (napr. „Rodičia“).',
+    namePh: 'Meno, napr. Timeo', name: 'Meno', genderAria: 'Rod (pre gramatiku otázok)', remove: 'Odstrániť', addMember: '+ Pridať člena',
+    genderHint: 'On / Ona / Viacerí používame len na správnu gramatiku otázok – „Čo dnes obedoval<b>a</b> Alma?“',
+    custom: 'Vlastné', label: 'Názov', add: 'Pridať', customPhP: 'napr. Tvaroh', customPhC: 'napr. Tortilla',
+    proteinsTitle: 'Zdroje bielkovín', proteinsLead: 'Čo bežne jete? Toto budeš pri zapisovaní jedla vyberať jedným ťuknutím.',
+    autoPick: '✨ Automatický výber', vegan: '🌱 Vegánska diéta', clearPick: 'Zrušiť výber', classic: 'Klasické', veganAlt: 'Vegánske alternatívy',
+    carbsTitle: 'Zdroje sacharidov', carbsLead: 'Prílohy a obilniny, ktoré sa u vás objavujú. Po výbere bielkoviny sa spýtam aj na ne.',
+    wholeOnly: '🌾 Len celozrnné / komplexné', offer: 'Ponuka',
+    lunchDinner: 'Obed a večera', bld: 'Raňajky, obed, večera', all: 'Všetko',
+    mealsTitle: 'Ktoré jedlá sledovať?', mealsLead: 'Čím menej jedál, tým rýchlejšie zapisovanie. Väčšine rodín stačí obed a večera.',
+    customPick: 'Vlastný výber', askFrom: 'Odkedy sa pýtať', notEarlier: n => `Skôr sa na ${n.toLowerCase()} nepýtam.`,
+    perDay: (a, b) => `Denne to bude ${a} × ${b} = ${a * b} rýchlych otázok.`,
+    recommended: (type, n) => `Odporúčané: ${type === 'min' ? 'aspoň' : 'najviac'} ${n}× týždenne`, noRec: 'Bez odporúčania',
+    goalType: 'Typ cieľa', goalOff: 'Nesledovať', atLeast: 'Aspoň', atMost: 'Najviac',
+    goalShort: (type, n) => `${type === 'min' ? 'aspoň' : 'najviac'} ${n}×`,
+    goalsTitle: 'Týždenné ciele', goalsLead: 'Koľkokrát týždenne na osobu? Predvyplnil som odporúčania – stačí potvrdiť alebo upraviť.',
+    useRec: '✔ Použiť odporúčané', pickProteins: 'Najprv vyber zdroje bielkovín.',
+    goalsNote: 'Odporúčania sú orientačné, inšpirované WHO (OMS) a európskymi výživovými smernicami (viac strukovín a rýb, menej červeného mäsa). Nie sú lekárskou radou.',
+    alertAt: a => `Upozorním pri ${a + 1}. raze v týždni`, noAlert: 'Bez upozornenia',
+    alertsTitle: 'Upozornenia na sacharidy', alertsLead: 'Nastav limit na týždeň. Keď ho niekto prekročí, appka ťa upozorní – napr. pri 5. klasickej cestovine v týždni.',
+    useSuggested: '✔ Použiť navrhované', allOff: 'Vypnúť všetky', pickCarbs: 'Najprv vyber zdroje sacharidov.',
+    reminderTitle: 'Denná pripomienka', reminderLead: 'Kedy ti mám pripomenúť, že treba zapísať jedlá? Zapísanie celej rodiny zaberie menej ako minútu.',
+    remindDaily: 'Pripomínať každý deň', reminderTime: 'Čas pripomienky',
+    notifAllowed: 'Notifikácie povolené', notifUnsupported: 'Notifikácie nepodporované', notifAllow: 'Povoliť notifikácie', notifDenied: 'Notifikácie nie sú povolené',
+    test: 'Vyskúšať', addCalendar: '📅 Pridať do kalendára',
+    pushNote: 'Skutočné push notifikácie aj pri zatvorenej appke potrebujú push server. V prototype pripomienka vyskočí, len keď je appka otvorená. Spoľahlivú dennú pripomienku už teraz zabezpečí opakovaná udalosť v kalendári (.ics).',
+    needMember: 'Pridaj aspoň jedného člena rodiny.', needProtein: 'Vyber aspoň jeden zdroj bielkovín.', needCarb: 'Vyber aspoň jeden zdroj sacharidov.', needMeal: 'Vyber aspoň jedno jedlo.',
+    prevDay: 'Predchádzajúci deň', nextDay: 'Nasledujúci deň', prevWeek: 'Predchádzajúci týždeň', nextWeek: 'Nasledujúci týždeň',
+    loggedOf: (a, b) => `${a} z ${b} zapísaných`, nothingYet: 'Zatiaľ nie je čo zapisovať', timeToLog: '⏰ Je čas zapísať dnešné jedlá.',
+    thisWeek: 'tento týždeň', sameAs: 'Rovnako ako', skipNow: 'Preskočiť zatiaľ', andWith: 'A k tomu? 🍽️',
+    proteins: 'Bielkoviny', carbs: 'Sacharidy', change: 'zmeniť', sameFor: 'Rovnaké jedlo zapísať aj pre:',
+    nothing: 'Zatiaľ nič', askLater: (meal, time) => `Na ${meal.toLowerCase()} sa spýtam po ${time}.`, fillYesterday: 'Doplniť včerajšok',
+    doneForNow: 'Zatiaľ hotovo', weekOverview: 'Týždenný prehľad', done: 'Hotovo!',
+    allLogged: isToday => `Všetky jedlá za ${isToday ? 'dnešok' : 'tento deň'} sú zapísané.`,
+    restLater: 'Zvyšok neskôr', skippedN: n => `Preskočil si ${n} ${n === 1 ? 'otázku' : n < 5 ? 'otázky' : 'otázok'}.`, continueLog: 'Pokračovať v zapisovaní',
+    later: 'neskôr', logged: 'Zapísané', editDay: '✏️ Upraviť deň',
+    overP: (who, it, n, l) => `${who}: ${it} už ${n}× tento týždeň (limit ${l}×).`,
+    overC: (who, it, n, l) => `${who}: ${it} už ${n}. raz tento týždeň (limit ${l}×).`,
+    goalMet: (who, e, n) => `${who}: ${e} cieľ ${n}× splnený!`,
+    warning: '⚠️ Upozornenie', limitsHint: 'Limity si upravíš v Nastaveniach.', gotIt: 'Rozumiem', saved: '✓ Uložené',
+    sweetsTitle: '🍬 Sladké a cukor', sweets: 'Sladké', addSweet: '+ Pridať sladké', sugarHint: 'Gramy cukru sú orientačné odhady na bežnú porciu.',
+    gSugar: g => `~${g} g cukru`, sweetPh: 'napr. Palacinka', sugarGrams: 'Gramy cukru', close: 'Zavrieť',
+    limit: 'limit', sugarFromSweets: '🍬 Cukor zo sladkostí', member: 'Člen rodiny', noEntries: 'Zatiaľ žiadne záznamy.',
+    daysTap: 'Dni – ťukni pre opravu', future: 'budúcnosť', edit: 'upraviť ›',
+    notLogged: '— nezapísané —', dayEdit: 'Úprava dňa', quickLog: 'Rýchle zapisovanie',
+    family: 'Rodina', trackedMeals: 'Sledované jedlá', carbAlerts: 'Alerty na sacharidy',
+    nGoals: n => `${n} cieľov`, nLimits: n => `${n} limitov`, everyDayAt: t => `každý deň o ${t}`, off: 'vypnutá',
+    premiumActive: 'Premium aktívne', premiumToggle: 'Bez platby – v prototype sa Premium len prepína.',
+    data: '💾 Dáta', dataHint: 'Všetko je uložené len v tomto prehliadači (localStorage).',
+    demoData: '🧪 Doplniť ukážkové dáta', exportJson: '⬇️ Export JSON', importJson: '⬆️ Import JSON', deleteAll: '🗑️ Vymazať všetko',
+    activatePremium: '⭐ Aktivovať Premium', premiumThanks: 'Premium je aktívne. Ďakujeme!',
+    premiumLead: 'Odomkni chytré funkcie, ktoré ušetria čas pri plánovaní a varení.', deactivate: 'Deaktivovať', activateFree: 'Aktivovať za 0 €',
+    paymentFake: f => `Platba je v prototype ${f} – nič sa neúčtuje.`,
+    schoolTitle: 'Školské menu', schoolLead: 'Odfoť jedálny lístok zo školy. Appka rozpozná jedlá a vyplní obedy na celý týždeň alebo mesiac.',
+    forWhom: 'Pre koho', period: 'Obdobie', thisWeekCap: 'Tento týždeň', fourWeeks: '4 týždne',
+    takePhoto: '📷 Odfotiť / vybrať fotku', recognizing: 'Rozpoznávam…', recognize: '🔍 Rozpoznať', menuPreview: 'Náhľad jedálneho lístka',
+    noLunch: 'Obed nie je medzi sledovanými jedlami – po uložení ho uvidíš až keď ho zapneš v nastaveniach.',
+    recognizedLunches: 'Rozpoznané obedy', simulatedCheck: 'Výsledok je simulovaný. Skontroluj a prípadne oprav pred uložením.',
+    alreadyLogged: 'už zapísané', overwrite: 'Prepísať už zapísané dni', discard: 'Zahodiť', saveToOverview: 'Uložiť do prehľadu',
+    recipes: 'Recepty', recipesLead: 'Návrhy podľa vašich zdrojov bielkovín a sacharidov. V prototype je to pevný zoznam, nie AI.',
+    forKids: '🧒 Pre deti', under20: '⚡ Do 20 min', missingGoal: '🎯 Chýba do cieľa', noRecipe: 'Žiadny recept nevyhovuje filtrom.',
+    saveTime: '⏱️ Ako ušetriť čas v kuchyni',
+    plannerTitle: 'AI jedálniček', plannerLead: 'Analyzuje, čo u vás chutí, a navrhne menu, ktoré spĺňa týždenné ciele aj limity. V prototype to robí jednoduchý algoritmus priamo v prehliadači, nie skutočná AI.',
+    histPeriod: 'Monitorované obdobie', lastNDays: n => `posledných ${n} dní`, foundN: n => `Nájdených ${n} záznamov.`,
+    logMore: ' Pre lepšie návrhy zapisuj aspoň týždeň (alebo doplň ukážkové dáta v Nastaveniach).',
+    menuRange: 'Rozsah menu', weekly: 'Týždenné', monthly: 'Mesačné', generating: 'Generujem…', createMenu: 'Vytvoriť menu',
+    menuFrom: d => `Menu od ${d}`, nEntries: n => `${n} záznamov`, makeShopping: '🛒 Vytvoriť nákupný zoznam',
+    freezer: 'Mraznička', freezerLead: 'Čo máte v mrazničke – aby nič nezostalo zabudnuté.', freezerPh: 'napr. Kuracie prsia 500 g', item: 'Položka',
+    photoContents: '📷 Odfotiť obsah', foundInPhoto: 'Rozpoznané na fotke', simulatedTick: 'Simulovaný výsledok – odškrtni, čo naozaj máš.', addSelected: 'Pridať vybrané',
+    inFreezer: n => `V mrazničke (${n})`, since: d => `od ${d}`, freezerEmpty: 'Mraznička je prázdna.',
+    shopping: 'Nákup', shoppingList: 'Nákupný zoznam', fromMenu: '+ Z menu', addItem: 'Pridať položku', listEmpty: 'Zoznam je prázdny.', removeBought: 'Odstrániť kúpené',
+    mustHave: 'Must-have doma', missingToShop: n => `+ Chýbajúce (${n}) do nákupu`, mustHint: 'Veci, ktoré má byť stále doma. Odškrtni, keď dochádzajú.',
+    missing: 'chýba', addMust: 'Pridať must-have', mustItem: 'Must-have položka',
+    sugarLead: 'Zapisuj sladkosti na obrazovke Dnes. Appka spočíta gramy cukru za deň.', trackSweets: 'Sledovať sladké',
+    sugarLimit: 'Denný limit cukru na osobu', whoNote: 'WHO (OMS) odporúča obmedziť voľné cukry pod 10 % energie, ideálne pod 5 % – to je približne 25 g denne pre dospelého. Pre menšie deti je vhodný ešte nižší limit.',
+    logSweets: 'Zapisovať sladké →',
+    icsSummary: 'Zapísať dnešné jedlá', icsOpen: 'Otvor appku', icsFile: 'pripomienka-jedla.ics',
+    recSet: '✓ Odporúčané ciele nastavené', timeToLogShort: 'Čas zapísať jedlá!',
+    delMember: n => `${n} má zapísané jedlá. Odstrániť aj s nimi?`,
+    demoConfirm: 'Doplniť náhodné ukážkové jedlá za posledných 14 dní? Existujúce záznamy sa neprepíšu.', demoAdded: n => `🧪 Pridaných ${n} ukážkových záznamov`,
+    resetConfirm: 'Naozaj vymazať všetky nastavenia a zapísané jedlá? Túto akciu nie je možné vrátiť.', premiumOn: '⭐ Premium aktivované (FAKE)',
+    lunchesSaved: (n, kept) => `✓ Uložených ${n} obedov${kept ? `, ${kept} ponechaných` : ''}`,
+    replaceMenu: 'Nahradiť existujúce menu novým?', discardMenu: 'Zahodiť menu?', addedToList: '✓ Pridané do nákupného zoznamu',
+    delFromFreezer: n => `Odstrániť „${n}“ z mrazničky?`, delItem: n => `Odstrániť „${n}“?`, itemsAdded: n => `✓ Pridaných ${n} položiek`,
+    delMust: n => `Odstrániť „${n}“ z must-have?`, addedToShop: '✓ Pridané do nákupu',
+    entryRemoved: 'Záznam odstránený', importConfirm: 'Import nahradí všetky súčasné dáta. Pokračovať?', imported: '✓ Dáta importované', badFile: '⚠️ Neplatný súbor',
+    exists: 'Táto položka už existuje', overSugar: (who, tot, lim) => `⚠️ ${who}: ${tot} g cukru – nad denným limitom ${lim} g`,
+  },
+  en: {
+    app: 'Family Plate', fileSlug: 'family-plate', language: 'Language', mainNav: 'Main navigation',
+    today: 'Today', yesterday: 'Yesterday', week: 'Week', premium: 'Premium', settings: 'Settings',
+    saveFail: '⚠️ Could not save data (browser storage is unavailable)',
+    fakeTitle: 'Simulated – not connected to a real service in this prototype',
+    question: (m, meal, when, day) => {
+      const name = m.g === 'pl' && /^parents$/i.test(m.name) ? 'the parents' : m.name;
+      const what = { breakfast: 'breakfast', snack1: 'a morning snack', lunch: 'lunch', snack2: 'an afternoon snack', dinner: 'dinner' }[meal];
+      return `What did ${name} have for ${what} ${when ?? `on ${day}`}?`;
+    },
+    less: 'Less', more: 'More', back: '← Back', save: 'Save', next: 'Next →', finish: 'Done, let’s start 🎉',
+    stepOf: (a, b) => `Step ${a} of ${b}`,
+    he: 'He', she: 'She', several: 'Several', parents: 'Parents',
+    membersTitle: 'Who’s in the family?',
+    membersLead: 'Add the members whose meals you want to track. Several people who eat the same can be merged into one (e.g. “Parents”).',
+    namePh: 'Name, e.g. Timeo', name: 'Name', genderAria: 'Gender (for question grammar)', remove: 'Remove', addMember: '+ Add member',
+    genderHint: 'He / She / Several is only used to phrase questions correctly in Slovak and Italian.',
+    custom: 'Custom', label: 'Name', add: 'Add', customPhP: 'e.g. Cottage cheese', customPhC: 'e.g. Tortilla',
+    proteinsTitle: 'Protein sources', proteinsLead: 'What do you usually eat? You’ll pick from these with a single tap when logging meals.',
+    autoPick: '✨ Automatic selection', vegan: '🌱 Vegan diet', clearPick: 'Clear selection', classic: 'Classic', veganAlt: 'Vegan alternatives',
+    carbsTitle: 'Carb sources', carbsLead: 'Sides and grains that show up at your table. After the protein I’ll ask about these too.',
+    wholeOnly: '🌾 Only wholegrain / complex', offer: 'Options',
+    lunchDinner: 'Lunch and dinner', bld: 'Breakfast, lunch, dinner', all: 'All',
+    mealsTitle: 'Which meals to track?', mealsLead: 'The fewer meals, the faster logging. Lunch and dinner are enough for most families.',
+    customPick: 'Custom selection', askFrom: 'When to start asking', notEarlier: () => 'I won’t ask before this time.',
+    perDay: (a, b) => `That’s ${a} × ${b} = ${a * b} quick questions a day.`,
+    recommended: (type, n) => `Recommended: ${type === 'min' ? 'at least' : 'at most'} ${n}× a week`, noRec: 'No recommendation',
+    goalType: 'Goal type', goalOff: 'Off', atLeast: 'At least', atMost: 'At most',
+    goalShort: (type, n) => `${type === 'min' ? 'at least' : 'at most'} ${n}×`,
+    goalsTitle: 'Weekly goals', goalsLead: 'How many times a week per person? I’ve pre-filled recommendations – just confirm or adjust.',
+    useRec: '✔ Use recommended', pickProteins: 'Pick protein sources first.',
+    goalsNote: 'Recommendations are indicative, inspired by the WHO and European dietary guidelines (more legumes and fish, less red meat). They are not medical advice.',
+    alertAt: a => `Warn above ${a}× a week`, noAlert: 'No warning',
+    alertsTitle: 'Carb alerts', alertsLead: 'Set a weekly limit. When someone goes over it, the app warns you – e.g. on the 5th regular pasta in a week.',
+    useSuggested: '✔ Use suggested', allOff: 'Turn all off', pickCarbs: 'Pick carb sources first.',
+    reminderTitle: 'Daily reminder', reminderLead: 'When should I remind you to log meals? Logging the whole family takes less than a minute.',
+    remindDaily: 'Remind me every day', reminderTime: 'Reminder time',
+    notifAllowed: 'Notifications allowed', notifUnsupported: 'Notifications not supported', notifAllow: 'Allow notifications', notifDenied: 'Notifications are not allowed',
+    test: 'Test', addCalendar: '📅 Add to calendar',
+    pushNote: 'Real push notifications while the app is closed need a push server. In the prototype the reminder only pops up while the app is open. A recurring calendar event (.ics) already gives you a reliable daily reminder.',
+    needMember: 'Add at least one family member.', needProtein: 'Pick at least one protein source.', needCarb: 'Pick at least one carb source.', needMeal: 'Pick at least one meal.',
+    prevDay: 'Previous day', nextDay: 'Next day', prevWeek: 'Previous week', nextWeek: 'Next week',
+    loggedOf: (a, b) => `${a} of ${b} logged`, nothingYet: 'Nothing to log yet', timeToLog: '⏰ Time to log today’s meals.',
+    thisWeek: 'this week', sameAs: 'Same as', skipNow: 'Skip for now', andWith: 'And with it? 🍽️',
+    proteins: 'Protein', carbs: 'Carbs', change: 'change', sameFor: 'Log the same meal for:',
+    nothing: 'Nothing yet', askLater: (meal, time) => `${meal}: I’ll ask after ${time}.`, fillYesterday: 'Fill in yesterday',
+    doneForNow: 'Done for now', weekOverview: 'Weekly overview', done: 'Done!',
+    allLogged: isToday => `All meals for ${isToday ? 'today' : 'this day'} are logged.`,
+    restLater: 'The rest later', skippedN: n => `You skipped ${n} question${n === 1 ? '' : 's'}.`, continueLog: 'Continue logging',
+    later: 'later', logged: 'Logged', editDay: '✏️ Edit day',
+    overP: (who, it, n, l) => `${who}: ${it} already ${n}× this week (limit ${l}×).`,
+    overC: (who, it, n, l) => `${who}: ${it} already ${n}× this week (limit ${l}×).`,
+    goalMet: (who, e, n) => `${who}: ${e} goal of ${n}× reached!`,
+    warning: '⚠️ Warning', limitsHint: 'You can change limits in Settings.', gotIt: 'Got it', saved: '✓ Saved',
+    sweetsTitle: '🍬 Sweets & sugar', sweets: 'Sweets', addSweet: '+ Add a sweet', sugarHint: 'Grams of sugar are rough estimates for a typical portion.',
+    gSugar: g => `~${g} g sugar`, sweetPh: 'e.g. Pancake', sugarGrams: 'Grams of sugar', close: 'Close',
+    limit: 'limit', sugarFromSweets: '🍬 Sugar from sweets', member: 'Family member', noEntries: 'No entries yet.',
+    daysTap: 'Days – tap to edit', future: 'future', edit: 'edit ›',
+    notLogged: '— not logged —', dayEdit: 'Edit day', quickLog: 'Quick logging',
+    family: 'Family', trackedMeals: 'Tracked meals', carbAlerts: 'Carb alerts',
+    nGoals: n => `${n} goal${n === 1 ? '' : 's'}`, nLimits: n => `${n} limit${n === 1 ? '' : 's'}`, everyDayAt: t => `every day at ${t}`, off: 'off',
+    premiumActive: 'Premium active', premiumToggle: 'No payment – in the prototype Premium is just a toggle.',
+    data: '💾 Data', dataHint: 'Everything is stored only in this browser (localStorage).',
+    demoData: '🧪 Add demo data', exportJson: '⬇️ Export JSON', importJson: '⬆️ Import JSON', deleteAll: '🗑️ Delete everything',
+    activatePremium: '⭐ Activate Premium', premiumThanks: 'Premium is active. Thank you!',
+    premiumLead: 'Unlock smart features that save time planning and cooking.', deactivate: 'Deactivate', activateFree: 'Activate for €0',
+    paymentFake: f => `Payment is ${f} in the prototype – nothing is charged.`,
+    schoolTitle: 'School menu', schoolLead: 'Snap the school menu. The app recognises the dishes and fills in lunches for the whole week or month.',
+    forWhom: 'For whom', period: 'Period', thisWeekCap: 'This week', fourWeeks: '4 weeks',
+    takePhoto: '📷 Take / choose a photo', recognizing: 'Recognising…', recognize: '🔍 Recognise', menuPreview: 'Menu preview',
+    noLunch: 'Lunch isn’t among the tracked meals – after saving you’ll only see it once you turn it on in settings.',
+    recognizedLunches: 'Recognised lunches', simulatedCheck: 'The result is simulated. Check it and fix anything before saving.',
+    alreadyLogged: 'already logged', overwrite: 'Overwrite already logged days', discard: 'Discard', saveToOverview: 'Save to overview',
+    recipes: 'Recipes', recipesLead: 'Suggestions based on your protein and carb sources. In the prototype it’s a fixed list, not AI.',
+    forKids: '🧒 For kids', under20: '⚡ Under 20 min', missingGoal: '🎯 Behind on goals', noRecipe: 'No recipe matches the filters.',
+    saveTime: '⏱️ How to save time in the kitchen',
+    plannerTitle: 'AI meal plan', plannerLead: 'It analyses what your family likes and suggests a menu that meets the weekly goals and limits. In the prototype a simple algorithm does this right in the browser, not real AI.',
+    histPeriod: 'Analysed period', lastNDays: n => `last ${n} days`, foundN: n => `Found ${n} entries.`,
+    logMore: ' For better suggestions, log for at least a week (or add demo data in Settings).',
+    menuRange: 'Menu range', weekly: 'Weekly', monthly: 'Monthly', generating: 'Generating…', createMenu: 'Create menu',
+    menuFrom: d => `Menu from ${d}`, nEntries: n => `${n} entries`, makeShopping: '🛒 Create shopping list',
+    freezer: 'Freezer', freezerLead: 'What’s in your freezer – so nothing gets forgotten.', freezerPh: 'e.g. Chicken breast 500 g', item: 'Item',
+    photoContents: '📷 Photograph contents', foundInPhoto: 'Recognised in the photo', simulatedTick: 'Simulated result – keep ticked what you really have.', addSelected: 'Add selected',
+    inFreezer: n => `In the freezer (${n})`, since: d => `since ${d}`, freezerEmpty: 'The freezer is empty.',
+    shopping: 'Shopping', shoppingList: 'Shopping list', fromMenu: '+ From menu', addItem: 'Add item', listEmpty: 'The list is empty.', removeBought: 'Remove bought',
+    mustHave: 'Must-haves at home', missingToShop: n => `+ Missing (${n}) to shopping`, mustHint: 'Things that should always be at home. Untick them when running low.',
+    missing: 'missing', addMust: 'Add must-have', mustItem: 'Must-have item',
+    sugarLead: 'Log sweets on the Today screen. The app adds up grams of sugar per day.', trackSweets: 'Track sweets',
+    sugarLimit: 'Daily sugar limit per person', whoNote: 'The WHO recommends keeping free sugars under 10 % of energy, ideally under 5 % – about 25 g a day for an adult. Younger children should have an even lower limit.',
+    logSweets: 'Log sweets →',
+    icsSummary: 'Log today’s meals', icsOpen: 'Open the app', icsFile: 'meal-reminder.ics',
+    recSet: '✓ Recommended goals set', timeToLogShort: 'Time to log meals!',
+    delMember: n => `${n} has logged meals. Remove them too?`,
+    demoConfirm: 'Add random demo meals for the last 14 days? Existing entries won’t be overwritten.', demoAdded: n => `🧪 Added ${n} demo entries`,
+    resetConfirm: 'Really delete all settings and logged meals? This cannot be undone.', premiumOn: '⭐ Premium activated (FAKE)',
+    lunchesSaved: (n, kept) => `✓ Saved ${n} lunches${kept ? `, ${kept} kept` : ''}`,
+    replaceMenu: 'Replace the existing menu with a new one?', discardMenu: 'Discard the menu?', addedToList: '✓ Added to the shopping list',
+    delFromFreezer: n => `Remove “${n}” from the freezer?`, delItem: n => `Remove “${n}”?`, itemsAdded: n => `✓ Added ${n} items`,
+    delMust: n => `Remove “${n}” from must-haves?`, addedToShop: '✓ Added to shopping',
+    entryRemoved: 'Entry removed', importConfirm: 'Import replaces all current data. Continue?', imported: '✓ Data imported', badFile: '⚠️ Invalid file',
+    exists: 'This item already exists', overSugar: (who, tot, lim) => `⚠️ ${who}: ${tot} g sugar – over the daily limit of ${lim} g`,
+  },
+  it: {
+    app: 'Piatto di famiglia', fileSlug: 'piatto-di-famiglia', language: 'Lingua', mainNav: 'Navigazione principale',
+    today: 'Oggi', yesterday: 'Ieri', week: 'Settimana', premium: 'Premium', settings: 'Impostazioni',
+    saveFail: '⚠️ Impossibile salvare i dati (memoria del browser non disponibile)',
+    fakeTitle: 'Simulato – nel prototipo non è collegato a un servizio reale',
+    question: (m, meal, when, day) => {
+      const name = m.g === 'pl' && /^genitori$/i.test(m.name) ? 'i genitori' : m.name;
+      const what = { breakfast: 'a colazione', snack1: 'come spuntino', lunch: 'a pranzo', snack2: 'a merenda', dinner: 'a cena' }[meal];
+      return `Cosa ${m.g === 'pl' ? 'hanno' : 'ha'} mangiato ${name} ${what} ${{ today: 'oggi', yesterday: 'ieri' }[when] ?? day}?`;
+    },
+    less: 'Meno', more: 'Più', back: '← Indietro', save: 'Salva', next: 'Avanti →', finish: 'Fatto, iniziamo 🎉',
+    stepOf: (a, b) => `Passo ${a} di ${b}`,
+    he: 'Lui', she: 'Lei', several: 'Più persone', parents: 'Genitori',
+    membersTitle: 'Chi c’è in famiglia?',
+    membersLead: 'Aggiungi i membri di cui vuoi seguire i pasti. Più persone che mangiano allo stesso modo possono essere unite in una sola (es. “Genitori”).',
+    namePh: 'Nome, es. Timeo', name: 'Nome', genderAria: 'Genere (per la grammatica delle domande)', remove: 'Rimuovi', addMember: '+ Aggiungi membro',
+    genderHint: 'Lui / Lei / Più persone serve solo a formulare bene le domande – “Cosa <b>hanno</b> mangiato i genitori?”',
+    custom: 'Personalizzati', label: 'Nome', add: 'Aggiungi', customPhP: 'es. Ricotta', customPhC: 'es. Piadina',
+    proteinsTitle: 'Fonti di proteine', proteinsLead: 'Cosa mangiate di solito? Durante la registrazione sceglierai tra queste con un tocco.',
+    autoPick: '✨ Selezione automatica', vegan: '🌱 Dieta vegana', clearPick: 'Deseleziona tutto', classic: 'Classiche', veganAlt: 'Alternative vegane',
+    carbsTitle: 'Fonti di carboidrati', carbsLead: 'Contorni e cereali che compaiono a tavola. Dopo la proteina chiederò anche di questi.',
+    wholeOnly: '🌾 Solo integrali / complessi', offer: 'Scelta',
+    lunchDinner: 'Pranzo e cena', bld: 'Colazione, pranzo, cena', all: 'Tutti',
+    mealsTitle: 'Quali pasti seguire?', mealsLead: 'Meno pasti, registrazione più veloce. Alla maggior parte delle famiglie bastano pranzo e cena.',
+    customPick: 'Selezione personalizzata', askFrom: 'Da che ora chiedere', notEarlier: () => 'Prima di quest’ora non chiedo.',
+    perDay: (a, b) => `Ogni giorno saranno ${a} × ${b} = ${a * b} domande veloci.`,
+    recommended: (type, n) => `Consigliato: ${type === 'min' ? 'almeno' : 'al massimo'} ${n}× a settimana`, noRec: 'Nessuna raccomandazione',
+    goalType: 'Tipo di obiettivo', goalOff: 'Non seguire', atLeast: 'Almeno', atMost: 'Al massimo',
+    goalShort: (type, n) => `${type === 'min' ? 'almeno' : 'al massimo'} ${n}×`,
+    goalsTitle: 'Obiettivi settimanali', goalsLead: 'Quante volte a settimana a persona? Ho precompilato i valori consigliati: conferma o modifica.',
+    useRec: '✔ Usa i consigliati', pickProteins: 'Prima scegli le fonti di proteine.',
+    goalsNote: 'Le raccomandazioni sono indicative, ispirate all’OMS e alle linee guida alimentari europee (più legumi e pesce, meno carne rossa). Non sono un consiglio medico.',
+    alertAt: a => `Avviso oltre ${a}× a settimana`, noAlert: 'Nessun avviso',
+    alertsTitle: 'Avvisi sui carboidrati', alertsLead: 'Imposta un limite settimanale. Quando qualcuno lo supera, l’app ti avvisa – es. alla 5ª pasta normale della settimana.',
+    useSuggested: '✔ Usa i suggeriti', allOff: 'Disattiva tutti', pickCarbs: 'Prima scegli le fonti di carboidrati.',
+    reminderTitle: 'Promemoria giornaliero', reminderLead: 'Quando devo ricordarti di registrare i pasti? Registrare tutta la famiglia richiede meno di un minuto.',
+    remindDaily: 'Ricordamelo ogni giorno', reminderTime: 'Ora del promemoria',
+    notifAllowed: 'Notifiche consentite', notifUnsupported: 'Notifiche non supportate', notifAllow: 'Consenti notifiche', notifDenied: 'Le notifiche non sono consentite',
+    test: 'Prova', addCalendar: '📅 Aggiungi al calendario',
+    pushNote: 'Le vere notifiche push ad app chiusa richiedono un server push. Nel prototipo il promemoria appare solo con l’app aperta. Un evento ricorrente nel calendario (.ics) garantisce già un promemoria giornaliero affidabile.',
+    needMember: 'Aggiungi almeno un membro della famiglia.', needProtein: 'Scegli almeno una fonte di proteine.', needCarb: 'Scegli almeno una fonte di carboidrati.', needMeal: 'Scegli almeno un pasto.',
+    prevDay: 'Giorno precedente', nextDay: 'Giorno successivo', prevWeek: 'Settimana precedente', nextWeek: 'Settimana successiva',
+    loggedOf: (a, b) => `${a} di ${b} registrati`, nothingYet: 'Ancora niente da registrare', timeToLog: '⏰ È ora di registrare i pasti di oggi.',
+    thisWeek: 'questa settimana', sameAs: 'Come', skipNow: 'Salta per ora', andWith: 'E come contorno? 🍽️',
+    proteins: 'Proteine', carbs: 'Carboidrati', change: 'cambia', sameFor: 'Registra lo stesso pasto anche per:',
+    nothing: 'Ancora niente', askLater: (meal, time) => `${meal}: te lo chiedo dopo le ${time}.`, fillYesterday: 'Completa ieri',
+    doneForNow: 'Fatto per ora', weekOverview: 'Riepilogo settimanale', done: 'Fatto!',
+    allLogged: isToday => `Tutti i pasti di ${isToday ? 'oggi' : 'questo giorno'} sono registrati.`,
+    restLater: 'Il resto dopo', skippedN: n => `Hai saltato ${n} ${n === 1 ? 'domanda' : 'domande'}.`, continueLog: 'Continua a registrare',
+    later: 'più tardi', logged: 'Registrati', editDay: '✏️ Modifica giorno',
+    overP: (who, it, n, l) => `${who}: ${it} già ${n}× questa settimana (limite ${l}×).`,
+    overC: (who, it, n, l) => `${who}: ${it} già ${n}× questa settimana (limite ${l}×).`,
+    goalMet: (who, e, n) => `${who}: ${e} obiettivo di ${n}× raggiunto!`,
+    warning: '⚠️ Attenzione', limitsHint: 'Puoi modificare i limiti nelle Impostazioni.', gotIt: 'Ho capito', saved: '✓ Salvato',
+    sweetsTitle: '🍬 Dolci e zuccheri', sweets: 'Dolci', addSweet: '+ Aggiungi dolce', sugarHint: 'I grammi di zucchero sono stime indicative per una porzione tipica.',
+    gSugar: g => `~${g} g di zucchero`, sweetPh: 'es. Crêpe', sugarGrams: 'Grammi di zucchero', close: 'Chiudi',
+    limit: 'limite', sugarFromSweets: '🍬 Zucchero dai dolci', member: 'Membro della famiglia', noEntries: 'Ancora nessuna voce.',
+    daysTap: 'Giorni – tocca per modificare', future: 'futuro', edit: 'modifica ›',
+    notLogged: '— non registrato —', dayEdit: 'Modifica giorno', quickLog: 'Registrazione rapida',
+    family: 'Famiglia', trackedMeals: 'Pasti seguiti', carbAlerts: 'Avvisi sui carboidrati',
+    nGoals: n => `${n} ${n === 1 ? 'obiettivo' : 'obiettivi'}`, nLimits: n => `${n} ${n === 1 ? 'limite' : 'limiti'}`, everyDayAt: t => `ogni giorno alle ${t}`, off: 'disattivato',
+    premiumActive: 'Premium attivo', premiumToggle: 'Nessun pagamento – nel prototipo Premium è solo un interruttore.',
+    data: '💾 Dati', dataHint: 'Tutto è salvato solo in questo browser (localStorage).',
+    demoData: '🧪 Aggiungi dati di esempio', exportJson: '⬇️ Esporta JSON', importJson: '⬆️ Importa JSON', deleteAll: '🗑️ Elimina tutto',
+    activatePremium: '⭐ Attiva Premium', premiumThanks: 'Premium è attivo. Grazie!',
+    premiumLead: 'Sblocca funzioni intelligenti che fanno risparmiare tempo nella pianificazione e in cucina.', deactivate: 'Disattiva', activateFree: 'Attiva per 0 €',
+    paymentFake: f => `Nel prototipo il pagamento è ${f} – non viene addebitato nulla.`,
+    schoolTitle: 'Menù scolastico', schoolLead: 'Fotografa il menù della mensa. L’app riconosce i piatti e compila i pranzi per tutta la settimana o il mese.',
+    forWhom: 'Per chi', period: 'Periodo', thisWeekCap: 'Questa settimana', fourWeeks: '4 settimane',
+    takePhoto: '📷 Scatta / scegli una foto', recognizing: 'Riconoscimento…', recognize: '🔍 Riconosci', menuPreview: 'Anteprima del menù',
+    noLunch: 'Il pranzo non è tra i pasti seguiti – dopo il salvataggio lo vedrai solo attivandolo nelle impostazioni.',
+    recognizedLunches: 'Pranzi riconosciuti', simulatedCheck: 'Il risultato è simulato. Controlla e correggi prima di salvare.',
+    alreadyLogged: 'già registrato', overwrite: 'Sovrascrivi i giorni già registrati', discard: 'Scarta', saveToOverview: 'Salva nel riepilogo',
+    recipes: 'Ricette', recipesLead: 'Proposte in base alle vostre fonti di proteine e carboidrati. Nel prototipo è un elenco fisso, non IA.',
+    forKids: '🧒 Per bambini', under20: '⚡ Entro 20 min', missingGoal: '🎯 Manca all’obiettivo', noRecipe: 'Nessuna ricetta corrisponde ai filtri.',
+    saveTime: '⏱️ Come risparmiare tempo in cucina',
+    plannerTitle: 'Menù con IA', plannerLead: 'Analizza cosa piace alla famiglia e propone un menù che rispetta obiettivi e limiti settimanali. Nel prototipo lo fa un semplice algoritmo nel browser, non una vera IA.',
+    histPeriod: 'Periodo analizzato', lastNDays: n => `ultimi ${n} giorni`, foundN: n => `Trovate ${n} voci.`,
+    logMore: ' Per proposte migliori registra almeno una settimana (o aggiungi dati di esempio nelle Impostazioni).',
+    menuRange: 'Durata del menù', weekly: 'Settimanale', monthly: 'Mensile', generating: 'Generazione…', createMenu: 'Crea menù',
+    menuFrom: d => `Menù dal ${d}`, nEntries: n => `${n} voci`, makeShopping: '🛒 Crea lista della spesa',
+    freezer: 'Congelatore', freezerLead: 'Cosa c’è nel congelatore – così niente viene dimenticato.', freezerPh: 'es. Petto di pollo 500 g', item: 'Articolo',
+    photoContents: '📷 Fotografa il contenuto', foundInPhoto: 'Riconosciuti nella foto', simulatedTick: 'Risultato simulato – lascia spuntato ciò che hai davvero.', addSelected: 'Aggiungi selezionati',
+    inFreezer: n => `Nel congelatore (${n})`, since: d => `dal ${d}`, freezerEmpty: 'Il congelatore è vuoto.',
+    shopping: 'Spesa', shoppingList: 'Lista della spesa', fromMenu: '+ Dal menù', addItem: 'Aggiungi articolo', listEmpty: 'La lista è vuota.', removeBought: 'Rimuovi acquistati',
+    mustHave: 'Indispensabili in casa', missingToShop: n => `+ Mancanti (${n}) nella spesa`, mustHint: 'Cose da avere sempre in casa. Togli la spunta quando stanno finendo.',
+    missing: 'manca', addMust: 'Aggiungi indispensabile', mustItem: 'Articolo indispensabile',
+    sugarLead: 'Registra i dolci nella schermata Oggi. L’app somma i grammi di zucchero al giorno.', trackSweets: 'Segui i dolci',
+    sugarLimit: 'Limite giornaliero di zucchero a persona', whoNote: 'L’OMS raccomanda di limitare gli zuccheri liberi sotto il 10 % dell’energia, idealmente sotto il 5 % – circa 25 g al giorno per un adulto. Per i bambini più piccoli è indicato un limite ancora più basso.',
+    logSweets: 'Registra dolci →',
+    icsSummary: 'Registra i pasti di oggi', icsOpen: 'Apri l’app', icsFile: 'promemoria-pasti.ics',
+    recSet: '✓ Obiettivi consigliati impostati', timeToLogShort: 'È ora di registrare i pasti!',
+    delMember: n => `${n} ha pasti registrati. Rimuovere anche quelli?`,
+    demoConfirm: 'Aggiungere pasti di esempio casuali per gli ultimi 14 giorni? Le voci esistenti non verranno sovrascritte.', demoAdded: n => `🧪 Aggiunte ${n} voci di esempio`,
+    resetConfirm: 'Eliminare davvero tutte le impostazioni e i pasti registrati? L’azione non può essere annullata.', premiumOn: '⭐ Premium attivato (FAKE)',
+    lunchesSaved: (n, kept) => `✓ Salvati ${n} pranzi${kept ? `, ${kept} mantenuti` : ''}`,
+    replaceMenu: 'Sostituire il menù esistente con uno nuovo?', discardMenu: 'Scartare il menù?', addedToList: '✓ Aggiunto alla lista della spesa',
+    delFromFreezer: n => `Rimuovere “${n}” dal congelatore?`, delItem: n => `Rimuovere “${n}”?`, itemsAdded: n => `✓ Aggiunti ${n} articoli`,
+    delMust: n => `Rimuovere “${n}” dagli indispensabili?`, addedToShop: '✓ Aggiunto alla spesa',
+    entryRemoved: 'Voce rimossa', importConfirm: 'L’importazione sostituisce tutti i dati attuali. Continuare?', imported: '✓ Dati importati', badFile: '⚠️ File non valido',
+    exists: 'Questo articolo esiste già', overSugar: (who, tot, lim) => `⚠️ ${who}: ${tot} g di zucchero – oltre il limite giornaliero di ${lim} g`,
+  },
 };
+for (const l in I18N) console.assert(Object.keys(I18N.sk).every(k => k in I18N[l]), `i18n: ${l} is missing keys`);
+const T = (key, ...args) => { const v = I18N[lang][key] ?? I18N.sk[key]; return typeof v === 'function' ? v(...args) : v; };
 
 /* ═══════════════════════════ STATE ═══════════════════════════ */
 
@@ -481,7 +881,7 @@ function load() {
 let state = load();
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); }
-  catch { toast('⚠️ Nepodarilo sa uložiť dáta (úložisko prehliadača je nedostupné)'); }
+  catch { toast(T('saveFail')); }
 }
 const S = () => state.settings;
 
@@ -495,15 +895,14 @@ const addDays = (s, n) => { const d = parseDate(s); d.setDate(d.getDate() + n); 
 const todayIso = () => iso(new Date());
 const weekStart = s => { const d = parseDate(s); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return iso(d); };
 const weekDays = s => { const st = weekStart(s); return Array.from({ length: 7 }, (_, i) => addDays(st, i)); };
-const DAY_NAMES = ['pondelok', 'utorok', 'streda', 'štvrtok', 'piatok', 'sobota', 'nedeľa'];
-const dayName = s => DAY_NAMES[(parseDate(s).getDay() + 6) % 7];
-const fmtDate = s => { const d = parseDate(s); return `${d.getDate()}. ${d.getMonth() + 1}.`; };
+const dayName = s => new Intl.DateTimeFormat(LOCALE, { weekday: 'long' }).format(parseDate(s));
+const fmtDate = s => new Intl.DateTimeFormat(LOCALE, { day: 'numeric', month: 'numeric' }).format(parseDate(s));
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 const validDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s ?? '') && !isNaN(parseDate(s)) ? s : null;
 function dateLabel(s) {
   const t = todayIso();
-  if (s === t) return `Dnes, ${dayName(s)} ${fmtDate(s)}`;
-  if (s === addDays(t, -1)) return `Včera, ${dayName(s)} ${fmtDate(s)}`;
+  if (s === t) return `${T('today')}, ${dayName(s)} ${fmtDate(s)}`;
+  if (s === addDays(t, -1)) return `${T('yesterday')}, ${dayName(s)} ${fmtDate(s)}`;
   return `${cap(dayName(s))} ${fmtDate(s)}`;
 }
 const param = k => new URLSearchParams(location.search).get(k);
@@ -520,14 +919,14 @@ function weighted(pool, weight, rnd) {
 function shuffle(a, rnd) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
-const FAKE = '<span class="fake" title="Simulované – v prototype nie je napojené na skutočnú službu">FAKE</span>';
+const FAKE = `<span class="fake" title="${T('fakeTitle')}">FAKE</span>`;
 
 /* catalog access */
 const allItems = kind => [...(kind === 'p' ? PROTEINS : CARBS), ...S().custom[kind]];
-const NONE = { p: { id: 'none', name: 'Bez bielkovín', emoji: '🚫' }, c: { id: 'none', name: 'Bez sacharidov', emoji: '🚫' } };
+const NONE = { p: { id: 'none', name: L('Bez bielkovín', 'No protein', 'Senza proteine'), emoji: '🚫' }, c: { id: 'none', name: L('Bez sacharidov', 'No carbs', 'Senza carboidrati'), emoji: '🚫' } };
 function item(kind, id) {
   if (id === 'none') return NONE[kind];
-  return allItems(kind).find(x => x.id === id) ?? { id, name: 'Neznáme', emoji: '❔' };
+  return allItems(kind).find(x => x.id === id) ?? { id, name: L('Neznáme', 'Unknown', 'Sconosciuto'), emoji: '❔' };
 }
 const selectedIds = kind => S()[kind === 'p' ? 'proteins' : 'carbs'];
 const selected = kind => allItems(kind).filter(x => selectedIds(kind).includes(x.id));
@@ -570,16 +969,10 @@ function pending(date) {
 }
 const hasData = mid => Object.values(state.log).some(d => d[mid] && (Object.keys(d[mid].meals ?? {}).length || d[mid].sweets?.length));
 
-/* grammar: "Čo dnes obedoval Timeo?", "Čo dnes obedovala Alma?", "Čo dnes obedovali rodičia?" */
-const SUFFIX = { m: '', f: 'a', pl: 'i' };
 function question(m, meal, date) {
-  const s = SUFFIX[m.g] ?? '';
   const t = todayIso();
-  const when = date === t ? 'dnes' : date === addDays(t, -1) ? 'včera' : `v ${dayName(date) === 'nedeľa' ? 'nedeľu' : dayName(date).replace(/a$/, 'u')}`;
-  const name = m.g === 'pl' && /^rodičia$/i.test(m.name) ? 'rodičia' : m.name;
-  const verb = { breakfast: 'raňajkoval', lunch: 'obedoval', dinner: 'večeral' }[meal];
-  if (verb) return `Čo ${when} ${verb}${s} ${name}?`;
-  return `Čo mal${s} ${name} ${when} na ${meal === 'snack1' ? 'desiatu' : 'olovrant'}?`;
+  const when = date === t ? 'today' : date === addDays(t, -1) ? 'yesterday' : null;
+  return T('question', m, meal, when, dayName(date));
 }
 
 /* ═══════════════════════════ UI PRIMITIVES ═══════════════════════════ */
@@ -610,7 +1003,7 @@ function go(href, replace = false) {
 const qs = obj => '?' + new URLSearchParams(Object.entries(obj).filter(([, v]) => v != null && v !== '')).toString();
 
 const stepper = (act, id, n) =>
-  `<div class="stepper"><button data-act="${act}" data-id="${esc(id)}" data-d="-1" aria-label="Menej">−</button><output>${n}×</output><button data-act="${act}" data-id="${esc(id)}" data-d="1" aria-label="Viac">+</button></div>`;
+  `<div class="stepper"><button data-act="${act}" data-id="${esc(id)}" data-d="-1" aria-label="${T('less')}">−</button><output>${n}×</output><button data-act="${act}" data-id="${esc(id)}" data-d="1" aria-label="${T('more')}">+</button></div>`;
 const bar = (val, max, cls = '') => `<div class="progress ${cls}"><i style="width:${max ? clamp(val / max * 100, 0, 100) : 0}%"></i></div>`;
 const pill = (kind, id) => { const it = item(kind, id); return `<span class="entry-pill">${it.emoji} ${esc(it.name)}</span>`; };
 
@@ -632,7 +1025,7 @@ addEventListener('popstate', render);
 
 /* ═══════════════════════════ SETUP WIZARD ═══════════════════════════ */
 
-const STEPS = ['Rodina', 'Bielkoviny', 'Sacharidy', 'Jedlá', 'Ciele', 'Alerty', 'Pripomienka'];
+const STEPS = L(['Rodina', 'Bielkoviny', 'Sacharidy', 'Jedlá', 'Ciele', 'Alerty', 'Pripomienka'], ['Family', 'Proteins', 'Carbs', 'Meals', 'Goals', 'Alerts', 'Reminder'], ['Famiglia', 'Proteine', 'Carboidrati', 'Pasti', 'Obiettivi', 'Avvisi', 'Promemoria']);
 
 function viewSetup() {
   const step = clamp(parseInt(param('step')) || 1, 1, STEPS.length);
@@ -640,35 +1033,35 @@ function viewSetup() {
   const body = [stepMembers, stepProteins, stepCarbs, stepMeals, stepGoals, stepAlerts, stepReminder][step - 1]();
   return `<section>
     ${edit ? '' : `<div class="dots">${STEPS.map((_, i) => `<span class="${i + 1 === step ? 'on' : i + 1 < step ? 'done' : ''}"></span>`).join('')}</div>`}
-    <p class="eyebrow">${edit ? 'Nastavenia' : `Krok ${step} z ${STEPS.length}`} · ${STEPS[step - 1]}</p>
+    <p class="eyebrow">${edit ? T('settings') : T('stepOf', step, STEPS.length)} · ${STEPS[step - 1]}</p>
     ${body}
     <div class="wizard-nav">
       ${edit
-        ? `<a class="btn" href="?view=settings">← Späť</a><button class="btn primary" data-act="setup-save" data-step="${step}">Uložiť</button>`
-        : `${step > 1 ? `<button class="btn" data-act="setup-go" data-step="${step - 1}">← Späť</button>` : '<span></span>'}
-           <button class="btn primary" data-act="setup-go" data-step="${step + 1}">${step === STEPS.length ? 'Hotovo, začať 🎉' : 'Ďalej →'}</button>`}
+        ? `<a class="btn" href="?view=settings">${T('back')}</a><button class="btn primary" data-act="setup-save" data-step="${step}">${T('save')}</button>`
+        : `${step > 1 ? `<button class="btn" data-act="setup-go" data-step="${step - 1}">${T('back')}</button>` : '<span></span>'}
+           <button class="btn primary" data-act="setup-go" data-step="${step + 1}">${step === STEPS.length ? T('finish') : T('next')}</button>`}
     </div>
   </section>`;
 }
 
 function stepMembers() {
-  const genders = [['m', 'On'], ['f', 'Ona'], ['pl', 'Viacerí']];
-  return `<h1>Kto je v rodine?</h1>
-  <p class="lead">Pridaj členov, ktorých jedlo chceš sledovať. Viac ľudí, ktorí jedia rovnako, môžeš zlúčiť do jedného (napr. „Rodičia“).</p>
+  const genders = [['m', T('he')], ['f', T('she')], ['pl', T('several')]];
+  return `<h1>${T('membersTitle')}</h1>
+  <p class="lead">${T('membersLead')}</p>
   <div>${S().members.map(m => `
     <div class="member-row">
-      <input type="text" value="${esc(m.name)}" placeholder="Meno, napr. Timeo" maxlength="30" data-input="member-name" data-id="${m.id}" aria-label="Meno">
-      <div class="seg" role="group" aria-label="Rod (pre gramatiku otázok)">
+      <input type="text" value="${esc(m.name)}" placeholder="${T('namePh')}" maxlength="30" data-input="member-name" data-id="${m.id}" aria-label="${T('name')}">
+      <div class="seg" role="group" aria-label="${T('genderAria')}">
         ${genders.map(([g, l]) => `<button aria-pressed="${m.g === g}" data-act="member-g" data-id="${m.id}" data-g="${g}">${l}</button>`).join('')}
       </div>
-      <button class="icon-btn" data-act="member-del" data-id="${m.id}" aria-label="Odstrániť ${esc(m.name)}">✕</button>
+      <button class="icon-btn" data-act="member-del" data-id="${m.id}" aria-label="${T('remove')} ${esc(m.name)}">✕</button>
     </div>`).join('')}
   </div>
   <div class="row-btns">
-    <button class="btn" data-act="member-add">+ Pridať člena</button>
-    <button class="btn ghost" data-act="member-add" data-name="Rodičia" data-g="pl">+ Rodičia</button>
+    <button class="btn" data-act="member-add">${T('addMember')}</button>
+    <button class="btn ghost" data-act="member-add" data-name="${T('parents')}" data-g="pl">+ ${T('parents')}</button>
   </div>
-  <p class="hint">On / Ona / Viacerí používame len na správnu gramatiku otázok – „Čo dnes obedoval<b>a</b> Alma?“</p>`;
+  <p class="hint">${T('genderHint')}</p>`;
 }
 
 function chipList(kind, list) {
@@ -677,50 +1070,50 @@ function chipList(kind, list) {
 }
 function customBlock(kind) {
   const list = S().custom[kind];
-  return `<h3>Vlastné</h3>
+  return `<h3>${T('custom')}</h3>
   ${list.length ? chipList(kind, list) : ''}
   <form class="inline-form" data-submit="add-custom" data-kind="${kind}">
-    <input name="name" placeholder="${kind === 'p' ? 'napr. Tvaroh' : 'napr. Tortilla'}" maxlength="30" required aria-label="Názov">
+    <input name="name" placeholder="${T(kind === 'p' ? 'customPhP' : 'customPhC')}" maxlength="30" required aria-label="${T('label')}">
     <input name="emoji" class="emoji-in" placeholder="🍽️" maxlength="4" aria-label="Emoji">
-    <button class="btn small">Pridať</button>
+    <button class="btn small">${T('add')}</button>
   </form>`;
 }
 
 function stepProteins() {
-  return `<h1>Zdroje bielkovín</h1>
-  <p class="lead">Čo bežne jete? Toto budeš pri zapisovaní jedla vyberať jedným ťuknutím.</p>
+  return `<h1>${T('proteinsTitle')}</h1>
+  <p class="lead">${T('proteinsLead')}</p>
   <div class="row-btns">
-    <button class="btn" data-act="preset" data-kind="p" data-set="classic">✨ Automatický výber</button>
-    <button class="btn" data-act="preset" data-kind="p" data-set="vegan">🌱 Vegánska diéta</button>
-    <button class="btn ghost" data-act="preset" data-kind="p" data-set="none">Zrušiť výber</button>
+    <button class="btn" data-act="preset" data-kind="p" data-set="classic">${T('autoPick')}</button>
+    <button class="btn" data-act="preset" data-kind="p" data-set="vegan">${T('vegan')}</button>
+    <button class="btn ghost" data-act="preset" data-kind="p" data-set="none">${T('clearPick')}</button>
   </div>
-  <h3>Klasické</h3>${chipList('p', PROTEINS.filter(p => p.set === 'classic'))}
-  <h3>Vegánske alternatívy</h3>${chipList('p', PROTEINS.filter(p => p.set === 'vegan'))}
+  <h3>${T('classic')}</h3>${chipList('p', PROTEINS.filter(p => p.set === 'classic'))}
+  <h3>${T('veganAlt')}</h3>${chipList('p', PROTEINS.filter(p => p.set === 'vegan'))}
   ${customBlock('p')}`;
 }
 
 function stepCarbs() {
-  return `<h1>Zdroje sacharidov</h1>
-  <p class="lead">Prílohy a obilniny, ktoré sa u vás objavujú. Po výbere bielkoviny sa spýtam aj na ne.</p>
+  return `<h1>${T('carbsTitle')}</h1>
+  <p class="lead">${T('carbsLead')}</p>
   <div class="row-btns">
-    <button class="btn" data-act="preset" data-kind="c" data-set="all">✨ Automatický výber</button>
-    <button class="btn" data-act="preset" data-kind="c" data-set="whole">🌾 Len celozrnné / komplexné</button>
-    <button class="btn ghost" data-act="preset" data-kind="c" data-set="none">Zrušiť výber</button>
+    <button class="btn" data-act="preset" data-kind="c" data-set="all">${T('autoPick')}</button>
+    <button class="btn" data-act="preset" data-kind="c" data-set="whole">${T('wholeOnly')}</button>
+    <button class="btn ghost" data-act="preset" data-kind="c" data-set="none">${T('clearPick')}</button>
   </div>
-  <h3>Ponuka</h3>${chipList('c', CARBS)}
+  <h3>${T('offer')}</h3>${chipList('c', CARBS)}
   ${customBlock('c')}`;
 }
 
 function stepMeals() {
-  const presets = [['Obed a večera', ['lunch', 'dinner']], ['Raňajky, obed, večera', ['breakfast', 'lunch', 'dinner']], ['Všetko', MEALS.map(m => m.id)]];
-  return `<h1>Ktoré jedlá sledovať?</h1>
-  <p class="lead">Čím menej jedál, tým rýchlejšie zapisovanie. Väčšine rodín stačí obed a večera.</p>
+  const presets = [[T('lunchDinner'), ['lunch', 'dinner']], [T('bld'), ['breakfast', 'lunch', 'dinner']], [T('all'), MEALS.map(m => m.id)]];
+  return `<h1>${T('mealsTitle')}</h1>
+  <p class="lead">${T('mealsLead')}</p>
   <div class="row-btns">${presets.map(([l, ids]) => `<button class="btn" data-act="meal-preset" data-ids="${ids.join(',')}">${l}</button>`).join('')}</div>
-  <h3>Vlastný výber</h3>
+  <h3>${T('customPick')}</h3>
   <div class="chips">${MEALS.map(m => `<button class="chip" aria-pressed="${S().meals.includes(m.id)}" data-act="toggle-meal" data-id="${m.id}">${m.emoji} ${m.name}</button>`).join('')}</div>
-  ${activeMeals().length ? `<h3>Odkedy sa pýtať</h3>
-  <div class="card">${activeMeals().map(m => `<label class="list-row"><span class="grow"><strong>${m.emoji} ${m.name}</strong><small>Skôr sa na ${m.name.toLowerCase()} nepýtam.</small></span><input type="time" style="width:auto" value="${mealStart(m.id)}" data-change="meal-time" data-id="${m.id}"></label>`).join('')}</div>` : ''}
-  <p class="hint">Denne to bude ${S().members.filter(m => m.name.trim()).length || 1} × ${S().meals.length} = ${(S().members.filter(m => m.name.trim()).length || 1) * S().meals.length} rýchlych otázok.</p>`;
+  ${activeMeals().length ? `<h3>${T('askFrom')}</h3>
+  <div class="card">${activeMeals().map(m => `<label class="list-row"><span class="grow"><strong>${m.emoji} ${m.name}</strong><small>${T('notEarlier', m.name)}</small></span><input type="time" style="width:auto" value="${mealStart(m.id)}" data-change="meal-time" data-id="${m.id}"></label>`).join('')}</div>` : ''}
+  <p class="hint">${T('perDay', S().members.filter(m => m.name.trim()).length || 1, S().meals.length)}</p>`;
 }
 
 function stepGoals() {
@@ -729,18 +1122,18 @@ function stepGoals() {
     const rec = REC_GOALS[it.id];
     return `<div class="list-row">
       <div class="grow"><strong>${it.emoji} ${esc(it.name)}</strong>
-        <small>${rec ? `Odporúčané: ${rec.type === 'min' ? 'aspoň' : 'najviac'} ${rec.n}× týždenne` : 'Bez odporúčania'}</small></div>
-      <div class="seg" role="group" aria-label="Typ cieľa">
-        ${[['', 'Nesledovať'], ['min', 'Aspoň'], ['max', 'Najviac']].map(([t, l]) => `<button aria-pressed="${(g?.type ?? '') === t}" data-act="goal-type" data-id="${esc(it.id)}" data-type="${t}">${l}</button>`).join('')}
+        <small>${rec ? T('recommended', rec.type, rec.n) : T('noRec')}</small></div>
+      <div class="seg" role="group" aria-label="${T('goalType')}">
+        ${[['', T('goalOff')], ['min', T('atLeast')], ['max', T('atMost')]].map(([t, l]) => `<button aria-pressed="${(g?.type ?? '') === t}" data-act="goal-type" data-id="${esc(it.id)}" data-type="${t}">${l}</button>`).join('')}
       </div>
       ${g ? stepper('goal-n', it.id, g.n) : ''}
     </div>`;
   }).join('');
-  return `<h1>Týždenné ciele</h1>
-  <p class="lead">Koľkokrát týždenne na osobu? Predvyplnil som odporúčania – stačí potvrdiť alebo upraviť.</p>
-  <div class="row-btns"><button class="btn" data-act="goals-rec">✔ Použiť odporúčané</button></div>
-  <div class="card">${rows || '<p class="hint">Najprv vyber zdroje bielkovín.</p>'}</div>
-  <p class="note">Odporúčania sú orientačné, inšpirované WHO (OMS) a európskymi výživovými smernicami (viac strukovín a rýb, menej červeného mäsa). Nie sú lekárskou radou.</p>`;
+  return `<h1>${T('goalsTitle')}</h1>
+  <p class="lead">${T('goalsLead')}</p>
+  <div class="row-btns"><button class="btn" data-act="goals-rec">${T('useRec')}</button></div>
+  <div class="card">${rows || `<p class="hint">${T('pickProteins')}</p>`}</div>
+  <p class="note">${T('goalsNote')}</p>`;
 }
 
 function stepAlerts() {
@@ -748,42 +1141,42 @@ function stepAlerts() {
     const a = S().alerts[it.id];
     return `<div class="list-row">
       <label class="check grow"><input type="checkbox" data-change="alert-on" data-id="${esc(it.id)}" ${a ? 'checked' : ''}> <span><strong>${it.emoji} ${esc(it.name)}</strong>
-        <small>${a ? `Upozorním pri ${a + 1}. raze v týždni` : 'Bez upozornenia'}</small></span></label>
+        <small>${a ? T('alertAt', a) : T('noAlert')}</small></span></label>
       ${a ? stepper('alert-n', it.id, a) : ''}
     </div>`;
   }).join('');
-  return `<h1>Upozornenia na sacharidy</h1>
-  <p class="lead">Nastav limit na týždeň. Keď ho niekto prekročí, appka ťa upozorní – napr. pri 5. klasickej cestovine v týždni.</p>
-  <div class="row-btns"><button class="btn" data-act="alerts-rec">✔ Použiť navrhované</button><button class="btn ghost" data-act="alerts-none">Vypnúť všetky</button></div>
-  <div class="card">${rows || '<p class="hint">Najprv vyber zdroje sacharidov.</p>'}</div>`;
+  return `<h1>${T('alertsTitle')}</h1>
+  <p class="lead">${T('alertsLead')}</p>
+  <div class="row-btns"><button class="btn" data-act="alerts-rec">${T('useSuggested')}</button><button class="btn ghost" data-act="alerts-none">${T('allOff')}</button></div>
+  <div class="card">${rows || `<p class="hint">${T('pickCarbs')}</p>`}</div>`;
 }
 
 function stepReminder() {
   const r = S().reminder;
   const perm = 'Notification' in window ? Notification.permission : 'unsupported';
-  return `<h1>Denná pripomienka</h1>
-  <p class="lead">Kedy ti mám pripomenúť, že treba zapísať jedlá? Zapísanie celej rodiny zaberie menej ako minútu.</p>
+  return `<h1>${T('reminderTitle')}</h1>
+  <p class="lead">${T('reminderLead')}</p>
   <div class="card">
-    <label class="check"><input type="checkbox" data-change="rem-on" ${r.on ? 'checked' : ''}> <strong>Pripomínať každý deň</strong></label>
-    <label class="field" style="margin-top:8px">Čas pripomienky <input type="time" value="${esc(r.time)}" data-change="rem-time"></label>
+    <label class="check"><input type="checkbox" data-change="rem-on" ${r.on ? 'checked' : ''}> <strong>${T('remindDaily')}</strong></label>
+    <label class="field" style="margin-top:8px">${T('reminderTime')} <input type="time" value="${esc(r.time)}" data-change="rem-time"></label>
     <div class="row-btns" style="margin-top:12px">
-      <button class="btn small" data-act="notif-perm" ${perm === 'granted' || perm === 'unsupported' ? 'disabled' : ''}>🔔 ${perm === 'granted' ? 'Notifikácie povolené' : perm === 'unsupported' ? 'Notifikácie nepodporované' : 'Povoliť notifikácie'}</button>
-      <button class="btn small" data-act="notif-test">Vyskúšať</button>
-      <button class="btn small" data-act="ics">📅 Pridať do kalendára</button>
+      <button class="btn small" data-act="notif-perm" ${perm === 'granted' || perm === 'unsupported' ? 'disabled' : ''}>🔔 ${T(perm === 'granted' ? 'notifAllowed' : perm === 'unsupported' ? 'notifUnsupported' : 'notifAllow')}</button>
+      <button class="btn small" data-act="notif-test">${T('test')}</button>
+      <button class="btn small" data-act="ics">${T('addCalendar')}</button>
     </div>
   </div>
-  <p class="note">${FAKE} Skutočné push notifikácie aj pri zatvorenej appke potrebujú push server. V prototype pripomienka vyskočí, len keď je appka otvorená. Spoľahlivú dennú pripomienku už teraz zabezpečí opakovaná udalosť v kalendári (.ics).</p>`;
+  <p class="note">${FAKE} ${T('pushNote')}</p>`;
 }
 
 function validateStep(step) {
   const s = S();
   if (step === 1) {
     s.members = s.members.map(m => ({ ...m, name: m.name.trim() })).filter(m => m.name);
-    if (!s.members.length) { s.members = [{ id: uid(), name: '', g: 'm' }]; return 'Pridaj aspoň jedného člena rodiny.'; }
+    if (!s.members.length) { s.members = [{ id: uid(), name: '', g: 'm' }]; return T('needMember'); }
   }
-  if (step === 2 && !s.proteins.length) return 'Vyber aspoň jeden zdroj bielkovín.';
-  if (step === 3 && !s.carbs.length) return 'Vyber aspoň jeden zdroj sacharidov.';
-  if (step === 4 && !s.meals.length) return 'Vyber aspoň jedno jedlo.';
+  if (step === 2 && !s.proteins.length) return T('needProtein');
+  if (step === 3 && !s.carbs.length) return T('needCarb');
+  if (step === 4 && !s.meals.length) return T('needMeal');
   return null;
 }
 
@@ -809,12 +1202,12 @@ function viewToday() {
 
   return `
   <div class="day-head">
-    <a class="icon-btn" href="${qs({ view: 'today', date: addDays(date, -1) })}" aria-label="Predchádzajúci deň">‹</a>
-    <div><strong>${dateLabel(date)}</strong><small>${total ? `${done} z ${total} zapísaných` : 'Zatiaľ nie je čo zapisovať'}</small></div>
-    ${date < t ? `<a class="icon-btn" href="${qs({ view: 'today', date: addDays(date, 1) })}" aria-label="Nasledujúci deň">›</a>` : '<span class="icon-btn" style="visibility:hidden"></span>'}
+    <a class="icon-btn" href="${qs({ view: 'today', date: addDays(date, -1) })}" aria-label="${T('prevDay')}">‹</a>
+    <div><strong>${dateLabel(date)}</strong><small>${total ? T('loggedOf', done, total) : T('nothingYet')}</small></div>
+    ${date < t ? `<a class="icon-btn" href="${qs({ view: 'today', date: addDays(date, 1) })}" aria-label="${T('nextDay')}">›</a>` : '<span class="icon-btn" style="visibility:hidden"></span>'}
   </div>
   ${bar(done, total)}
-  ${reminderDue() && date === t && pend.length ? `<div class="banner">⏰ Je čas zapísať dnešné jedlá.</div>` : ''}
+  ${reminderDue() && date === t && pend.length ? `<div class="banner">${T('timeToLog')}</div>` : ''}
   ${flow ? questionCard() : doneCard(date, pend)}
   ${todaySummary(date)}
   ${S().premium && S().sugar.on ? sweetsCard(date) : ''}`;
@@ -825,9 +1218,9 @@ function tile(act, kind, it, mid, date) {
   if (it.id !== 'none') {
     const n = countWeek(mid, date, kind, it.id);
     const g = kind === 'p' ? S().goals[it.id] : S().alerts[it.id] ? { type: 'max', n: S().alerts[it.id] } : null;
-    if (g?.type === 'min') hint = `<small class="${n >= g.n ? 'ok' : ''}">${n}/${g.n} tento týždeň</small>`;
+    if (g?.type === 'min') hint = `<small class="${n >= g.n ? 'ok' : ''}">${n}/${g.n} ${T('thisWeek')}</small>`;
     else if (g?.type === 'max') hint = `<small class="${n >= g.n ? 'warn' : ''}">${n}/${g.n} max</small>`;
-    else if (n) hint = `<small>${n}× tento týždeň</small>`;
+    else if (n) hint = `<small>${n}× ${T('thisWeek')}</small>`;
   }
   return `<button class="tile ${it.id === 'none' ? 'none' : ''}" data-act="${act}" data-id="${esc(it.id)}"><span class="e">${it.emoji}</span>${esc(it.name)}${hint}</button>`;
 }
@@ -841,14 +1234,14 @@ function questionCard() {
     const others = S().members.filter(o => o.id !== mid && entry(date, o.id, meal));
     const shortcuts = others.map(o => {
       const e = entry(date, o.id, meal);
-      return `<button class="shortcut" data-act="same-as" data-id="${o.id}">↺ Rovnako ako ${esc(o.name)}: ${item('p', e.p).emoji} ${esc(item('p', e.p).name)} + ${item('c', e.c).emoji} ${esc(item('c', e.c).name)}</button>`;
+      return `<button class="shortcut" data-act="same-as" data-id="${o.id}">↺ ${T('sameAs')} ${esc(o.name)}: ${item('p', e.p).emoji} ${esc(item('p', e.p).name)} + ${item('c', e.c).emoji} ${esc(item('c', e.c).name)}</button>`;
     }).join('');
     return `<article class="q-card" data-key="${skey(date, mid, meal)}p">
       ${head}
       <h1 class="q">${esc(question(m, meal, date))}</h1>
       ${shortcuts ? `<div class="shortcuts">${shortcuts}</div>` : ''}
       <div class="tiles">${selected('p').map(it => tile('pick-p', 'p', it, mid, date)).join('')}${tile('pick-p', 'p', NONE.p, mid, date)}</div>
-      <div class="q-foot"><button class="link" data-act="skip">Preskočiť zatiaľ</button></div>
+      <div class="q-foot"><button class="link" data-act="skip">${T('skipNow')}</button></div>
     </article>`;
   }
 
@@ -856,34 +1249,34 @@ function questionCard() {
   const restPending = S().members.filter(o => o.id !== mid && !entry(date, o.id, meal));
   return `<article class="q-card" data-key="${skey(date, mid, meal)}c">
     ${head}
-    <h1 class="q">A k tomu? 🍽️</h1>
-    <p class="chosen">Bielkoviny: <strong>${p.emoji} ${esc(p.name)}</strong> <button class="link" data-act="back-p">zmeniť</button></p>
+    <h1 class="q">${T('andWith')}</h1>
+    <p class="chosen">${T('proteins')}: <strong>${p.emoji} ${esc(p.name)}</strong> <button class="link" data-act="back-p">${T('change')}</button></p>
     <div class="tiles">${selected('c').map(it => tile('pick-c', 'c', it, mid, date)).join('')}${tile('pick-c', 'c', NONE.c, mid, date)}</div>
-    ${restPending.length ? `<div class="q-foot"><label class="check"><input type="checkbox" data-change="flow-all" ${flow.all ? 'checked' : ''}> Rovnaké jedlo zapísať aj pre: ${restPending.map(o => esc(o.name)).join(', ')}</label></div>` : ''}
+    ${restPending.length ? `<div class="q-foot"><label class="check"><input type="checkbox" data-change="flow-all" ${flow.all ? 'checked' : ''}> ${T('sameFor')} ${restPending.map(o => esc(o.name)).join(', ')}</label></div>` : ''}
   </article>`;
 }
 
 function doneCard(date, pend) {
   const later = laterMeals(date);
-  const next = later[0] && `${later[0].emoji} ${later[0].name.toLowerCase()} sa spýtam po ${mealStart(later[0].id)}.`;
-  if (!pend.length && later.length === activeMeals().length) return `<article class="q-card done-card"><div class="big">☕</div><h1>Zatiaľ nič</h1><p class="lead">Na ${next}</p>
-    <div class="row-btns" style="justify-content:center"><a class="btn" href="${qs({ view: 'today', date: addDays(date, -1) })}">Doplniť včerajšok</a></div></article>`;
-  if (!pend.length && later.length) return `<article class="q-card done-card"><div class="big">👍</div><h1>Zatiaľ hotovo</h1><p class="lead">Na ${next}</p>
-    <div class="row-btns" style="justify-content:center"><a class="btn" href="${qs({ view: 'week', date })}">📅 Týždenný prehľad</a></div></article>`;
-  if (!pend.length) return `<article class="q-card done-card"><div class="big">🎉</div><h1>Hotovo!</h1><p class="lead">Všetky jedlá za ${date === todayIso() ? 'dnešok' : 'tento deň'} sú zapísané.</p>
-    <div class="row-btns" style="justify-content:center"><a class="btn" href="${qs({ view: 'week', date })}">📅 Týždenný prehľad</a></div></article>`;
-  return `<article class="q-card done-card"><div class="big">⏭️</div><h1>Zvyšok neskôr</h1><p class="lead">Preskočil si ${pend.length} ${pend.length === 1 ? 'otázku' : pend.length < 5 ? 'otázky' : 'otázok'}.</p>
-    <div class="row-btns" style="justify-content:center"><button class="btn primary" data-act="unskip" data-date="${date}">Pokračovať v zapisovaní</button></div></article>`;
+  const next = later[0] && T('askLater', `${later[0].emoji} ${later[0].name}`, mealStart(later[0].id));
+  if (!pend.length && later.length === activeMeals().length) return `<article class="q-card done-card"><div class="big">☕</div><h1>${T('nothing')}</h1><p class="lead">${next}</p>
+    <div class="row-btns" style="justify-content:center"><a class="btn" href="${qs({ view: 'today', date: addDays(date, -1) })}">${T('fillYesterday')}</a></div></article>`;
+  if (!pend.length && later.length) return `<article class="q-card done-card"><div class="big">👍</div><h1>${T('doneForNow')}</h1><p class="lead">${next}</p>
+    <div class="row-btns" style="justify-content:center"><a class="btn" href="${qs({ view: 'week', date })}">📅 ${T('weekOverview')}</a></div></article>`;
+  if (!pend.length) return `<article class="q-card done-card"><div class="big">🎉</div><h1>${T('done')}</h1><p class="lead">${T('allLogged', date === todayIso())}</p>
+    <div class="row-btns" style="justify-content:center"><a class="btn" href="${qs({ view: 'week', date })}">📅 ${T('weekOverview')}</a></div></article>`;
+  return `<article class="q-card done-card"><div class="big">⏭️</div><h1>${T('restLater')}</h1><p class="lead">${T('skippedN', pend.length)}</p>
+    <div class="row-btns" style="justify-content:center"><button class="btn primary" data-act="unskip" data-date="${date}">${T('continueLog')}</button></div></article>`;
 }
 
 function todaySummary(date) {
   const rows = S().members.map(m => `<div class="mini-row"><span class="who">${esc(m.name)}</span><span class="what">${activeMeals().map(ml => {
     const e = entry(date, m.id, ml.id);
     if (e) return `<span class="entry-pill" title="${ml.name}">${ml.emoji} ${item('p', e.p).emoji}${item('c', e.c).emoji}</span>`;
-    if (laterMeals(date).includes(ml)) return `<span class="entry-pill missing" title="${ml.name} – neskôr">${ml.emoji} <small>${mealStart(ml.id)}</small></span>`;
+    if (laterMeals(date).includes(ml)) return `<span class="entry-pill missing" title="${ml.name} – ${T('later')}">${ml.emoji} <small>${mealStart(ml.id)}</small></span>`;
     return `<span class="entry-pill missing" title="${ml.name}">${ml.emoji} ?</span>`;
   }).join('')}</span></div>`).join('');
-  return `<section class="card"><div class="card-head"><h2>Zapísané</h2><a class="btn small" href="${qs({ view: 'day', date })}">✏️ Upraviť deň</a></div><div class="mini">${rows}</div></section>`;
+  return `<section class="card"><div class="card-head"><h2>${T('logged')}</h2><a class="btn small" href="${qs({ view: 'day', date })}">${T('editDay')}</a></div><div class="mini">${rows}</div></section>`;
 }
 
 function saveFlowEntry(cId) {
@@ -902,19 +1295,19 @@ function notifyChecks(date, mids, e) {
     const g = S().goals[e.p];
     if (g && e.p !== 'none') {
       const n = countWeek(mid, date, 'p', e.p), it = item('p', e.p);
-      if (g.type === 'max' && n > g.n) warns.push(`${esc(m.name)}: ${it.emoji} ${esc(it.name)} už ${n}× tento týždeň (limit ${g.n}×).`);
-      if (g.type === 'min' && n === g.n) wins.push(`${m.name}: ${it.emoji} cieľ ${g.n}× splnený!`);
+      if (g.type === 'max' && n > g.n) warns.push(T('overP', esc(m.name), `${it.emoji} ${esc(it.name)}`, n, g.n));
+      if (g.type === 'min' && n === g.n) wins.push(T('goalMet', m.name, it.emoji, g.n));
     }
     const a = S().alerts[e.c];
     if (a && e.c !== 'none') {
       const n = countWeek(mid, date, 'c', e.c), it = item('c', e.c);
-      if (n > a) warns.push(`${esc(m.name)}: ${it.emoji} ${esc(it.name)} už ${n}. raz tento týždeň (limit ${a}×).`);
+      if (n > a) warns.push(T('overC', esc(m.name), `${it.emoji} ${esc(it.name)}`, n, a));
     }
   }
-  if (warns.length) dialog(`<h2>⚠️ Upozornenie</h2><ul>${warns.map(w => `<li>${w}</li>`).join('')}</ul>
-    <p class="hint">Limity si upravíš v Nastaveniach.</p><div class="row-btns"><button class="btn primary" data-act="dlg-close">Rozumiem</button></div>`);
+  if (warns.length) dialog(`<h2>${T('warning')}</h2><ul>${warns.map(w => `<li>${w}</li>`).join('')}</ul>
+    <p class="hint">${T('limitsHint')}</p><div class="row-btns"><button class="btn primary" data-act="dlg-close">${T('gotIt')}</button></div>`);
   else if (wins.length) toast('🎉 ' + wins.join(' · '));
-  else toast('✓ Uložené');
+  else toast(T('saved'));
 }
 
 /* sweets (premium) */
@@ -922,28 +1315,28 @@ function sweetTotal(date, mid) { return (state.log[date]?.[mid]?.sweets ?? []).r
 const sugarLimit = mid => S().sugar.limits[mid] ?? 25;
 
 function sweetsCard(date) {
-  return `<section class="card"><div class="card-head"><h2>🍬 Sladké a cukor</h2><span class="badge gold">⭐ Premium</span></div>
+  return `<section class="card"><div class="card-head"><h2>${T('sweetsTitle')}</h2><span class="badge gold">⭐ Premium</span></div>
     ${S().members.map(m => {
       const sw = state.log[date]?.[m.id]?.sweets ?? [], tot = sweetTotal(date, m.id), lim = sugarLimit(m.id);
       return `<div style="margin-bottom:12px">
         <div class="goal"><strong>${esc(m.name)}</strong><span class="val ${tot > lim ? 'bad' : tot > lim * .8 ? 'warn' : 'ok'}">${tot} / ${lim} g</span>${bar(tot, lim, tot > lim ? 'bad' : tot > lim * .8 ? 'warn' : '')}</div>
-        <div class="chips">${sw.map((s, i) => `<button class="chip" data-act="sweet-del" data-mid="${m.id}" data-i="${i}" data-date="${date}" aria-label="Odstrániť ${esc(s.name)}">${s.emoji} ${esc(s.name)} <small>${s.g} g</small><span class="x">✕</span></button>`).join('')}
-        <button class="chip" data-act="sweet-add" data-mid="${m.id}" data-date="${date}">+ Pridať sladké</button></div>
+        <div class="chips">${sw.map((s, i) => `<button class="chip" data-act="sweet-del" data-mid="${m.id}" data-i="${i}" data-date="${date}" aria-label="${T('remove')} ${esc(s.name)}">${s.emoji} ${esc(s.name)} <small>${s.g} g</small><span class="x">✕</span></button>`).join('')}
+        <button class="chip" data-act="sweet-add" data-mid="${m.id}" data-date="${date}">${T('addSweet')}</button></div>
       </div>`;
     }).join('')}
-    <p class="hint">Gramy cukru sú orientačné odhady na bežnú porciu.</p></section>`;
+    <p class="hint">${T('sugarHint')}</p></section>`;
 }
 
 function sweetDialog(mid, date) {
-  dialog(`<h2>Sladké – ${esc(member(mid).name)}</h2>
-    <div class="tiles">${SWEETS.map((s, i) => `<button class="tile" data-act="sweet-pick" data-i="${i}" data-mid="${mid}" data-date="${date}"><span class="e">${s.emoji}</span>${esc(s.name)}<small>~${s.g} g cukru</small></button>`).join('')}</div>
-    <h3>Vlastné</h3>
+  dialog(`<h2>${T('sweets')} – ${esc(member(mid).name)}</h2>
+    <div class="tiles">${SWEETS.map((s, i) => `<button class="tile" data-act="sweet-pick" data-i="${i}" data-mid="${mid}" data-date="${date}"><span class="e">${s.emoji}</span>${esc(s.name)}<small>${T('gSugar', s.g)}</small></button>`).join('')}</div>
+    <h3>${T('custom')}</h3>
     <form class="inline-form" data-submit="sweet-custom" data-mid="${mid}" data-date="${date}">
-      <input name="name" placeholder="napr. Palacinka" required maxlength="30" aria-label="Názov">
-      <input name="g" type="number" min="0" max="200" placeholder="g" required class="emoji-in" aria-label="Gramy cukru">
-      <button class="btn small">Pridať</button>
+      <input name="name" placeholder="${T('sweetPh')}" required maxlength="30" aria-label="${T('label')}">
+      <input name="g" type="number" min="0" max="200" placeholder="g" required class="emoji-in" aria-label="${T('sugarGrams')}">
+      <button class="btn small">${T('add')}</button>
     </form>
-    <div class="row-btns"><button class="btn" data-act="dlg-close">Zavrieť</button></div>`);
+    <div class="row-btns"><button class="btn" data-act="dlg-close">${T('close')}</button></div>`);
 }
 
 /* ═══════════════════════════ WEEK OVERVIEW ═══════════════════════════ */
@@ -959,35 +1352,35 @@ function viewWeek() {
     const n = countWeek(mid, date, 'p', it.id), g = S().goals[it.id];
     if (!g) return n ? `<div class="goal"><span>${it.emoji} ${esc(it.name)}</span><span class="val">${n}×</span></div>` : '';
     const cls = g.type === 'min' ? (n >= g.n ? 'ok' : '') : (n > g.n ? 'bad' : n === g.n ? 'warn' : 'ok');
-    return `<div class="goal"><span>${it.emoji} ${esc(it.name)} <small>${g.type === 'min' ? 'aspoň' : 'najviac'} ${g.n}×</small></span><span class="val ${cls}">${n} / ${g.n}</span>${bar(n, g.n, cls === 'bad' ? 'bad' : cls === 'warn' ? 'warn' : '')}</div>`;
+    return `<div class="goal"><span>${it.emoji} ${esc(it.name)} <small>${T('goalShort', g.type, g.n)}</small></span><span class="val ${cls}">${n} / ${g.n}</span>${bar(n, g.n, cls === 'bad' ? 'bad' : cls === 'warn' ? 'warn' : '')}</div>`;
   }).join('');
   const carbRows = selected('c').map(it => {
     const n = countWeek(mid, date, 'c', it.id), a = S().alerts[it.id];
     if (!n && !a) return '';
     const cls = a ? (n > a ? 'bad' : n === a ? 'warn' : 'ok') : '';
-    return `<div class="goal"><span>${it.emoji} ${esc(it.name)} ${a ? `<small>limit ${a}×</small>` : ''}</span><span class="val ${cls}">${a ? `${n} / ${a}` : `${n}×`}</span>${a ? bar(n, a, cls === 'bad' ? 'bad' : cls === 'warn' ? 'warn' : '') : ''}</div>`;
+    return `<div class="goal"><span>${it.emoji} ${esc(it.name)} ${a ? `<small>${T('limit')} ${a}×</small>` : ''}</span><span class="val ${cls}">${a ? `${n} / ${a}` : `${n}×`}</span>${a ? bar(n, a, cls === 'bad' ? 'bad' : cls === 'warn' ? 'warn' : '') : ''}</div>`;
   }).join('');
 
   let sugar = '';
   if (S().premium && S().sugar.on) {
     const tot = days.map(d => sweetTotal(d, mid));
-    sugar = `<section class="card"><div class="card-head"><h2>🍬 Cukor zo sladkostí</h2><span class="badge gold">⭐ Premium</span></div>
+    sugar = `<section class="card"><div class="card-head"><h2>${T('sugarFromSweets')}</h2><span class="badge gold">⭐ Premium</span></div>
       ${days.map((d, i) => `<div class="goal"><span>${cap(dayName(d))}</span><span class="val ${tot[i] > sugarLimit(mid) ? 'bad' : ''}">${tot[i]} g</span>${bar(tot[i], sugarLimit(mid), tot[i] > sugarLimit(mid) ? 'bad' : '')}</div>`).join('')}</section>`;
   }
 
   return `
   <div class="day-head">
-    <a class="icon-btn" href="${qs({ view: 'week', date: addDays(days[0], -7), member: mid })}" aria-label="Predchádzajúci týždeň">‹</a>
-    <div><strong>${fmtDate(days[0])} – ${fmtDate(days[6])} ${parseDate(days[6]).getFullYear()}</strong><small>Týždenný prehľad</small></div>
-    <a class="icon-btn" href="${qs({ view: 'week', date: addDays(days[0], 7), member: mid })}" aria-label="Nasledujúci týždeň">›</a>
+    <a class="icon-btn" href="${qs({ view: 'week', date: addDays(days[0], -7), member: mid })}" aria-label="${T('prevWeek')}">‹</a>
+    <div><strong>${fmtDate(days[0])} – ${fmtDate(days[6])} ${parseDate(days[6]).getFullYear()}</strong><small>${T('weekOverview')}</small></div>
+    <a class="icon-btn" href="${qs({ view: 'week', date: addDays(days[0], 7), member: mid })}" aria-label="${T('nextWeek')}">›</a>
   </div>
-  <nav class="tabs-line" aria-label="Člen rodiny">${S().members.map(o => `<a href="${qs({ view: 'week', date, member: o.id })}" ${o.id === mid ? 'aria-current="page"' : ''}>${esc(o.name)}</a>`).join('')}</nav>
-  <section class="card"><h2>Bielkoviny – ${esc(m?.name)}</h2>${goalRows || '<p class="hint">Zatiaľ žiadne záznamy.</p>'}</section>
-  <section class="card"><h2>Sacharidy</h2>${carbRows || '<p class="hint">Zatiaľ žiadne záznamy.</p>'}</section>
+  <nav class="tabs-line" aria-label="${T('member')}">${S().members.map(o => `<a href="${qs({ view: 'week', date, member: o.id })}" ${o.id === mid ? 'aria-current="page"' : ''}>${esc(o.name)}</a>`).join('')}</nav>
+  <section class="card"><h2>${T('proteins')} – ${esc(m?.name)}</h2>${goalRows || `<p class="hint">${T('noEntries')}</p>`}</section>
+  <section class="card"><h2>${T('carbs')}</h2>${carbRows || `<p class="hint">${T('noEntries')}</p>`}</section>
   ${sugar}
-  <h3>Dni – ťukni pre opravu</h3>
+  <h3>${T('daysTap')}</h3>
   ${days.map(d => `<a class="card day-card ${d === t ? 'today' : ''}" href="${qs({ view: 'day', date: d, member: mid })}">
-    <div class="dh"><strong>${dayName(d)} ${fmtDate(d)}</strong><small>${d > t ? 'budúcnosť' : 'upraviť ›'}</small></div>
+    <div class="dh"><strong>${dayName(d)} ${fmtDate(d)}</strong><small>${d > t ? T('future') : T('edit')}</small></div>
     ${activeMeals().map(ml => { const e = entry(d, mid, ml.id);
       return `<div class="meal-line"><span>${ml.emoji} ${ml.name}</span><span>${e ? `${item('p', e.p).emoji} ${esc(item('p', e.p).name)} · ${item('c', e.c).emoji} ${esc(item('c', e.c).name)}` : '<small>—</small>'}</span></div>`; }).join('')}
   </a>`).join('')}`;
@@ -1000,23 +1393,23 @@ function viewDay() {
   const opts = (kind, cur) => {
     const list = selected(kind);
     if (cur && cur !== 'none' && !list.some(x => x.id === cur)) list.push(item(kind, cur));
-    return `<option value="">— nezapísané —</option>${list.map(it => `<option value="${esc(it.id)}" ${cur === it.id ? 'selected' : ''}>${it.emoji} ${esc(it.name)}</option>`).join('')}<option value="none" ${cur === 'none' ? 'selected' : ''}>🚫 ${NONE[kind].name}</option>`;
+    return `<option value="">${T('notLogged')}</option>${list.map(it => `<option value="${esc(it.id)}" ${cur === it.id ? 'selected' : ''}>${it.emoji} ${esc(it.name)}</option>`).join('')}<option value="none" ${cur === 'none' ? 'selected' : ''}>🚫 ${NONE[kind].name}</option>`;
   };
   return `
   <div class="day-head">
-    <a class="icon-btn" href="${qs({ view: 'day', date: addDays(date, -1), member: param('member') })}" aria-label="Predchádzajúci deň">‹</a>
-    <div><strong>${dateLabel(date)}</strong><small>Úprava dňa</small></div>
-    <a class="icon-btn" href="${qs({ view: 'day', date: addDays(date, 1), member: param('member') })}" aria-label="Nasledujúci deň">›</a>
+    <a class="icon-btn" href="${qs({ view: 'day', date: addDays(date, -1), member: param('member') })}" aria-label="${T('prevDay')}">‹</a>
+    <div><strong>${dateLabel(date)}</strong><small>${T('dayEdit')}</small></div>
+    <a class="icon-btn" href="${qs({ view: 'day', date: addDays(date, 1), member: param('member') })}" aria-label="${T('nextDay')}">›</a>
   </div>
   ${S().members.map(m => `<section class="card"><h2>${esc(m.name)}</h2>
     ${activeMeals().map(ml => { const e = entry(date, m.id, ml.id);
       return `<div class="edit-meal"><strong>${ml.emoji} ${ml.name}</strong>
-        <select data-change="edit-entry" data-date="${date}" data-mid="${m.id}" data-meal="${ml.id}" data-kind="p" aria-label="${ml.name} – bielkoviny">${opts('p', e?.p)}</select>
-        <select data-change="edit-entry" data-date="${date}" data-mid="${m.id}" data-meal="${ml.id}" data-kind="c" aria-label="${ml.name} – sacharidy">${opts('c', e?.c)}</select>
+        <select data-change="edit-entry" data-date="${date}" data-mid="${m.id}" data-meal="${ml.id}" data-kind="p" aria-label="${ml.name} – ${T('proteins')}">${opts('p', e?.p)}</select>
+        <select data-change="edit-entry" data-date="${date}" data-mid="${m.id}" data-meal="${ml.id}" data-kind="c" aria-label="${ml.name} – ${T('carbs')}">${opts('c', e?.c)}</select>
       </div>`; }).join('')}
   </section>`).join('')}
   ${S().premium && S().sugar.on ? sweetsCard(date) : ''}
-  <div class="row-btns"><a class="btn" href="${qs({ view: 'week', date, member: param('member') })}">← Týždeň</a><a class="btn primary" href="${qs({ view: 'today', date: date > todayIso() ? '' : date })}">Rýchle zapisovanie</a></div>`;
+  <div class="row-btns"><a class="btn" href="${qs({ view: 'week', date, member: param('member') })}">← ${T('week')}</a><a class="btn primary" href="${qs({ view: 'today', date: date > todayIso() ? '' : date })}">${T('quickLog')}</a></div>`;
 }
 
 /* ═══════════════════════════ SETTINGS ═══════════════════════════ */
@@ -1024,27 +1417,30 @@ function viewDay() {
 function viewSettings() {
   const s = S();
   const link = (step, title, desc) => `<a class="list-row" style="text-decoration:none;color:inherit" href="${qs({ view: 'setup', step, edit: 1 })}"><div class="grow"><strong>${title}</strong><small>${desc}</small></div><span>›</span></a>`;
-  return `<h1>Nastavenia</h1>
+  return `<h1>${T('settings')}</h1>
   <section class="card">
-    ${link(1, '👨‍👩‍👧 Rodina', s.members.map(m => m.name).join(', '))}
-    ${link(2, '🍗 Zdroje bielkovín', selected('p').map(x => x.emoji).join(' '))}
-    ${link(3, '🍚 Zdroje sacharidov', selected('c').map(x => x.emoji).join(' '))}
-    ${link(4, '🍽️ Sledované jedlá', activeMeals().map(m => m.name).join(', '))}
-    ${link(5, '🎯 Týždenné ciele', `${Object.keys(s.goals).filter(id => s.proteins.includes(id)).length} cieľov`)}
-    ${link(6, '⚠️ Alerty na sacharidy', `${Object.keys(s.alerts).filter(id => s.carbs.includes(id)).length} limitov`)}
-    ${link(7, '⏰ Denná pripomienka', s.reminder.on ? `každý deň o ${s.reminder.time}` : 'vypnutá')}
+    ${link(1, `👨‍👩‍👧 ${T('family')}`, s.members.map(m => m.name).join(', '))}
+    ${link(2, `🍗 ${T('proteinsTitle')}`, selected('p').map(x => x.emoji).join(' '))}
+    ${link(3, `🍚 ${T('carbsTitle')}`, selected('c').map(x => x.emoji).join(' '))}
+    ${link(4, `🍽️ ${T('trackedMeals')}`, activeMeals().map(m => m.name).join(', '))}
+    ${link(5, `🎯 ${T('goalsTitle')}`, T('nGoals', Object.keys(s.goals).filter(id => s.proteins.includes(id)).length))}
+    ${link(6, `⚠️ ${T('carbAlerts')}`, T('nLimits', Object.keys(s.alerts).filter(id => s.carbs.includes(id)).length))}
+    ${link(7, `⏰ ${T('reminderTitle')}`, s.reminder.on ? T('everyDayAt', s.reminder.time) : T('off'))}
+  </section>
+  <section class="card"><h2>🌐 ${T('language')}</h2>
+    <select data-change="lang" aria-label="${T('language')}">${langOptions(true)}</select>
   </section>
   <section class="card"><h2>⭐ Premium</h2>
-    <label class="check"><input type="checkbox" data-change="premium" ${s.premium ? 'checked' : ''}> Premium aktívne ${FAKE}</label>
-    <p class="hint">Bez platby – v prototype sa Premium len prepína.</p>
+    <label class="check"><input type="checkbox" data-change="premium" ${s.premium ? 'checked' : ''}> ${T('premiumActive')} ${FAKE}</label>
+    <p class="hint">${T('premiumToggle')}</p>
   </section>
-  <section class="card"><h2>💾 Dáta</h2>
-    <p class="hint" style="margin:0 0 8px">Všetko je uložené len v tomto prehliadači (localStorage).</p>
+  <section class="card"><h2>${T('data')}</h2>
+    <p class="hint" style="margin:0 0 8px">${T('dataHint')}</p>
     <div class="row-btns">
-      <button class="btn small" data-act="demo">🧪 Doplniť ukážkové dáta</button>
-      <button class="btn small" data-act="export">⬇️ Export JSON</button>
-      <label class="btn small file-btn">⬆️ Import JSON<input type="file" accept="application/json,.json" data-change="import"></label>
-      <button class="btn small danger" data-act="reset">🗑️ Vymazať všetko</button>
+      <button class="btn small" data-act="demo">${T('demoData')}</button>
+      <button class="btn small" data-act="export">${T('exportJson')}</button>
+      <label class="btn small file-btn">${T('importJson')}<input type="file" accept="application/json,.json" data-change="import"></label>
+      <button class="btn small danger" data-act="reset">${T('deleteAll')}</button>
     </div>
   </section>`;
 }
@@ -1052,26 +1448,26 @@ function viewSettings() {
 /* ═══════════════════════════ PREMIUM ═══════════════════════════ */
 
 const FEATURES = [
-  { f: 'school', emoji: '📸', title: 'Školské menu z fotky', desc: 'Odfoť jedálny lístok a appka vyplní celý týždeň/mesiac obedov.', fake: true },
-  { f: 'recipes', emoji: '👩‍🍳', title: 'Recepty a tipy', desc: 'Recepty pre deti, rýchle jedlá a nápady, ako ušetriť čas v kuchyni.', fake: true },
-  { f: 'planner', emoji: '🤖', title: 'AI jedálniček', desc: 'Z histórie vašich jedál vytvorí týždenné alebo mesačné menu.', fake: true },
-  { f: 'freezer', emoji: '🧊', title: 'Inventár mrazničky', desc: 'Prehľad, čo máte v mrazničke. Pomôže aj fotka obsahu.', fake: true },
-  { f: 'shopping', emoji: '🛒', title: 'Nákupný zoznam', desc: 'Z menu vytvorí nákup + zoznam „must“ produktov, ktoré majú byť doma.' },
-  { f: 'sugar', emoji: '🍬', title: 'Sladké a cukor', desc: 'Zapisuj sladkosti a sleduj gramy cukru za deň.' },
+  { f: 'school', emoji: '📸', title: L('Školské menu z fotky', 'School menu from a photo', 'Menù scolastico da foto'), desc: L('Odfoť jedálny lístok a appka vyplní celý týždeň/mesiac obedov.', 'Snap the school menu and the app fills in a week/month of lunches.', 'Fotografa il menù della mensa e l’app compila i pranzi di una settimana/un mese.'), fake: true },
+  { f: 'recipes', emoji: '👩‍🍳', title: L('Recepty a tipy', 'Recipes & tips', 'Ricette e consigli'), desc: L('Recepty pre deti, rýchle jedlá a nápady, ako ušetriť čas v kuchyni.', 'Kid-friendly recipes, quick meals and ideas to save time in the kitchen.', 'Ricette per bambini, piatti veloci e idee per risparmiare tempo in cucina.'), fake: true },
+  { f: 'planner', emoji: '🤖', title: L('AI jedálniček', 'AI meal plan', 'Menù con IA'), desc: L('Z histórie vašich jedál vytvorí týždenné alebo mesačné menu.', 'Builds a weekly or monthly menu from your meal history.', 'Crea un menù settimanale o mensile dalla cronologia dei vostri pasti.'), fake: true },
+  { f: 'freezer', emoji: '🧊', title: L('Inventár mrazničky', 'Freezer inventory', 'Inventario del congelatore'), desc: L('Prehľad, čo máte v mrazničke. Pomôže aj fotka obsahu.', 'An overview of what’s in your freezer. A photo of it helps too.', 'Una panoramica di cosa c’è nel congelatore. Aiuta anche una foto.'), fake: true },
+  { f: 'shopping', emoji: '🛒', title: L('Nákupný zoznam', 'Shopping list', 'Lista della spesa'), desc: L('Z menu vytvorí nákup + zoznam „must“ produktov, ktoré majú byť doma.', 'Turns the menu into a shopping list + a list of “must-have” staples to keep at home.', 'Dal menù crea la spesa + una lista di prodotti “indispensabili” da avere in casa.') },
+  { f: 'sugar', emoji: '🍬', title: L('Sladké a cukor', 'Sweets & sugar', 'Dolci e zuccheri'), desc: L('Zapisuj sladkosti a sleduj gramy cukru za deň.', 'Log sweets and track grams of sugar per day.', 'Registra i dolci e controlla i grammi di zucchero al giorno.') },
 ];
 
 function viewPremium() {
   const f = param('f');
   const feat = FEATURES.find(x => x.f === f);
   if (feat) {
-    if (!S().premium) return `<a class="link" href="?view=premium">← Premium</a><div class="card locked"><div class="big">🔒</div><h1>${feat.emoji} ${feat.title}</h1><p class="lead">${feat.desc}</p><button class="btn primary" data-act="premium-on">⭐ Aktivovať Premium ${FAKE}</button></div>`;
+    if (!S().premium) return `<a class="link" href="?view=premium">← Premium</a><div class="card locked"><div class="big">🔒</div><h1>${feat.emoji} ${feat.title}</h1><p class="lead">${feat.desc}</p><button class="btn primary" data-act="premium-on">${T('activatePremium')} ${FAKE}</button></div>`;
     return `<a class="link" href="?view=premium">← Premium</a>` + { school: viewSchool, recipes: viewRecipes, planner: viewPlanner, freezer: viewFreezer, shopping: viewShopping, sugar: viewSugar }[f]();
   }
   return `<section class="card premium-hero">
     <h1>⭐ Premium</h1>
-    <p class="lead" style="margin:0 0 12px">${S().premium ? 'Premium je aktívne. Ďakujeme!' : 'Odomkni chytré funkcie, ktoré ušetria čas pri plánovaní a varení.'}</p>
-    ${S().premium ? `<button class="btn small" data-act="premium-off">Deaktivovať</button>` : `<button class="btn primary" data-act="premium-on">Aktivovať za 0 € ${FAKE}</button>`}
-    <p class="hint">Platba je v prototype ${FAKE} – nič sa neúčtuje.</p>
+    <p class="lead" style="margin:0 0 12px">${S().premium ? T('premiumThanks') : T('premiumLead')}</p>
+    ${S().premium ? `<button class="btn small" data-act="premium-off">${T('deactivate')}</button>` : `<button class="btn primary" data-act="premium-on">${T('activateFree')} ${FAKE}</button>`}
+    <p class="hint">${T('paymentFake', FAKE)}</p>
   </section>
   <div class="feature-grid">${FEATURES.map(x => `<a class="card feature" href="${qs({ view: 'premium', f: x.f })}"><span class="fe">${x.emoji}</span><div><h2>${x.title} ${x.fake ? FAKE : ''}</h2><p>${x.desc}</p></div></a>`).join('')}</div>`;
 }
@@ -1084,25 +1480,25 @@ function viewSchool() {
   school.mid = mid;
   const noLunch = !S().meals.includes('lunch');
   const opts = (kind, cur) => [...new Map([...selected(kind), item(kind, cur)].map(x => [x.id, x])).values()].map(it => `<option value="${esc(it.id)}" ${it.id === cur ? 'selected' : ''}>${it.emoji} ${esc(it.name)}</option>`).join('');
-  return `<h1>📸 Školské menu ${FAKE}</h1>
-  <p class="lead">Odfoť jedálny lístok zo školy. Appka rozpozná jedlá a vyplní obedy na celý týždeň alebo mesiac.</p>
+  return `<h1>📸 ${T('schoolTitle')} ${FAKE}</h1>
+  <p class="lead">${T('schoolLead')}</p>
   <section class="card">
-    <label class="field">Pre koho<select data-change="school-mid">${S().members.map(m => `<option value="${m.id}" ${m.id === mid ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></label>
-    <div class="seg" style="margin-top:12px" role="group" aria-label="Obdobie">${[['week', 'Tento týždeň'], ['month', '4 týždne']].map(([v, l]) => `<button aria-pressed="${school.range === v}" data-act="school-range" data-v="${v}">${l}</button>`).join('')}</div>
+    <label class="field">${T('forWhom')}<select data-change="school-mid">${S().members.map(m => `<option value="${m.id}" ${m.id === mid ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></label>
+    <div class="seg" style="margin-top:12px" role="group" aria-label="${T('period')}">${[['week', T('thisWeekCap')], ['month', T('fourWeeks')]].map(([v, l]) => `<button aria-pressed="${school.range === v}" data-act="school-range" data-v="${v}">${l}</button>`).join('')}</div>
     <div class="row-btns" style="margin-top:12px">
-      <label class="btn file-btn">📷 Odfotiť / vybrať fotku<input type="file" accept="image/*" capture="environment" data-change="school-photo"></label>
-      <button class="btn primary" data-act="school-scan" ${school.photo && !school.busy ? '' : 'disabled'}>${school.busy ? '<span class="spinner"></span> Rozpoznávam…' : '🔍 Rozpoznať'}</button>
+      <label class="btn file-btn">${T('takePhoto')}<input type="file" accept="image/*" capture="environment" data-change="school-photo"></label>
+      <button class="btn primary" data-act="school-scan" ${school.photo && !school.busy ? '' : 'disabled'}>${school.busy ? `<span class="spinner"></span> ${T('recognizing')}` : T('recognize')}</button>
     </div>
-    ${school.photo ? `<img class="photo-preview" src="${school.photo}" alt="Náhľad jedálneho lístka">` : ''}
-    ${noLunch ? '<p class="note">Obed nie je medzi sledovanými jedlami – po uložení ho uvidíš až keď ho zapneš v nastaveniach.</p>' : ''}
+    ${school.photo ? `<img class="photo-preview" src="${school.photo}" alt="${T('menuPreview')}">` : ''}
+    ${noLunch ? `<p class="note">${T('noLunch')}</p>` : ''}
   </section>
-  ${school.rows ? `<section class="card"><div class="card-head"><h2>Rozpoznané obedy ${FAKE}</h2></div>
-    <p class="hint" style="margin:0 0 8px">Výsledok je simulovaný. Skontroluj a prípadne oprav pred uložením.</p>
-    ${school.rows.map((r, i) => `<div class="edit-meal"><strong>${cap(dayName(r.date))} ${fmtDate(r.date)} – ${esc(r.name)}${entry(r.date, mid, 'lunch') ? ' <span class="badge">už zapísané</span>' : ''}</strong>
-      <select data-change="school-row" data-i="${i}" data-kind="p" aria-label="Bielkoviny">${opts('p', r.p)}</select>
-      <select data-change="school-row" data-i="${i}" data-kind="c" aria-label="Sacharidy">${opts('c', r.c)}</select></div>`).join('')}
-    <label class="check"><input type="checkbox" data-change="school-overwrite" ${school.overwrite ? 'checked' : ''}> Prepísať už zapísané dni</label>
-    <div class="row-btns"><button class="btn" data-act="school-discard">Zahodiť</button><button class="btn primary" data-act="school-save">Uložiť do prehľadu</button></div>
+  ${school.rows ? `<section class="card"><div class="card-head"><h2>${T('recognizedLunches')} ${FAKE}</h2></div>
+    <p class="hint" style="margin:0 0 8px">${T('simulatedCheck')}</p>
+    ${school.rows.map((r, i) => `<div class="edit-meal"><strong>${cap(dayName(r.date))} ${fmtDate(r.date)} – ${esc(r.name)}${entry(r.date, mid, 'lunch') ? ` <span class="badge">${T('alreadyLogged')}</span>` : ''}</strong>
+      <select data-change="school-row" data-i="${i}" data-kind="p" aria-label="${T('proteins')}">${opts('p', r.p)}</select>
+      <select data-change="school-row" data-i="${i}" data-kind="c" aria-label="${T('carbs')}">${opts('c', r.c)}</select></div>`).join('')}
+    <label class="check"><input type="checkbox" data-change="school-overwrite" ${school.overwrite ? 'checked' : ''}> ${T('overwrite')}</label>
+    <div class="row-btns"><button class="btn" data-act="school-discard">${T('discard')}</button><button class="btn primary" data-act="school-save">${T('saveToOverview')}</button></div>
   </section>` : ''}`;
 }
 
@@ -1134,17 +1530,17 @@ function viewRecipes() {
   if (quick) list = list.filter(r => r.t <= 20);
   if (need) list = list.filter(r => r.p.some(p => behind.has(p)));
   const toggle = (k, v, l) => `<a class="chip" aria-pressed="${v}" href="${qs({ view: 'premium', f: 'recipes', kid: k === 'kid' ? (v ? '' : 1) : kid ? 1 : '', quick: k === 'quick' ? (v ? '' : 1) : quick ? 1 : '', need: k === 'need' ? (v ? '' : 1) : need ? 1 : '' })}" style="text-decoration:none;color:inherit">${l}</a>`;
-  return `<h1>👩‍🍳 Recepty ${FAKE}</h1>
-  <p class="lead">Návrhy podľa vašich zdrojov bielkovín a sacharidov. V prototype je to pevný zoznam, nie AI.</p>
-  <div class="chips" style="margin-bottom:14px">${toggle('kid', kid, '🧒 Pre deti')}${toggle('quick', quick, '⚡ Do 20 min')}${toggle('need', need, `🎯 Chýba do cieľa${behind.size ? ` (${[...behind].map(id => item('p', id).emoji).join('')})` : ''}`)}</div>
+  return `<h1>👩‍🍳 ${T('recipes')} ${FAKE}</h1>
+  <p class="lead">${T('recipesLead')}</p>
+  <div class="chips" style="margin-bottom:14px">${toggle('kid', kid, T('forKids'))}${toggle('quick', quick, T('under20'))}${toggle('need', need, `${T('missingGoal')}${behind.size ? ` (${[...behind].map(id => item('p', id).emoji).join('')})` : ''}`)}</div>
   ${list.map(r => {
     const p = item('p', r.p.find(x => P.includes(x)) ?? r.p[0]), c = item('c', r.c.find(x => selectedIds('c').includes(x)) ?? r.c[0]);
     return `<article class="card recipe"><h2>${esc(r.name)}</h2>
-      <div class="meta"><span class="badge">⏱ ${r.t} min</span><span class="badge">${p.emoji} ${esc(p.name)}</span><span class="badge">${c.emoji} ${esc(c.name)}</span>${r.kid ? '<span class="badge kid">🧒 pre deti</span>' : ''}</div>
+      <div class="meta"><span class="badge">⏱ ${r.t} min</span><span class="badge">${p.emoji} ${esc(p.name)}</span><span class="badge">${c.emoji} ${esc(c.name)}</span>${r.kid ? `<span class="badge kid">${T('forKids').toLowerCase()}</span>` : ''}</div>
       <ul>${[...r.ing, c.name.toLowerCase()].map(i => `<li>${esc(i)}</li>`).join('')}</ul>
       <p class="hint" style="margin:0">💡 ${esc(r.tip)}</p></article>`;
-  }).join('') || '<p class="card hint">Žiadny recept nevyhovuje filtrom.</p>'}
-  <section class="card"><h2>⏱️ Ako ušetriť čas v kuchyni</h2><ul style="margin-left:18px">${TIME_TIPS.map(t => `<li>${esc(t)}</li>`).join('')}</ul></section>`;
+  }).join('') || `<p class="card hint">${T('noRecipe')}</p>`}
+  <section class="card"><h2>${T('saveTime')}</h2><ul style="margin-left:18px">${TIME_TIPS.map(t => `<li>${esc(t)}</li>`).join('')}</ul></section>`;
 }
 
 /* ── AI planner (FAKE AI – local heuristic) ── */
@@ -1160,18 +1556,18 @@ function viewPlanner() {
   const byDay = {};
   for (const s of plan?.slots ?? []) (byDay[s.date] ??= []).push(s);
 
-  return `<h1>🤖 AI jedálniček ${FAKE}</h1>
-  <p class="lead">Analyzuje, čo u vás chutí, a navrhne menu, ktoré spĺňa týždenné ciele aj limity. V prototype to robí jednoduchý algoritmus priamo v prehliadači, nie skutočná AI.</p>
+  return `<h1>🤖 ${T('plannerTitle')} ${FAKE}</h1>
+  <p class="lead">${T('plannerLead')}</p>
   <section class="card">
-    <label class="field">Monitorované obdobie<select data-change="planner-hist">${[7, 14, 30].map(n => `<option value="${n}" ${n === hist ? 'selected' : ''}>posledných ${n} dní</option>`).join('')}</select></label>
-    <p class="hint">Nájdených ${analyzed} záznamov.${analyzed < 10 ? ' Pre lepšie návrhy zapisuj aspoň týždeň (alebo doplň ukážkové dáta v Nastaveniach).' : ''}</p>
-    <div class="seg" style="margin-top:12px" role="group" aria-label="Rozsah menu">${[['week', 'Týždenné'], ['month', 'Mesačné']].map(([v, l]) => `<a href="${qs({ view: 'premium', f: 'planner', hist, range: v })}" aria-pressed="${range === v}">${l}</a>`).join('')}</div>
-    <div class="row-btns" style="margin-top:12px"><button class="btn primary" data-act="plan-make" data-hist="${hist}" data-range="${range}" ${plannerBusy ? 'disabled' : ''}>${plannerBusy ? '<span class="spinner"></span> Generujem…' : '✨ Vytvoriť menu'}</button></div>
+    <label class="field">${T('histPeriod')}<select data-change="planner-hist">${[7, 14, 30].map(n => `<option value="${n}" ${n === hist ? 'selected' : ''}>${T('lastNDays', n)}</option>`).join('')}</select></label>
+    <p class="hint">${T('foundN', analyzed)}${analyzed < 10 ? T('logMore') : ''}</p>
+    <div class="seg" style="margin-top:12px" role="group" aria-label="${T('menuRange')}">${[['week', T('weekly')], ['month', T('monthly')]].map(([v, l]) => `<a href="${qs({ view: 'premium', f: 'planner', hist, range: v })}" aria-pressed="${range === v}">${l}</a>`).join('')}</div>
+    <div class="row-btns" style="margin-top:12px"><button class="btn primary" data-act="plan-make" data-hist="${hist}" data-range="${range}" ${plannerBusy ? 'disabled' : ''}>${plannerBusy ? `<span class="spinner"></span> ${T('generating')}` : `✨ ${T('createMenu')}`}</button></div>
   </section>
-  ${plan ? `<section class="card"><div class="card-head"><h2>Menu od ${fmtDate(plan.slots[0].date)}</h2><span class="badge">${plan.analyzed} záznamov</span></div>
+  ${plan ? `<section class="card"><div class="card-head"><h2>${T('menuFrom', fmtDate(plan.slots[0].date))}</h2><span class="badge">${T('nEntries', plan.analyzed)}</span></div>
     ${Object.entries(byDay).map(([d, slots]) => `<div class="plan-day"><strong>${dayName(d)} ${fmtDate(d)}</strong>
       ${slots.map(s => `<div class="meal-line"><span>${mealById(s.meal).emoji} ${mealById(s.meal).name}</span><span>${s.name ? `${esc(s.name)} ` : ''}<small>${item('p', s.p).emoji} ${esc(item('p', s.p).name)} · ${item('c', s.c).emoji} ${esc(item('c', s.c).name)}</small></span></div>`).join('')}</div>`).join('')}
-    <div class="row-btns"><button class="btn" data-act="plan-clear">Zahodiť</button><button class="btn primary" data-act="plan-shop">🛒 Vytvoriť nákupný zoznam</button></div>
+    <div class="row-btns"><button class="btn" data-act="plan-clear">${T('discard')}</button><button class="btn primary" data-act="plan-shop">${T('makeShopping')}</button></div>
   </section>` : ''}`;
 }
 
@@ -1234,36 +1630,36 @@ function makePlan(hist, weeks) {
 let freezerScan = { busy: false, found: null };
 
 function viewFreezer() {
-  return `<h1>🧊 Mraznička</h1>
-  <p class="lead">Čo máte v mrazničke – aby nič nezostalo zabudnuté.</p>
+  return `<h1>🧊 ${T('freezer')}</h1>
+  <p class="lead">${T('freezerLead')}</p>
   <section class="card">
     <form class="inline-form" data-submit="freezer-add" style="margin-top:0">
-      <input name="name" placeholder="napr. Kuracie prsia 500 g" required maxlength="50" aria-label="Položka">
-      <button class="btn small">Pridať</button>
+      <input name="name" placeholder="${T('freezerPh')}" required maxlength="50" aria-label="${T('item')}">
+      <button class="btn small">${T('add')}</button>
     </form>
-    <div class="row-btns"><label class="btn small file-btn">📷 Odfotiť obsah ${FAKE}<input type="file" accept="image/*" capture="environment" data-change="freezer-photo"></label>${freezerScan.busy ? '<span class="spinner"></span>' : ''}</div>
+    <div class="row-btns"><label class="btn small file-btn">${T('photoContents')} ${FAKE}<input type="file" accept="image/*" capture="environment" data-change="freezer-photo"></label>${freezerScan.busy ? '<span class="spinner"></span>' : ''}</div>
   </section>
-  ${freezerScan.found ? `<section class="card"><h2>Rozpoznané na fotke ${FAKE}</h2><p class="hint" style="margin:0 0 8px">Simulovaný výsledok – odškrtni, čo naozaj máš.</p>
+  ${freezerScan.found ? `<section class="card"><h2>${T('foundInPhoto')} ${FAKE}</h2><p class="hint" style="margin:0 0 8px">${T('simulatedTick')}</p>
     ${freezerScan.found.map((n, i) => `<label class="check"><input type="checkbox" checked data-i="${i}" class="fz-found"> ${esc(n)}</label>`).join('')}
-    <div class="row-btns"><button class="btn" data-act="freezer-scan-discard">Zahodiť</button><button class="btn primary" data-act="freezer-scan-add">Pridať vybrané</button></div></section>` : ''}
-  <section class="card"><h2>V mrazničke (${state.freezer.length})</h2>
-    ${state.freezer.length ? state.freezer.map(it => `<div class="list-row"><div class="grow"><strong>${esc(it.name)}</strong><small>od ${fmtDate(it.added)}</small></div>${stepper('freezer-qty', it.id, it.qty)}<button class="icon-btn" data-act="freezer-del" data-id="${it.id}" aria-label="Odstrániť">✕</button></div>`).join('') : '<p class="hint">Mraznička je prázdna.</p>'}
+    <div class="row-btns"><button class="btn" data-act="freezer-scan-discard">${T('discard')}</button><button class="btn primary" data-act="freezer-scan-add">${T('addSelected')}</button></div></section>` : ''}
+  <section class="card"><h2>${T('inFreezer', state.freezer.length)}</h2>
+    ${state.freezer.length ? state.freezer.map(it => `<div class="list-row"><div class="grow"><strong>${esc(it.name)}</strong><small>${T('since', fmtDate(it.added))}</small></div>${stepper('freezer-qty', it.id, it.qty)}<button class="icon-btn" data-act="freezer-del" data-id="${it.id}" aria-label="${T('remove')}">✕</button></div>`).join('') : `<p class="hint">${T('freezerEmpty')}</p>`}
   </section>`;
 }
 
 /* ── Shopping list ── */
 function viewShopping() {
   const missing = state.mustHave.filter(m => !m.home).length;
-  return `<h1>🛒 Nákup</h1>
-  <section class="card"><div class="card-head"><h2>Nákupný zoznam</h2>${state.plan ? '<button class="btn small" data-act="plan-shop">+ Z menu</button>' : `<a class="btn small" href="${qs({ view: 'premium', f: 'planner' })}">Vytvoriť menu</a>`}</div>
-    <form class="inline-form" data-submit="shop-add" style="margin:0 0 8px"><input name="name" placeholder="Pridať položku" required maxlength="50" aria-label="Položka"><button class="btn small">Pridať</button></form>
-    ${state.shopping.map(it => `<div class="shop-item ${it.done ? 'done' : ''}"><label><input type="checkbox" data-change="shop-done" data-id="${it.id}" ${it.done ? 'checked' : ''}><span>${esc(it.name)}</span>${it.qty > 1 ? `<span class="qty">× ${it.qty}</span>` : ''}</label><button class="icon-btn" data-act="shop-del" data-id="${it.id}" aria-label="Odstrániť">✕</button></div>`).join('') || '<p class="hint">Zoznam je prázdny.</p>'}
-    ${state.shopping.some(i => i.done) ? '<div class="row-btns"><button class="btn small ghost" data-act="shop-clear">Odstrániť kúpené</button></div>' : ''}
+  return `<h1>🛒 ${T('shopping')}</h1>
+  <section class="card"><div class="card-head"><h2>${T('shoppingList')}</h2>${state.plan ? `<button class="btn small" data-act="plan-shop">${T('fromMenu')}</button>` : `<a class="btn small" href="${qs({ view: 'premium', f: 'planner' })}">${T('createMenu')}</a>`}</div>
+    <form class="inline-form" data-submit="shop-add" style="margin:0 0 8px"><input name="name" placeholder="${T('addItem')}" required maxlength="50" aria-label="${T('item')}"><button class="btn small">${T('add')}</button></form>
+    ${state.shopping.map(it => `<div class="shop-item ${it.done ? 'done' : ''}"><label><input type="checkbox" data-change="shop-done" data-id="${it.id}" ${it.done ? 'checked' : ''}><span>${esc(it.name)}</span>${it.qty > 1 ? `<span class="qty">× ${it.qty}</span>` : ''}</label><button class="icon-btn" data-act="shop-del" data-id="${it.id}" aria-label="${T('remove')}">✕</button></div>`).join('') || `<p class="hint">${T('listEmpty')}</p>`}
+    ${state.shopping.some(i => i.done) ? `<div class="row-btns"><button class="btn small ghost" data-act="shop-clear">${T('removeBought')}</button></div>` : ''}
   </section>
-  <section class="card"><div class="card-head"><h2>Must-have doma</h2>${missing ? `<button class="btn small primary" data-act="must-to-shop">+ Chýbajúce (${missing}) do nákupu</button>` : ''}</div>
-    <p class="hint" style="margin:0 0 8px">Veci, ktoré má byť stále doma. Odškrtni, keď dochádzajú.</p>
-    ${state.mustHave.map(it => `<div class="shop-item"><label><input type="checkbox" data-change="must-home" data-id="${it.id}" ${it.home ? 'checked' : ''}><span>${esc(it.name)}</span>${it.home ? '' : '<span class="badge" style="color:var(--warn)">chýba</span>'}</label><button class="icon-btn" data-act="must-del" data-id="${it.id}" aria-label="Odstrániť">✕</button></div>`).join('')}
-    <form class="inline-form" data-submit="must-add"><input name="name" placeholder="Pridať must-have" required maxlength="50" aria-label="Must-have položka"><button class="btn small">Pridať</button></form>
+  <section class="card"><div class="card-head"><h2>${T('mustHave')}</h2>${missing ? `<button class="btn small primary" data-act="must-to-shop">${T('missingToShop', missing)}</button>` : ''}</div>
+    <p class="hint" style="margin:0 0 8px">${T('mustHint')}</p>
+    ${state.mustHave.map(it => `<div class="shop-item"><label><input type="checkbox" data-change="must-home" data-id="${it.id}" ${it.home ? 'checked' : ''}><span>${esc(it.name)}</span>${it.home ? '' : `<span class="badge" style="color:var(--warn)">${T('missing')}</span>`}</label><button class="icon-btn" data-act="must-del" data-id="${it.id}" aria-label="${T('remove')}">✕</button></div>`).join('')}
+    <form class="inline-form" data-submit="must-add"><input name="name" placeholder="${T('addMust')}" required maxlength="50" aria-label="${T('mustItem')}"><button class="btn small">${T('add')}</button></form>
   </section>`;
 }
 
@@ -1278,15 +1674,15 @@ function addToShopping(names) {
 
 /* ── Sugar settings ── */
 function viewSugar() {
-  return `<h1>🍬 Sladké a cukor</h1>
-  <p class="lead">Zapisuj sladkosti na obrazovke Dnes. Appka spočíta gramy cukru za deň.</p>
+  return `<h1>${T('sweetsTitle')}</h1>
+  <p class="lead">${T('sugarLead')}</p>
   <section class="card">
-    <label class="check"><input type="checkbox" data-change="sugar-on" ${S().sugar.on ? 'checked' : ''}> <strong>Sledovať sladké</strong></label>
-    <h3>Denný limit cukru na osobu</h3>
-    ${S().members.map(m => `<div class="list-row"><span class="grow"><strong>${esc(m.name)}</strong></span><div class="stepper"><button data-act="sugar-lim" data-id="${m.id}" data-d="-5" aria-label="Menej">−</button><output>${sugarLimit(m.id)} g</output><button data-act="sugar-lim" data-id="${m.id}" data-d="5" aria-label="Viac">+</button></div></div>`).join('')}
-    <p class="note">WHO (OMS) odporúča obmedziť voľné cukry pod 10 % energie, ideálne pod 5 % – to je približne 25 g denne pre dospelého. Pre menšie deti je vhodný ešte nižší limit.</p>
+    <label class="check"><input type="checkbox" data-change="sugar-on" ${S().sugar.on ? 'checked' : ''}> <strong>${T('trackSweets')}</strong></label>
+    <h3>${T('sugarLimit')}</h3>
+    ${S().members.map(m => `<div class="list-row"><span class="grow"><strong>${esc(m.name)}</strong></span><div class="stepper"><button data-act="sugar-lim" data-id="${m.id}" data-d="-5" aria-label="${T('less')}">−</button><output>${sugarLimit(m.id)} g</output><button data-act="sugar-lim" data-id="${m.id}" data-d="5" aria-label="${T('more')}">+</button></div></div>`).join('')}
+    <p class="note">${T('whoNote')}</p>
   </section>
-  <a class="btn primary" href="?view=today">Zapisovať sladké →</a>`;
+  <a class="btn primary" href="?view=today">${T('logSweets')}</a>`;
 }
 
 /* ═══════════════════════════ REMINDER ═══════════════════════════ */
@@ -1300,7 +1696,7 @@ function reminderDue() {
 }
 function notify(body) {
   try {
-    if ('Notification' in window && Notification.permission === 'granted') { new Notification('Rodinný tanier', { body, tag: 'food-monitor' }); return; }
+    if ('Notification' in window && Notification.permission === 'granted') { new Notification(T('app'), { body, tag: 'food-monitor' }); return; }
   } catch { /* e.g. mobile Chrome requires a service worker – fall back to a toast */ }
   toast('⏰ ' + body);
 }
@@ -1330,10 +1726,10 @@ function downloadIcs() {
   const url = location.origin + location.pathname + '?view=today';
   const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Rodinny tanier//SK', 'BEGIN:VEVENT',
     `UID:${uid()}@food-monitor`, `DTSTAMP:${now}`, `DTSTART:${d}T${h}${m}00`, 'DURATION:PT5M', 'RRULE:FREQ=DAILY',
-    'SUMMARY:🍽️ Zapísať dnešné jedlá', `DESCRIPTION:Otvor appku: ${url}`, `URL:${url}`,
-    'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Zapísať dnešné jedlá', 'TRIGGER:PT0M', 'END:VALARM',
+    `SUMMARY:🍽️ ${T('icsSummary')}`, `DESCRIPTION:${T('icsOpen')}: ${url}`, `URL:${url}`,
+    'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${T('icsSummary')}`, 'TRIGGER:PT0M', 'END:VALARM',
     'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
-  download('pripomienka-jedla.ics', ics, 'text/calendar');
+  download(T('icsFile'), ics, 'text/calendar');
 }
 function download(name, text, type) {
   const a = document.createElement('a');
@@ -1381,13 +1777,13 @@ const ACT = {
   'setup-save'(el) {
     const err = validateStep(+el.dataset.step); save();
     if (err) { toast(err); render(); return; }
-    toast('✓ Uložené'); go('?view=settings');
+    toast(T('saved')); go('?view=settings');
   },
   'member-add'(el) { S().members.push({ id: uid(), name: el.dataset.name ?? '', g: el.dataset.g ?? 'm' }); save(); render(); afterFocusLast(); },
   'member-g'(el) { member(el.dataset.id).g = el.dataset.g; save(); render(); },
   'member-del'(el) {
     const m = member(el.dataset.id);
-    if (hasData(m.id) && !confirm(`${m.name} má zapísané jedlá. Odstrániť aj s nimi?`)) return;
+    if (hasData(m.id) && !confirm(T('delMember', m.name))) return;
     S().members = S().members.filter(x => x.id !== m.id);
     for (const d of Object.values(state.log)) delete d[m.id];
     save(); render();
@@ -1412,17 +1808,17 @@ const ACT = {
     save(); render();
   },
   'goal-n'(el) { const g = S().goals[el.dataset.id]; g.n = clamp(g.n + +el.dataset.d, 1, 21); save(); render(); },
-  'goals-rec'() { S().goals = Object.fromEntries(S().proteins.map(id => [id, REC_GOALS[id]]).filter(([, g]) => g).map(([id, g]) => [id, { ...g }])); save(); render(); toast('✓ Odporúčané ciele nastavené'); },
+  'goals-rec'() { S().goals = Object.fromEntries(S().proteins.map(id => [id, REC_GOALS[id]]).filter(([, g]) => g).map(([id, g]) => [id, { ...g }])); save(); render(); toast(T('recSet')); },
   'alert-n'(el) { const id = el.dataset.id; S().alerts[id] = clamp(S().alerts[id] + +el.dataset.d, 1, 21); save(); render(); },
   'alerts-rec'() { S().alerts = { ...REC_ALERTS }; save(); render(); },
   'alerts-none'() { S().alerts = {}; save(); render(); },
   async 'notif-perm'() {
     if (!('Notification' in window)) return;
     const p = await Notification.requestPermission();
-    toast(p === 'granted' ? '✓ Notifikácie povolené' : 'Notifikácie nie sú povolené');
+    toast(p === 'granted' ? `✓ ${T('notifAllowed')}` : T('notifDenied'));
     render();
   },
-  'notif-test'() { const m = S().members[0]; notify(m?.name ? question(m, activeMeals()[0]?.id ?? 'lunch', todayIso()) : 'Čas zapísať jedlá!'); },
+  'notif-test'() { const m = S().members[0]; notify(m?.name ? question(m, activeMeals()[0]?.id ?? 'lunch', todayIso()) : T('timeToLogShort')); },
   ics() { downloadIcs(); },
 
   /* today */
@@ -1444,15 +1840,15 @@ const ACT = {
 
   /* settings */
   demo() {
-    if (!confirm('Doplniť náhodné ukážkové jedlá za posledných 14 dní? Existujúce záznamy sa neprepíšu.')) return;
-    toast(`🧪 Pridaných ${fillDemo()} ukážkových záznamov`); render();
+    if (!confirm(T('demoConfirm'))) return;
+    toast(T('demoAdded', fillDemo())); render();
   },
-  export() { download(`rodinny-tanier-${todayIso()}.json`, JSON.stringify(state, null, 2), 'application/json'); },
+  export() { download(`${T('fileSlug')}-${todayIso()}.json`, JSON.stringify(state, null, 2), 'application/json'); },
   reset() {
-    if (!confirm('Naozaj vymazať všetky nastavenia a zapísané jedlá? Túto akciu nie je možné vrátiť.')) return;
+    if (!confirm(T('resetConfirm'))) return;
     state = defaults(); save(); flow = null; skipped.clear(); go('?view=setup&step=1');
   },
-  'premium-on'() { S().premium = true; save(); toast('⭐ Premium aktivované (FAKE)'); render(); },
+  'premium-on'() { S().premium = true; save(); toast(T('premiumOn')); render(); },
   'premium-off'() { S().premium = false; save(); render(); },
 
   /* premium: school */
@@ -1470,20 +1866,20 @@ const ACT = {
       setEntry(r.date, school.mid, 'lunch', { p: r.p, c: r.c }); n++;
     }
     save();
-    toast(`✓ Uložených ${n} obedov${kept ? `, ${kept} ponechaných` : ''}`);
+    toast(T('lunchesSaved', n, kept));
     school = { ...school, rows: null, photo: null };
     go(qs({ view: 'week', member: school.mid }));
   },
 
   /* premium: planner */
   async 'plan-make'(el) {
-    if (state.plan && !confirm('Nahradiť existujúce menu novým?')) return;
+    if (state.plan && !confirm(T('replaceMenu'))) return;
     plannerBusy = true; render();
     await wait(1200);
     state.plan = makePlan(+el.dataset.hist, el.dataset.range === 'month' ? 4 : 1);
     plannerBusy = false; save(); render();
   },
-  'plan-clear'() { if (confirm('Zahodiť menu?')) { state.plan = null; save(); render(); } },
+  'plan-clear'() { if (confirm(T('discardMenu'))) { state.plan = null; save(); render(); } },
   'plan-shop'() {
     if (!state.plan) return;
     const names = [];
@@ -1492,7 +1888,7 @@ const ACT = {
       if (s.c !== 'none') names.push(item('c', s.c).name.toLowerCase());
     }
     addToShopping(names.filter((n, i) => n !== 'none'));
-    toast('✓ Pridané do nákupného zoznamu');
+    toast(T('addedToList'));
     go(qs({ view: 'premium', f: 'shopping' }));
   },
 
@@ -1500,22 +1896,22 @@ const ACT = {
   'freezer-qty'(el) {
     const it = state.freezer.find(x => x.id === el.dataset.id);
     it.qty = it.qty + +el.dataset.d;
-    if (it.qty <= 0) { if (!confirm(`Odstrániť „${it.name}“ z mrazničky?`)) { it.qty = 1; render(); return; } state.freezer = state.freezer.filter(x => x !== it); }
+    if (it.qty <= 0) { if (!confirm(T('delFromFreezer', it.name))) { it.qty = 1; render(); return; } state.freezer = state.freezer.filter(x => x !== it); }
     save(); render();
   },
-  'freezer-del'(el) { const it = state.freezer.find(x => x.id === el.dataset.id); if (!confirm(`Odstrániť „${it.name}“?`)) return; state.freezer = state.freezer.filter(x => x !== it); save(); render(); },
+  'freezer-del'(el) { const it = state.freezer.find(x => x.id === el.dataset.id); if (!confirm(T('delItem', it.name))) return; state.freezer = state.freezer.filter(x => x !== it); save(); render(); },
   'freezer-scan-discard'() { freezerScan.found = null; render(); },
   'freezer-scan-add'() {
     const picked = [...document.querySelectorAll('.fz-found:checked')].map(i => freezerScan.found[+i.dataset.i]);
     for (const name of picked) state.freezer.push({ id: uid(), name, qty: 1, added: todayIso() });
-    freezerScan.found = null; save(); toast(`✓ Pridaných ${picked.length} položiek`); render();
+    freezerScan.found = null; save(); toast(T('itemsAdded', picked.length)); render();
   },
 
   /* premium: shopping */
   'shop-del'(el) { state.shopping = state.shopping.filter(x => x.id !== el.dataset.id); save(); render(); },
   'shop-clear'() { state.shopping = state.shopping.filter(x => !x.done); save(); render(); },
-  'must-del'(el) { const it = state.mustHave.find(x => x.id === el.dataset.id); if (!confirm(`Odstrániť „${it.name}“ z must-have?`)) return; state.mustHave = state.mustHave.filter(x => x !== it); save(); render(); },
-  'must-to-shop'() { addToShopping(state.mustHave.filter(m => !m.home).map(m => m.name)); toast('✓ Pridané do nákupu'); render(); },
+  'must-del'(el) { const it = state.mustHave.find(x => x.id === el.dataset.id); if (!confirm(T('delMust', it.name))) return; state.mustHave = state.mustHave.filter(x => x !== it); save(); render(); },
+  'must-to-shop'() { addToShopping(state.mustHave.filter(m => !m.home).map(m => m.name)); toast(T('addedToShop')); render(); },
 
   /* premium: sugar */
   'sugar-lim'(el) { S().sugar.limits[el.dataset.id] = clamp(sugarLimit(el.dataset.id) + +el.dataset.d, 5, 100); save(); render(); },
@@ -1533,7 +1929,7 @@ const CHANGE = {
     const next = { p: cur.p ?? 'none', c: cur.c ?? 'none', [kind]: el.value };
     if (!el.value) {
       // clearing one half clears the whole meal record
-      setEntry(date, mid, meal, null); save(); render(); toast('Záznam odstránený'); return;
+      setEntry(date, mid, meal, null); save(); render(); toast(T('entryRemoved')); return;
     }
     setEntry(date, mid, meal, next); save(); render();
     notifyChecks(date, [mid], next);
@@ -1544,9 +1940,9 @@ const CHANGE = {
     try {
       const data = JSON.parse(await file.text());
       if (data?.v !== 1 || !data.settings) throw new Error('format');
-      if (!confirm('Import nahradí všetky súčasné dáta. Pokračovať?')) return;
-      state = data; save(); flow = null; toast('✓ Dáta importované'); render();
-    } catch { toast('⚠️ Neplatný súbor'); }
+      if (!confirm(T('importConfirm'))) return;
+      state = data; save(); flow = null; toast(T('imported')); render();
+    } catch { toast(T('badFile')); }
   },
   'school-mid'(el) { school.mid = el.value; render(); },
   'school-photo'(el) {
@@ -1568,13 +1964,17 @@ const CHANGE = {
   'shop-done'(el) { state.shopping.find(x => x.id === el.dataset.id).done = el.checked; save(); render(); },
   'must-home'(el) { state.mustHave.find(x => x.id === el.dataset.id).home = el.checked; save(); render(); },
   'sugar-on'(el) { S().sugar.on = el.checked; save(); render(); },
+  lang(el) {
+    try { localStorage.setItem(LANG_KEY, el.value); } catch { toast(T('saveFail')); return; }
+    location.reload(); // catalog text is resolved at load
+  },
 };
 
 const SUBMIT = {
   'add-custom'(form) {
     const kind = form.dataset.kind;
     const name = form.name.value.trim(); if (!name) return;
-    if (allItems(kind).some(x => x.name.toLowerCase() === name.toLowerCase())) { toast('Táto položka už existuje'); return; }
+    if (allItems(kind).some(x => x.name.toLowerCase() === name.toLowerCase())) { toast(T('exists')); return; }
     const it = { id: 'x-' + uid(), name, emoji: form.emoji.value.trim() || '🍽️' };
     S().custom[kind].push(it);
     S()[kind === 'p' ? 'proteins' : 'carbs'].push(it.id);
@@ -1592,7 +1992,7 @@ function addSweet(mid, date, sweet) {
   dayRec(date, mid).sweets.push(sweet);
   save(); $dlg.close();
   const tot = sweetTotal(date, mid), lim = sugarLimit(mid);
-  if (tot > lim) toast(`⚠️ ${member(mid).name}: ${tot} g cukru – nad denným limitom ${lim} g`);
+  if (tot > lim) toast(T('overSugar', member(mid).name, tot, lim));
   else toast(`✓ ${sweet.emoji} ${sweet.name} (${tot}/${lim} g)`);
   render();
 }
@@ -1619,6 +2019,17 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   SUBMIT[form.dataset.submit]?.(form);
 });
+
+function langOptions(long) {
+  return Object.entries(LANGS).map(([code, flag]) => `<option value="${code}" ${code === lang ? 'selected' : ''}>${flag} ${long ? cap(new Intl.DisplayNames([code], { type: 'language' }).of(code)) : code.toUpperCase()}</option>`).join('');
+}
+document.title = T('app');
+const $langPick = document.querySelector('.lang-pick');
+$langPick.innerHTML = langOptions(false);
+$langPick.setAttribute('aria-label', T('language'));
+const $nav = document.querySelector('.tab-nav');
+$nav.setAttribute('aria-label', T('mainNav'));
+$nav.querySelectorAll('a').forEach(a => { a.lastChild.textContent = T(a.dataset.tab); });
 
 render();
 reminderTick();

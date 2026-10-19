@@ -59,14 +59,18 @@
     </form>
 </dialog>
 <script type="module">
-const IMG = /\.(jpe?g|png|gif|webp|avif|bmp)$/i, TRASH = '.trash';
+const IMG = /\.(jpe?g|png|gif|webp|avif|bmp)$/i, TRASH = '.trash', AHEAD = 3, KEEP = 5;
 const $ = s => document.querySelector(s);
 const img = $('main img'), bar = $('#bar'), dupe = $('#dupe');
-let root, photos = [], tags = [], i = 0, url;
+let root, photos = [], tags = [], i = 0, handles = new Map(), cache = new Map(), queue = Promise.resolve(), pending = 0;
 
 if (!('showDirectoryPicker' in window)) $('#unsupported').hidden = false;
 
-const dir = name => name ? root.getDirectoryHandle(name, { create: true }) : root;
+const dir = name => {
+    if (!name) return root;
+    if (!handles.has(name)) handles.set(name, root.getDirectoryHandle(name, { create: true }));
+    return handles.get(name);
+};
 const read = (d, name) => d.getFileHandle(name).then(h => h.getFile(), () => null);
 // indexedDB.cmp compares binary keys byte by byte: a fast native equality check
 const same = async (a, b) => a.size === b.size && indexedDB.cmp(await a.arrayBuffer(), await b.arrayBuffer()) === 0;
@@ -76,10 +80,11 @@ const status = text => $('#meta').textContent = text;
 async function pick() {
     try { root = await showDirectoryPicker({ mode: 'readwrite' }); }
     catch (e) { if (e.name !== 'AbortError') alert(e.message); return; }
-    photos = []; tags = [];
+    cache.forEach(u => u.then(URL.revokeObjectURL));
+    photos = []; tags = []; handles = new Map(); cache = new Map();
     const dirs = [];
     for await (const h of root.values()) {
-        if (h.kind === 'file' && IMG.test(h.name)) photos.push({ name: h.name, file: h.name, dir: '' });
+        if (h.kind === 'file' && IMG.test(h.name)) photos.push({ name: h.name });
         else if (h.kind === 'directory') { dirs.push(h); if (!h.name.startsWith('.')) tags.push(h.name); }
     }
     const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true });
@@ -99,7 +104,21 @@ async function pick() {
         for (const p of sorted) await root.removeEntry(p.name);
         photos = photos.filter(p => !sorted.includes(p));
     }
+    // dir: folder shown in the UI (updated instantly), at: where the file really is (updated by the background queue)
+    photos.forEach((p, n) => Object.assign(p, { idx: n, dir: '', at: { dir: '', file: p.name }, pending: 0 }));
     i = 0; render();
+}
+
+// Reads the photo into memory once, so its URL keeps working after the file is moved.
+function load(p) {
+    if (!cache.has(p)) cache.set(p, (async () => {
+        await p.busy;
+        const f = await read(await dir(p.at.dir), p.at.file);
+        const u = URL.createObjectURL(new Blob([await f.arrayBuffer()], { type: f.type }));
+        const im = new Image(); im.src = u; await im.decode().catch(() => {});
+        return u;
+    })().catch(() => { cache.delete(p); return ''; }));
+    return cache.get(p);
 }
 
 function button(label, on, onclick, id) {
@@ -109,22 +128,28 @@ function button(label, on, onclick, id) {
     return b;
 }
 
-async function render() {
+function ui() {
     const p = photos[i];
     img.hidden = bar.hidden = $('#prev').hidden = $('#next').hidden = !p;
     $('#empty').hidden = !!p;
     if (!p) { $('#name').textContent = root?.name ?? 'Photo Triage'; status(root ? 'All sorted 🎉 No photos left in the root folder' : 'Pick a folder to start'); return; }
     $('#name').textContent = p.name;
-    status(`${i + 1} / ${photos.length}` + (p.dir ? ` · ${p.dir === TRASH ? 'trash' : p.dir}` : '') + ` · ${photos.filter(x => !x.dir).length} left`);
+    status(`${i + 1} / ${photos.length}` + (p.dir ? ` · ${p.dir === TRASH ? 'trash' : p.dir}` : '') +
+        ` · ${photos.filter(x => !x.dir).length} left` + (pending ? ` · saving ${pending}…` : ''));
     bar.replaceChildren(
         button('🗑', p.dir === TRASH, () => move(TRASH), 'trash'),
         ...tags.map(t => button(t, p.dir === t, () => move(t))),
         button('＋', false, addTag),
     );
-    const file = await read(await dir(p.dir), p.file);
-    if (photos[i] !== p) return; // user navigated away while loading
-    URL.revokeObjectURL(url);
-    img.src = url = URL.createObjectURL(file);
+}
+
+async function render() {
+    ui();
+    const p = photos[i]; if (!p) return;
+    for (const [q, u] of cache) if (Math.abs(q.idx - i) > KEEP) { cache.delete(q); u.then(URL.revokeObjectURL); }
+    const u = await load(p);
+    if (photos[i] === p) img.src = u; // unless the user navigated away while loading
+    for (const q of photos.slice(i + 1, i + 1 + AHEAD)) load(q);
 }
 
 async function moveFile(src, from, dst, to) {
@@ -152,36 +177,45 @@ function choose(mine, theirs, folder) {
     return new Promise(resolve => dupe.onclose = () => { urls.forEach(URL.revokeObjectURL); resolve(dupe.returnValue); });
 }
 
+// The real file operation, run in the background queue one at a time.
+async function relocate(p, to) {
+    const { dir: from, file } = p.at;
+    if (from === to) return;
+    const src = await dir(from), dst = await dir(to), trash = await dir(TRASH);
+    const mine = await read(src, file), theirs = to === TRASH ? null : await read(dst, p.name);
+    let at = { dir: to, file: p.name };
+    if (to === TRASH) {
+        at.file = await freeName(trash, p.name);
+        await moveFile(src, file, trash, at.file);
+    } else if (!theirs) {
+        await moveFile(src, file, dst, p.name);
+    } else if (await same(mine, theirs)) {
+        await src.removeEntry(file); // identical copy is already there
+    } else {
+        const keep = await choose(mine, theirs, to);
+        if (keep === 'mine') {
+            await moveFile(dst, p.name, trash, await freeName(trash, p.name));
+            await moveFile(src, file, dst, p.name);
+        } else if (keep === 'theirs') {
+            at = { dir: TRASH, file: await freeName(trash, p.name) };
+            await moveFile(src, file, trash, at.file);
+        } else at = p.at;
+    }
+    p.at = at;
+}
+
 // Tapping the folder the photo is already in moves it back to the root.
-async function move(target) {
-    const p = photos[i]; if (!p) return;
+function move(target) {
+    const p = photos[i]; if (!p || dupe.open) return;
     const to = p.dir === target ? '' : target;
-    try {
-        const src = await dir(p.dir), dst = await dir(to), trash = await dir(TRASH);
-        const mine = await read(src, p.file), theirs = await read(dst, p.name);
-        if (to === TRASH || !theirs) {
-            const as = to === TRASH ? await freeName(trash, p.name) : p.name;
-            await moveFile(src, p.file, dst, as);
-            Object.assign(p, { dir: to, file: as });
-        } else if (await same(mine, theirs)) {
-            await src.removeEntry(p.file); // identical copy is already there
-            Object.assign(p, { dir: to, file: p.name });
-        } else {
-            const keep = await choose(mine, theirs, to);
-            if (keep === 'mine') {
-                await moveFile(dst, p.name, trash, await freeName(trash, p.name));
-                await moveFile(src, p.file, dst, p.name);
-                Object.assign(p, { dir: to, file: p.name });
-            } else if (keep === 'theirs') {
-                const as = await freeName(trash, p.name);
-                await moveFile(src, p.file, trash, as);
-                Object.assign(p, { dir: TRASH, file: as });
-            }
-        }
-        if (to && !tags.includes(to) && to !== TRASH) tags.push(to);
-        if (to && i < photos.length - 1) i++;
-        render();
-    } catch (e) { alert('Move failed: ' + e.message); }
+    p.dir = to;
+    if (to && to !== TRASH && !tags.includes(to)) tags.push(to);
+    if (to && i < photos.length - 1) i++;
+    pending++; p.pending++;
+    p.busy = queue = queue.then(() => relocate(p, to))
+        .catch(e => alert(`Moving "${p.name}" failed: ${e.message}`))
+        .finally(() => { pending--; if (!--p.pending) p.dir = p.at.dir; ui(); });
+    render();
 }
 
 function addTag() {
@@ -205,6 +239,7 @@ document.addEventListener('keydown', e => {
     else if (e.key === 'Delete' || e.key === 'Backspace') move(TRASH);
     else if (/^[1-9]$/.test(e.key) && tags[e.key - 1]) move(tags[e.key - 1]);
 });
+addEventListener('beforeunload', e => { if (pending) e.preventDefault(); }); // don't lose queued moves
 </script>
 </body>
 </html>

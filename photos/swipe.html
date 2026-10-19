@@ -28,8 +28,8 @@
     .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     figure { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
     figure img { width: 100%; height: 40dvh; object-fit: contain; background: #000; border-radius: 8px; }
-    figcaption { font-size: .75rem; color: #aaa; line-height: 1.4; overflow-wrap: anywhere; }
-    figcaption b { color: #eee; }
+    figcaption { font-size: .75rem; color: #aaa; line-height: 1.4; overflow-wrap: anywhere; white-space: pre-line; }
+    figcaption::first-line { color: #eee; font-weight: bold; }
     [hidden] { display: none !important; }
 </style>
 </head>
@@ -55,7 +55,8 @@
             <figure><img alt=""><figcaption></figcaption><button value="mine" class="primary">Keep this one</button></figure>
             <figure><img alt=""><figcaption></figcaption><button value="theirs" class="primary">Keep this one</button></figure>
         </div>
-        <button value="">Keep both, skip</button>
+        <button value="both">Keep both (rename this photo)</button>
+        <button value="">Skip, decide later</button>
     </form>
 </dialog>
 <script type="module">
@@ -74,7 +75,31 @@ const dir = name => {
 const read = (d, name) => d.getFileHandle(name).then(h => h.getFile(), () => null);
 // indexedDB.cmp compares binary keys byte by byte: a fast native equality check
 const same = async (a, b) => a.size === b.size && indexedDB.cmp(await a.arrayBuffer(), await b.arrayBuffer()) === 0;
-const freeName = async (d, name) => await read(d, name) ? `${Date.now()}-${name}` : name;
+// First name not taken in the folder: photo.jpg, photo_2.jpg, photo_3.jpg…
+async function freeName(d, name) {
+    const [, base, ext = ''] = name.match(/^(.*?)(\.[^.]*)?$/);
+    for (let n = 1; ; n++) {
+        const candidate = n === 1 ? name : `${base}_${n}${ext}`;
+        if (!await read(d, candidate)) return candidate;
+    }
+}
+
+// EXIF "date taken" (DateTimeOriginal, else DateTime) of a JPEG as "YYYY-MM-DD hh:mm:ss", or null.
+async function takenAt(f) {
+    try {
+        const v = new DataView(await f.slice(0, 131072).arrayBuffer());
+        if (v.getUint16(0) !== 0xFFD8) return null;
+        for (let o = 2; v.getUint8(o) === 0xFF; o += 2 + v.getUint16(o + 2)) {
+            if (v.getUint16(o) !== 0xFFE1 || v.getUint32(o + 4) !== 0x45786966) continue; // APP1 "Exif"
+            const t = o + 10, le = v.getUint16(t) === 0x4949;
+            const u16 = x => v.getUint16(t + x, le), u32 = x => v.getUint32(t + x, le);
+            const tag = (ifd, id) => { for (let k = 0; k < u16(ifd); k++) if (u16(ifd + 2 + k * 12) === id) return u32(ifd + 10 + k * 12); };
+            const ifd0 = u32(4), exif = tag(ifd0, 0x8769), at = (exif && tag(exif, 0x9003)) ?? tag(ifd0, 0x0132);
+            return at ? String.fromCharCode(...new Uint8Array(v.buffer, t + at, 19)).replace(':', '-').replace(':', '-') : null;
+        }
+    } catch {}
+    return null;
+}
 const status = text => $('#meta').textContent = text;
 
 async function pick() {
@@ -162,13 +187,14 @@ async function moveFile(src, from, dst, to) {
     }
 }
 
-// Shows both versions; resolves to 'mine', 'theirs' or '' (keep both).
-function choose(mine, theirs, folder) {
-    $('#dupeTitle').textContent = `"${mine.name}" already exists in ${folder || 'the root folder'} with different content. Which one to keep? The other goes to trash.`;
+// Shows both versions; resolves to 'mine', 'theirs', 'both' or '' (skip).
+async function choose(mine, theirs, folder) {
+    $('#dupeTitle').textContent = `"${mine.name}" already exists in ${folder || 'the root folder'} with different content. Keep one (the other goes to trash) or both?`;
+    const taken = await Promise.all([mine, theirs].map(takenAt));
     const urls = [mine, theirs].map((f, n) => {
         const fig = dupe.querySelectorAll('figure')[n], im = fig.querySelector('img'), u = URL.createObjectURL(f);
-        const cap = () => fig.querySelector('figcaption').innerHTML =
-            `<b>${n ? 'Already in ' + (folder || 'root') : 'This photo'}</b><br>${(f.size / 1048576).toFixed(2)} MB · ${im.naturalWidth || '?'}×${im.naturalHeight || '?'}<br>modified ${new Date(f.lastModified).toLocaleString()}`;
+        const cap = () => fig.querySelector('figcaption').textContent =
+            `${n ? 'Already in ' + (folder || 'root') : 'This photo'}\n${(f.size / 1048576).toFixed(2)} MB · ${im.naturalWidth || '?'}×${im.naturalHeight || '?'}\ntaken ${taken[n] ?? 'unknown'}\nmodified ${new Date(f.lastModified).toLocaleString()}`;
         im.onload = cap; im.src = u; cap();
         return u;
     });
@@ -199,6 +225,9 @@ async function relocate(p, to) {
         } else if (keep === 'theirs') {
             at = { dir: TRASH, file: await freeName(trash, p.name) };
             await moveFile(src, file, trash, at.file);
+        } else if (keep === 'both') {
+            at.file = await freeName(dst, p.name);
+            await moveFile(src, file, dst, at.file);
         } else at = p.at;
     }
     p.at = at;

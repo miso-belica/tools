@@ -7,3 +7,4 @@ This repo contains small HTML apps. HTML app is a minimalistic self-contained si
 6. Make the app mobile friendly - responsive design with progressive enhancements.
 7. Code should follow well-known best practices: Verify before you act. Ask for permission, not forgiveness. When in doubt, don't. Minimize blast radius. Principle of least astonishment.
 8. Commit finished changes and push them directly to `main` (fast-forward, no PR needed).
+9. Always add every new tool to `README.md` (name and link to the file).

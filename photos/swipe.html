@@ -67,7 +67,7 @@
 const IMG = /\.(jpe?g|png|gif|webp|avif|bmp|mp4|m4v|mov|webm)$/i, VID = /\.(mp4|m4v|mov|webm)$/i, TRASH = '.trash', AHEAD = 3, KEEP = 5;
 const $ = s => document.querySelector(s);
 const img = $('main img'), vid = $('main video'), bar = $('#bar'), dupe = $('#dupe');
-let root, photos = [], tags = [], shown = [], base = new Map(), i = 0, handles = new Map(), cache = new Map(), queue = Promise.resolve(), pending = 0;
+let root, loading = '', photos = [], tags = [], shown = [], base = new Map(), i = 0, handles = new Map(), cache = new Map(), queue = Promise.resolve(), pending = 0;
 
 // Autoplay setting, on unless turned off earlier.
 const auto = $('#autoplay');
@@ -124,38 +124,53 @@ async function pick() {
     try { root = await showDirectoryPicker({ mode: 'readwrite' }); }
     catch (e) { if (e.name !== 'AbortError') alert(e.message); return; }
     cache.forEach(u => u.then(URL.revokeObjectURL));
-    photos = []; tags = []; base = new Map(); handles = new Map(); cache = new Map();
+    photos = []; tags = []; base = new Map(); loading = ''; handles = new Map(); cache = new Map();
     const dirs = [];
     for await (const h of root.values()) {
         if (h.kind === 'file' && IMG.test(h.name)) photos.push({ name: h.name });
         else if (h.kind === 'directory') { dirs.push(h); if (!h.name.startsWith('.')) tags.push(h.name); }
     }
-    for (const t of tags) { // photos already in each tag folder, for ordering tags by use
-        status(`Counting photos in ${t}…`);
-        let n = 0;
-        for await (const f of (await dir(t)).values()) if (f.kind === 'file' && IMG.test(f.name)) n++;
-        base.set(t, n);
-    }
     const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true });
     photos.sort((a, b) => byName(a.name, b.name)); tags.sort(byName);
+    // dir: folder shown in the UI (updated instantly), at: where the file really is (updated by the background queue)
+    photos.forEach((p, n) => Object.assign(p, { idx: n, dir: '', at: { dir: '', file: p.name }, pending: 0 }));
+    i = 0; render();
+    background(root, dirs);
+}
+
+// Runs while triage is already going: the already-sorted check first, then folder counts for the tag order.
+async function background(r, dirs) {
+    const live = () => root === r; // stop when another folder gets opened
+    const progress = text => { loading = text; ui(); };
 
     // Root photos with an identical copy in a subfolder were already sorted (e.g. copied there earlier).
     const sorted = [];
     for (const [n, p] of photos.entries()) {
-        status(`Checking for already sorted photos… ${n + 1} / ${photos.length}`);
-        const mine = await read(root, p.name);
+        if (!live()) return;
+        if (n % 50 === 0) progress(`checking ${n} / ${photos.length}`);
+        if (p.dir || p.pending) continue; // the user got there first
+        const mine = await read(r, p.name); if (!mine) continue;
         for (const d of dirs) {
             const theirs = await read(d, p.name);
-            if (theirs && await same(mine, theirs)) { sorted.push(p); break; }
+            if (theirs && await same(mine, theirs)) { sorted.push([p, d.name]); break; }
         }
     }
-    if (sorted.length && confirm(`${sorted.length} of ${photos.length} photos in the root already have an identical copy in a subfolder. Remove these root copies?`)) {
-        for (const p of sorted) await root.removeEntry(p.name);
-        photos = photos.filter(p => !sorted.includes(p));
+    const todo = sorted.filter(([p]) => !p.dir && !p.pending);
+    if (live() && todo.length && confirm(`${todo.length} of ${photos.length} photos in the root already have an identical copy in a subfolder. Remove these root copies?`))
+        for (const [p, d] of todo) enqueue(p, d); // relocate() sees the identical copy and only removes the root one
+
+    // Counted inside the move queue, so no file is mid-move while a folder is listed.
+    for (const t of [...tags]) {
+        if (!live()) return;
+        progress(`counting ${t}`);
+        await (queue = queue.then(async () => {
+            if (!live()) return;
+            let n = 0;
+            for await (const f of (await dir(t)).values()) if (f.kind === 'file' && IMG.test(f.name)) n++;
+            base.set(t, n - photos.filter(p => p.at.dir === t).length); // our photos are counted by p.dir
+        }).catch(() => {}));
     }
-    // dir: folder shown in the UI (updated instantly), at: where the file really is (updated by the background queue)
-    photos.forEach((p, n) => Object.assign(p, { idx: n, dir: '', at: { dir: '', file: p.name }, pending: 0 }));
-    i = 0; render();
+    progress('');
 }
 
 // Reads the photo into memory once, so its URL keeps working after the file is moved.
@@ -187,7 +202,7 @@ function ui() {
     $('#name').textContent = p.name;
     (VID.test(p.name) ? img : vid).hidden = true;
     status(`${i + 1} / ${photos.length}` + (p.dir ? ` · ${p.dir === TRASH ? 'trash' : p.dir}` : '') +
-        ` · ${photos.filter(x => !x.dir).length} left` + (pending ? ` · saving ${pending}…` : ''));
+        ` · ${photos.filter(x => !x.dir).length} left` + (pending ? ` · saving ${pending}…` : '') + (loading ? ` · ${loading}…` : ''));
     // Most used tags first; sort is stable, so ties stay alphabetical.
     const count = new Map(base);
     for (const x of photos) count.set(x.dir, (count.get(x.dir) ?? 0) + 1);
@@ -260,12 +275,12 @@ async function relocate(p, to) {
         await moveFile(src, file, dst, p.name);
     } else if (await same(mine, theirs)) {
         await src.removeEntry(file); // identical copy is already there
-        base.set(to, base.get(to) - 1); // ...and is now counted as this photo
+        if (base.has(to)) base.set(to, base.get(to) - 1); // ...and is now counted as this photo
     } else {
         const keep = await choose(mine, theirs, to);
         if (keep === 'mine') {
             await moveFile(dst, p.name, trash, await freeName(trash, p.name));
-            base.set(to, base.get(to) - 1);
+            if (base.has(to)) base.set(to, base.get(to) - 1);
             await moveFile(src, file, dst, p.name);
         } else if (keep === 'theirs') {
             at = { dir: TRASH, file: await freeName(trash, p.name) };
@@ -282,9 +297,14 @@ async function relocate(p, to) {
 function move(target) {
     const p = photos[i]; if (!p || dupe.open) return;
     const to = p.dir === target ? '' : target;
-    p.dir = to;
     if (to && to !== TRASH && !tags.includes(to)) tags.push(to);
     if (to && i < photos.length - 1) i++;
+    enqueue(p, to);
+    render();
+}
+
+function enqueue(p, to) {
+    p.dir = to;
     pending++; p.pending++;
     p.busy = queue = queue.then(() => relocate(p, to))
         .catch(e => alert(`Moving "${p.name}" failed: ${e.message}`))
@@ -293,7 +313,6 @@ function move(target) {
             if (VID.test(p.name)) { cache.get(p)?.then(URL.revokeObjectURL); cache.delete(p); if (photos[i] === p) return render(); }
             ui();
         });
-    render();
 }
 
 function addTag() {

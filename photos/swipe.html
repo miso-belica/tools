@@ -64,7 +64,7 @@
 const IMG = /\.(jpe?g|png|gif|webp|avif|bmp)$/i, TRASH = '.trash', AHEAD = 3, KEEP = 5;
 const $ = s => document.querySelector(s);
 const img = $('main img'), bar = $('#bar'), dupe = $('#dupe');
-let root, photos = [], tags = [], i = 0, handles = new Map(), cache = new Map(), queue = Promise.resolve(), pending = 0;
+let root, photos = [], tags = [], shown = [], base = new Map(), i = 0, handles = new Map(), cache = new Map(), queue = Promise.resolve(), pending = 0;
 
 if (!('showDirectoryPicker' in window)) $('#unsupported').hidden = false;
 
@@ -112,11 +112,17 @@ async function pick() {
     try { root = await showDirectoryPicker({ mode: 'readwrite' }); }
     catch (e) { if (e.name !== 'AbortError') alert(e.message); return; }
     cache.forEach(u => u.then(URL.revokeObjectURL));
-    photos = []; tags = []; handles = new Map(); cache = new Map();
+    photos = []; tags = []; base = new Map(); handles = new Map(); cache = new Map();
     const dirs = [];
     for await (const h of root.values()) {
         if (h.kind === 'file' && IMG.test(h.name)) photos.push({ name: h.name });
         else if (h.kind === 'directory') { dirs.push(h); if (!h.name.startsWith('.')) tags.push(h.name); }
+    }
+    for (const t of tags) { // photos already in each tag folder, for ordering tags by use
+        status(`Counting photos in ${t}…`);
+        let n = 0;
+        for await (const f of (await dir(t)).values()) if (f.kind === 'file' && IMG.test(f.name)) n++;
+        base.set(t, n);
     }
     const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true });
     photos.sort((a, b) => byName(a.name, b.name)); tags.sort(byName);
@@ -167,9 +173,13 @@ function ui() {
     $('#name').textContent = p.name;
     status(`${i + 1} / ${photos.length}` + (p.dir ? ` · ${p.dir === TRASH ? 'trash' : p.dir}` : '') +
         ` · ${photos.filter(x => !x.dir).length} left` + (pending ? ` · saving ${pending}…` : ''));
+    // Most used tags first; sort is stable, so ties stay alphabetical.
+    const count = new Map(base);
+    for (const x of photos) count.set(x.dir, (count.get(x.dir) ?? 0) + 1);
+    shown = tags.toSorted((a, b) => (count.get(b) ?? 0) - (count.get(a) ?? 0));
     bar.replaceChildren(
         button('🗑', p.dir === TRASH, () => move(TRASH), 'trash'),
-        ...tags.map(t => {
+        ...shown.map(t => {
             const b = button(t, p.dir === t, () => move(t));
             b.style.setProperty('--c', `hsl(${hue(t)} 55% 32%)`);
             return b;
@@ -227,10 +237,12 @@ async function relocate(p, to) {
         await moveFile(src, file, dst, p.name);
     } else if (await same(mine, theirs)) {
         await src.removeEntry(file); // identical copy is already there
+        base.set(to, base.get(to) - 1); // ...and is now counted as this photo
     } else {
         const keep = await choose(mine, theirs, to);
         if (keep === 'mine') {
             await moveFile(dst, p.name, trash, await freeName(trash, p.name));
+            base.set(to, base.get(to) - 1);
             await moveFile(src, file, dst, p.name);
         } else if (keep === 'theirs') {
             at = { dir: TRASH, file: await freeName(trash, p.name) };
@@ -276,7 +288,7 @@ document.addEventListener('keydown', e => {
     if (e.key === 'ArrowLeft') go(-1);
     else if (e.key === 'ArrowRight') go(1);
     else if (e.key === 'Delete' || e.key === 'Backspace') move(TRASH);
-    else if (/^[1-9]$/.test(e.key) && tags[e.key - 1]) move(tags[e.key - 1]);
+    else if (/^[1-9]$/.test(e.key) && shown[e.key - 1]) move(shown[e.key - 1]);
 });
 addEventListener('beforeunload', e => { if (pending) e.preventDefault(); }); // don't lose queued moves
 </script>

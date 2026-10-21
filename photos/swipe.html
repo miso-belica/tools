@@ -19,7 +19,7 @@
     footer .on { box-shadow: inset 0 0 0 3px #fff; }
     footer #trash.on { background: #dc2626; }
     main { flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; }
-    main img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    main :is(img, video) { max-width: 100%; max-height: 100%; object-fit: contain; }
     main .arrow { position: absolute; top: 0; bottom: 0; width: 56px; background: transparent; border-radius: 0; font-size: 2rem; color: #fff8; }
     #prev { left: 0; } #next { right: 0; }
     #empty { text-align: center; color: #888; padding: 20px; line-height: 1.6; }
@@ -28,7 +28,7 @@
     dialog form { display: flex; flex-direction: column; gap: 12px; }
     .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     figure { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-    figure img { width: 100%; height: 40dvh; object-fit: contain; background: #000; border-radius: 8px; }
+    figure :is(img, video) { width: 100%; height: 40dvh; object-fit: contain; background: #000; border-radius: 8px; }
     figcaption { font-size: .75rem; color: #aaa; line-height: 1.4; overflow-wrap: anywhere; white-space: pre-line; }
     figcaption::first-line { color: #eee; font-weight: bold; }
     [hidden] { display: none !important; }
@@ -41,10 +41,11 @@
 </header>
 <main>
     <div id="empty">
-        <p>Photos in the picked folder are shown one by one.<br>Subfolders become tags; 🗑 moves to <code>.trash</code>.</p>
+        <p>Photos and videos in the picked folder are shown one by one.<br>Subfolders become tags; 🗑 moves to <code>.trash</code>.</p>
         <p id="unsupported" hidden>⚠️ This browser can't open folders. Use Chrome.</p>
     </div>
     <img alt="" hidden>
+    <video controls playsinline hidden></video>
     <button class="arrow" id="prev" hidden aria-label="Previous">‹</button>
     <button class="arrow" id="next" hidden aria-label="Next">›</button>
 </main>
@@ -61,9 +62,9 @@
     </form>
 </dialog>
 <script type="module">
-const IMG = /\.(jpe?g|png|gif|webp|avif|bmp)$/i, TRASH = '.trash', AHEAD = 3, KEEP = 5;
+const IMG = /\.(jpe?g|png|gif|webp|avif|bmp|mp4|m4v|mov|webm)$/i, VID = /\.(mp4|m4v|mov|webm)$/i, TRASH = '.trash', AHEAD = 3, KEEP = 5;
 const $ = s => document.querySelector(s);
-const img = $('main img'), bar = $('#bar'), dupe = $('#dupe');
+const img = $('main img'), vid = $('main video'), bar = $('#bar'), dupe = $('#dupe');
 let root, photos = [], tags = [], shown = [], base = new Map(), i = 0, handles = new Map(), cache = new Map(), queue = Promise.resolve(), pending = 0;
 
 if (!('showDirectoryPicker' in window)) $('#unsupported').hidden = false;
@@ -151,6 +152,8 @@ function load(p) {
     if (!cache.has(p)) cache.set(p, (async () => {
         await p.busy;
         const f = await read(await dir(p.at.dir), p.at.file);
+        // Videos are too big for memory: the URL points at the file and is dropped once the file moves.
+        if (VID.test(p.name)) return URL.createObjectURL(f);
         const u = URL.createObjectURL(new Blob([await f.arrayBuffer()], { type: f.type }));
         const im = new Image(); im.src = u; await im.decode().catch(() => {});
         return u;
@@ -167,10 +170,11 @@ function button(label, on, onclick, id) {
 
 function ui() {
     const p = photos[i];
-    img.hidden = bar.hidden = $('#prev').hidden = $('#next').hidden = !p;
+    img.hidden = vid.hidden = bar.hidden = $('#prev').hidden = $('#next').hidden = !p;
     $('#empty').hidden = !!p;
     if (!p) { $('#name').textContent = root?.name ?? 'Photo Triage'; status(root ? 'All sorted 🎉 No photos left in the root folder' : 'Pick a folder to start'); return; }
     $('#name').textContent = p.name;
+    (VID.test(p.name) ? img : vid).hidden = true;
     status(`${i + 1} / ${photos.length}` + (p.dir ? ` · ${p.dir === TRASH ? 'trash' : p.dir}` : '') +
         ` · ${photos.filter(x => !x.dir).length} left` + (pending ? ` · saving ${pending}…` : ''));
     // Most used tags first; sort is stable, so ties stay alphabetical.
@@ -190,10 +194,15 @@ function ui() {
 
 async function render() {
     ui();
-    const p = photos[i]; if (!p) return;
+    const p = photos[i];
+    if (photos[i]?.name !== vid.dataset.name) vid.pause();
+    if (!p) return;
     for (const [q, u] of cache) if (Math.abs(q.idx - i) > KEEP) { cache.delete(q); u.then(URL.revokeObjectURL); }
     const u = await load(p);
-    if (photos[i] === p) img.src = u; // unless the user navigated away while loading
+    if (photos[i] === p) { // unless the user navigated away while loading
+        if (!VID.test(p.name)) img.src = u;
+        else if (vid.src !== u) { vid.src = u; vid.dataset.name = p.name; }
+    }
     for (const q of photos.slice(i + 1, i + 1 + AHEAD)) load(q);
 }
 
@@ -212,10 +221,13 @@ async function choose(mine, theirs, folder) {
     $('#dupeTitle').textContent = `"${mine.name}" already exists in ${folder || 'the root folder'} with different content. Keep one (the other goes to trash) or both?`;
     const taken = await Promise.all([mine, theirs].map(takenAt));
     const urls = [mine, theirs].map((f, n) => {
-        const fig = dupe.querySelectorAll('figure')[n], im = fig.querySelector('img'), u = URL.createObjectURL(f);
+        const fig = dupe.querySelectorAll('figure')[n], u = URL.createObjectURL(f);
+        const im = document.createElement(VID.test(f.name) ? 'video' : 'img');
+        im.controls = im.muted = true;
+        fig.querySelector(':is(img, video)').replaceWith(im);
         const cap = () => fig.querySelector('figcaption').textContent =
-            `${n ? 'Already in ' + (folder || 'root') : 'This photo'}\n${(f.size / 1048576).toFixed(2)} MB · ${im.naturalWidth || '?'}×${im.naturalHeight || '?'}\ntaken ${taken[n] ?? 'unknown'}\nmodified ${new Date(f.lastModified).toLocaleString()}`;
-        im.onload = cap; im.src = u; cap();
+            `${n ? 'Already in ' + (folder || 'root') : 'This photo'}\n${(f.size / 1048576).toFixed(2)} MB · ${im.naturalWidth || im.videoWidth || '?'}×${im.naturalHeight || im.videoHeight || '?'}\ntaken ${taken[n] ?? 'unknown'}\nmodified ${new Date(f.lastModified).toLocaleString()}`;
+        im.onload = im.onloadedmetadata = cap; im.src = u; cap();
         return u;
     });
     dupe.returnValue = '';
@@ -265,7 +277,11 @@ function move(target) {
     pending++; p.pending++;
     p.busy = queue = queue.then(() => relocate(p, to))
         .catch(e => alert(`Moving "${p.name}" failed: ${e.message}`))
-        .finally(() => { pending--; if (!--p.pending) p.dir = p.at.dir; ui(); });
+        .finally(() => {
+            pending--; if (!--p.pending) p.dir = p.at.dir;
+            if (VID.test(p.name)) { cache.get(p)?.then(URL.revokeObjectURL); cache.delete(p); if (photos[i] === p) return render(); }
+            ui();
+        });
     render();
 }
 

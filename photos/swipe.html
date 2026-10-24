@@ -38,6 +38,9 @@
     figure :is(img, video) { width: 100%; height: 40dvh; object-fit: contain; background: #000; border-radius: 8px; }
     figcaption { max-height: 30dvh; overflow: auto; font-size: .75rem; color: #aaa; line-height: 1.4; overflow-wrap: anywhere; white-space: pre-line; }
     figcaption::first-line { color: #eee; font-weight: bold; }
+    figcaption mark { display: block; background: none; color: #fbbf24; }
+    figcaption summary { cursor: pointer; }
+    figcaption .same summary { color: #4ade80; }
     [hidden] { display: none !important; }
 </style>
 </head>
@@ -67,7 +70,7 @@
         <p id="dupeTitle"></p>
         <div class="pair"></div>
         <button value="both" id="both">Keep both (rename this photo)</button>
-        <button value="">Skip, decide later</button>
+        <button value="skip">Skip, decide later</button>
     </form>
 </dialog>
 <script type="module">
@@ -372,16 +375,25 @@ async function moveFile(src, from, dst, to) {
 async function choose(title, items, both) {
     $('#dupeTitle').textContent = title;
     $('#both').hidden = !both;
-    const urls = [];
-    dupe.querySelector('.pair').replaceChildren(...await Promise.all(items.map(async ([label, f], n) => {
-        const fig = document.createElement('figure'), cap = document.createElement('figcaption'), meta = await exif(f), u = URL.createObjectURL(f);
-        const im = document.createElement(VID.test(f.name) ? 'video' : 'img');
-        const show = () => cap.textContent = `${label}\n${(f.size / 1048576).toFixed(2)} MB · ${im.naturalWidth || im.videoWidth || '?'}×${im.naturalHeight || im.videoHeight || '?'}\nmodified ${new Date(f.lastModified).toLocaleString()}` +
-            Object.entries(meta).map(([k, v]) => `\n${k}: ${v}`).join('');
+    const urls = [], metas = await Promise.all(items.map(([, f]) => exif(f)));
+    // EXIF fields that differ between the files are shown, the identical ones are folded away.
+    const keys = [...new Set(metas.flatMap(Object.keys))], differ = keys.filter(k => new Set(metas.map(m => m[k])).size > 1);
+    const same = keys.filter(k => !differ.includes(k));
+    dupe.querySelector('.pair').replaceChildren(...items.map(([label, f], n) => {
+        const fig = document.createElement('figure'), cap = document.createElement('figcaption'), head = document.createElement('span'), u = URL.createObjectURL(f);
+        const im = document.createElement(VID.test(f.name) ? 'video' : 'img'), lines = ks => ks.map(k => `${k}: ${metas[n][k] ?? '—'}`).join('\n');
+        const show = () => head.textContent = `${label}\n${(f.size / 1048576).toFixed(2)} MB · ${im.naturalWidth || im.videoWidth || '?'}×${im.naturalHeight || im.videoHeight || '?'}\nmodified ${new Date(f.lastModified).toLocaleString()}\n`;
         im.controls = im.muted = true; im.onload = im.onloadedmetadata = show; im.src = u; show(); urls.push(u);
+        cap.append(head);
+        if (differ.length) cap.append(Object.assign(document.createElement('mark'), { textContent: lines(differ) }));
+        if (same.length) {
+            const more = Object.assign(document.createElement('details'), { className: differ.length ? '' : 'same' });
+            more.append(Object.assign(document.createElement('summary'), { textContent: differ.length ? `${same.length} more EXIF fields, identical` : `✓ all ${same.length} EXIF fields identical` }), lines(same));
+            cap.append(more);
+        }
         fig.append(im, cap, Object.assign(document.createElement('button'), { value: n, className: 'primary', textContent: 'Keep this one' }));
         return fig;
-    })));
+    }));
     dupe.returnValue = '';
     dupe.showModal();
     return new Promise(resolve => dupe.onclose = () => { urls.forEach(URL.revokeObjectURL); resolve(dupe.returnValue); });
@@ -406,7 +418,7 @@ async function decide(kept) {
     const fresh = (await Promise.all(kept.map(async c => ({ ...c, f: await read(await dir(c.dir), c.file) })))).filter(c => c.f);
     if (fresh.length < 2) return log(`${kept[0].file}: only one copy left, nothing to decide`);
     const k = await choose(`Identical copies of "${kept[0].file}". Keep one, the others go to trash.`, fresh.map(c => [where(c), c.f]));
-    if (k === '') return false;
+    if (k === '' || k === 'skip') return false;
     await dropAll(fresh.filter(c => c !== fresh[k]).map(c => [c, fresh[k]]), `copies of ${kept[0].file}, kept ${where(fresh[k])}`);
 }
 
@@ -470,7 +482,7 @@ async function relocate(p, to) {
         p.at = there;
         if (base.has(to)) base.set(to, base.get(to) - 1); // ...and is now counted as this photo
     } else {
-        const keep = await choose(`"${p.name}" already exists in ${to || 'the root folder'} with different content. Keep one (the other goes to trash) or both?`,
+        const keep = await choose(`"${p.name}" already exists in ${to || 'the root folder'} with different content. Keep one (the other goes to trash) or both? ← → keep left or right.`,
             [['This photo', mine], [`Already in ${to || 'root'}`, theirs]], true);
         if (keep === '0') { await trash(there, 'replaced'); await put(from, to, p.name); }
         else if (keep === '1') await trash(from, 'replaced');
@@ -529,7 +541,11 @@ let x0;
 $('main').addEventListener('touchstart', e => x0 = e.changedTouches[0].screenX, { passive: true });
 $('main').addEventListener('touchend', e => { const dx = e.changedTouches[0].screenX - x0; if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1); }, { passive: true });
 document.addEventListener('keydown', e => {
-    if (dupe.open) return;
+    if (dupe.open) { // ← keeps the left file, → the right one
+        const keep = { ArrowLeft: 0, ArrowRight: dupe.querySelectorAll('figure').length - 1 }[e.key];
+        if (keep !== undefined) { e.preventDefault(); dupe.close(String(keep)); }
+        return;
+    }
     if (e.key === 'ArrowLeft') go(-1);
     else if (e.key === 'ArrowRight') go(1);
     else if (e.key === 'Delete' || e.key === 'Backspace') move(TRASH);

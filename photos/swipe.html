@@ -104,8 +104,37 @@ const where = loc => (loc.dir ? loc.dir + '/' : '') + loc.file;
 const tagOf = d => d.startsWith(TRASH) ? TRASH : d;
 const photoAt = loc => photos.find(p => p.at.dir === loc.dir && p.at.file === loc.file);
 const read = (d, name) => d.getFileHandle(name).then(h => h.getFile(), () => null);
-// indexedDB.cmp compares binary keys byte by byte: a fast native equality check
-const same = async (a, b) => a.size === b.size && indexedDB.cmp(await a.arrayBuffer(), await b.arrayBuffer()) === 0;
+
+// Splits same-size files into groups of identical content (as indexes), reading growing chunks
+// so a whole video never sits in memory. Runs in a worker: keep it self-contained.
+async function identical(files) {
+    let groups = [files.map((_, k) => k)];
+    for (let o = 0, c = 65536; o < files[0].size && groups.length; o += c, c = Math.min(c * 2, 8388608)) {
+        const next = [];
+        for (const g of groups) {
+            const parts = [];
+            for (const k of g) {
+                const b = await files[k].slice(o, o + c).arrayBuffer().catch(() => null);
+                if (!b) continue; // moved or deleted meanwhile
+                // indexedDB.cmp compares binary keys byte by byte: a fast native equality check
+                const part = parts.find(([pb]) => indexedDB.cmp(pb, b) === 0);
+                part ? part[1].push(k) : parts.push([b, [k]]);
+            }
+            next.push(...parts.map(([, m]) => m).filter(m => m.length > 1));
+        }
+        groups = next;
+    }
+    return groups;
+}
+
+// Disk-heavy work goes to a few workers so the UI stays smooth; more would only make a disk seek.
+const pool = Array.from({ length: Math.min(4, navigator.hardwareConcurrency || 2) }, () => new Worker(URL.createObjectURL(new Blob([
+    `${identical}\nconst fns = { identical };\nonmessage = async e => postMessage({ id: e.data.id, r: await fns[e.data.fn](e.data.arg).catch(() => null) });`,
+], { type: 'text/javascript' }))));
+const calls = new Map(); let seq = 0;
+pool.forEach(w => w.onmessage = e => { calls.get(e.data.id)(e.data.r); calls.delete(e.data.id); });
+const work = (fn, arg, w = pool[seq % pool.length]) => new Promise(resolve => { calls.set(++seq, resolve); w.postMessage({ id: seq, fn, arg }); });
+const same = async (a, b) => a.size === b.size && (await work('identical', [a, b]))?.length === 1;
 // First name not taken in the folder: photo.jpg, photo_2.jpg, photo_3.jpg…
 async function freeName(d, name) {
     const [, base, ext = ''] = name.match(/^(.*?)(\.[^.]*)?$/);
@@ -396,6 +425,7 @@ document.addEventListener('keydown', e => {
     else if (e.key === 'Delete' || e.key === 'Backspace') move(TRASH);
     else if (/^[1-9]$/.test(e.key) && shown[e.key - 1]) move(shown[e.key - 1]);
 });
+identical([new File(['ab'], 'a'), new File(['ab'], 'b'), new File(['ac'], 'c')]).then(g => console.assert(JSON.stringify(g) === '[[0,1]]', 'identical'));
 console.assert(stamp(23417) === '00:23.417' && stamp(61000.4) === '01:01.000', 'stamp');
 addEventListener('beforeunload', e => { if (pending) e.preventDefault(); }); // don't lose queued moves
 </script>

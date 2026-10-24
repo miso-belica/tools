@@ -36,7 +36,7 @@
     .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     figure { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
     figure :is(img, video) { width: 100%; height: 40dvh; object-fit: contain; background: #000; border-radius: 8px; }
-    figcaption { font-size: .75rem; color: #aaa; line-height: 1.4; overflow-wrap: anywhere; white-space: pre-line; }
+    figcaption { max-height: 30dvh; overflow: auto; font-size: .75rem; color: #aaa; line-height: 1.4; overflow-wrap: anywhere; white-space: pre-line; }
     figcaption::first-line { color: #eee; font-weight: bold; }
     [hidden] { display: none !important; }
 </style>
@@ -129,11 +129,23 @@ async function identical(files) {
 
 // Disk-heavy work goes to a few workers so the UI stays smooth; more would only make a disk seek.
 const pool = Array.from({ length: Math.min(4, navigator.hardwareConcurrency || 2) }, () => new Worker(URL.createObjectURL(new Blob([
-    `${identical}\nconst fns = { identical };\nonmessage = async e => postMessage({ id: e.data.id, r: await fns[e.data.fn](e.data.arg).catch(() => null) });`,
+    `${identical}\n${exif}\n${taken}\nconst fns = { identical, taken };\nonmessage = async e => postMessage({ id: e.data.id, r: await fns[e.data.fn](e.data.arg).catch(() => null) });`,
 ], { type: 'text/javascript' }))));
 const calls = new Map(); let seq = 0;
 pool.forEach(w => w.onmessage = e => { calls.get(e.data.id)(e.data.r); calls.delete(e.data.id); });
 const work = (fn, arg, w = pool[seq % pool.length]) => new Promise(resolve => { calls.set(++seq, resolve); w.postMessage({ id: seq, fn, arg }); });
+// Runs fn over items in the workers, one job per worker at a time so the disk isn't flooded.
+async function parallel(fn, items, live, label) {
+    const out = []; let next = 0;
+    await Promise.all(pool.map(async w => {
+        while (next < items.length && live()) {
+            const k = next++;
+            if (k % 100 === 0) progress(`${label} ${k} / ${items.length}`);
+            out[k] = await work(fn, items[k], w);
+        }
+    }));
+    return out;
+}
 const same = async (a, b) => a.size === b.size && (await work('identical', [a, b]))?.length === 1;
 // First name not taken in the folder: photo.jpg, photo_2.jpg, photo_3.jpg…
 async function freeName(d, name) {
@@ -144,21 +156,51 @@ async function freeName(d, name) {
     }
 }
 
-// EXIF "date taken" (DateTimeOriginal, else DateTime) of a JPEG as "YYYY-MM-DD hh:mm:ss", or null.
-async function takenAt(f) {
+// All EXIF tags of a JPEG (main, Exif and GPS sections) as { name: value }; unknown tags by hex id.
+// Runs in a worker too: keep it self-contained.
+async function exif(f) {
+    const NAMES = {
+        0x010F: 'Make', 0x0110: 'Model', 0x0112: 'Orientation', 0x011A: 'XResolution', 0x011B: 'YResolution', 0x0128: 'ResolutionUnit',
+        0x0131: 'Software', 0x0132: 'DateTime', 0x013B: 'Artist', 0x0213: 'YCbCrPositioning', 0x8298: 'Copyright',
+        0x829A: 'ExposureTime', 0x829D: 'FNumber', 0x8822: 'ExposureProgram', 0x8827: 'ISO', 0x9000: 'ExifVersion',
+        0x9003: 'DateTimeOriginal', 0x9004: 'DateTimeDigitized', 0x9010: 'OffsetTime', 0x9011: 'OffsetTimeOriginal', 0x9012: 'OffsetTimeDigitized',
+        0x9201: 'ShutterSpeedValue', 0x9202: 'ApertureValue', 0x9204: 'ExposureBiasValue', 0x9207: 'MeteringMode', 0x9209: 'Flash',
+        0x920A: 'FocalLength', 0x927C: 'MakerNote', 0x9290: 'SubSecTime', 0x9291: 'SubSecTimeOriginal', 0xA001: 'ColorSpace',
+        0xA002: 'PixelXDimension', 0xA003: 'PixelYDimension', 0xA402: 'ExposureMode', 0xA403: 'WhiteBalance', 0xA405: 'FocalLengthIn35mmFilm',
+        0xA406: 'SceneCaptureType', 0xA420: 'ImageUniqueID', 0xA433: 'LensMake', 0xA434: 'LensModel',
+    };
+    const GPS = { 1: 'GPSLatitudeRef', 2: 'GPSLatitude', 3: 'GPSLongitudeRef', 4: 'GPSLongitude', 5: 'GPSAltitudeRef', 6: 'GPSAltitude', 7: 'GPSTimeStamp', 0x1D: 'GPSDateStamp' };
+    const SIZE = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 7: 1, 9: 4, 10: 8 }, out = {};
     try {
         const v = new DataView(await f.slice(0, 131072).arrayBuffer());
-        if (v.getUint16(0) !== 0xFFD8) return null;
+        if (v.getUint16(0) !== 0xFFD8) return out;
         for (let o = 2; v.getUint8(o) === 0xFF; o += 2 + v.getUint16(o + 2)) {
             if (v.getUint16(o) !== 0xFFE1 || v.getUint32(o + 4) !== 0x45786966) continue; // APP1 "Exif"
             const t = o + 10, le = v.getUint16(t) === 0x4949;
-            const u16 = x => v.getUint16(t + x, le), u32 = x => v.getUint32(t + x, le);
-            const tag = (ifd, id) => { for (let k = 0; k < u16(ifd); k++) if (u16(ifd + 2 + k * 12) === id) return u32(ifd + 10 + k * 12); };
-            const ifd0 = u32(4), exif = tag(ifd0, 0x8769), at = (exif && tag(exif, 0x9003)) ?? tag(ifd0, 0x0132);
-            return at ? String.fromCharCode(...new Uint8Array(v.buffer, t + at, 19)).replace(':', '-').replace(':', '-') : null;
+            const u16 = x => v.getUint16(t + x, le), u32 = x => v.getUint32(t + x, le), s32 = x => v.getInt32(t + x, le);
+            const num = (type, x) => ({ 1: () => v.getUint8(t + x), 3: () => u16(x), 4: () => u32(x), 9: () => s32(x),
+                5: () => `${u32(x)}/${u32(x + 4)}`, 10: () => `${s32(x)}/${s32(x + 4)}` })[type]?.();
+            const ifd = (at, names) => {
+                for (let k = 0; k < u16(at); k++) {
+                    const e = at + 2 + k * 12, id = u16(e), type = u16(e + 2), n = u32(e + 4), len = (SIZE[type] ?? 1) * n, p = len > 4 ? u32(e + 8) : e + 8;
+                    if (names === NAMES && id === 0x8769) ifd(u32(e + 8), NAMES);
+                    else if (names === NAMES && id === 0x8825) ifd(u32(e + 8), GPS);
+                    else out[names[id] ?? (names === GPS ? 'GPS ' : '') + '0x' + id.toString(16).padStart(4, '0')] =
+                        type === 2 ? String.fromCharCode(...new Uint8Array(v.buffer, t + p, n)).replace(/\0+$/, '')
+                        : n <= 4 && num(type, p) !== undefined ? Array.from({ length: n }, (_, j) => num(type, p + j * SIZE[type])).join(', ')
+                        : `(${len} bytes)`;
+                }
+            };
+            ifd(u32(4), NAMES);
+            break;
         }
-    } catch {}
-    return null;
+    } catch {} // cut off or broken EXIF: keep what was read
+    return out;
+}
+// EXIF date taken, else last edit date, as "YYYY:MM:DD hh:mm:ss", or null. Runs in a worker.
+async function taken(f) {
+    const e = await exif(f);
+    return e.DateTimeOriginal ?? e.DateTime ?? null;
 }
 // Same name, same color: hue from a string hash, mixed so similar names get distant hues.
 const hue = s => {
@@ -231,6 +273,14 @@ async function background(r, dirs) {
     for (const e of files) if (e.f && at.has(where(e))) Object.assign(at.get(where(e)), { f: e.f, time: e.f.lastModified });
     order();
     log(`read size and dates of ${files.length} files in ${took(t)}, sorted by modified date`);
+
+    // Date taken from EXIF beats the modified date, which copying often resets.
+    t = performance.now();
+    const shots = photos.filter(p => p.f), dates = await parallel('taken', shots.map(p => p.f), live, 'reading EXIF');
+    if (!live()) return;
+    shots.forEach((p, k) => p.time = Date.parse(dates[k]?.replace(':', '-').replace(':', '-').replace(' ', 'T')) || p.time);
+    order();
+    log(`read EXIF of ${shots.length} photos in ${took(t)}, ${dates.filter(Boolean).length} have a date taken, sorted by it`);
 
     // Root photos with an identical copy in a subfolder were already sorted (e.g. copied there earlier).
     const sorted = [];
@@ -331,14 +381,15 @@ async function moveFile(src, from, dst, to) {
 // Shows both versions; resolves to 'mine', 'theirs', 'both' or '' (skip).
 async function choose(mine, theirs, folder) {
     $('#dupeTitle').textContent = `"${mine.name}" already exists in ${folder || 'the root folder'} with different content. Keep one (the other goes to trash) or both?`;
-    const taken = await Promise.all([mine, theirs].map(takenAt));
+    const meta = await Promise.all([mine, theirs].map(exif));
     const urls = [mine, theirs].map((f, n) => {
         const fig = dupe.querySelectorAll('figure')[n], u = URL.createObjectURL(f);
         const im = document.createElement(VID.test(f.name) ? 'video' : 'img');
         im.controls = im.muted = true;
         fig.querySelector(':is(img, video)').replaceWith(im);
         const cap = () => fig.querySelector('figcaption').textContent =
-            `${n ? 'Already in ' + (folder || 'root') : 'This photo'}\n${(f.size / 1048576).toFixed(2)} MB · ${im.naturalWidth || im.videoWidth || '?'}×${im.naturalHeight || im.videoHeight || '?'}\ntaken ${taken[n] ?? 'unknown'}\nmodified ${new Date(f.lastModified).toLocaleString()}`;
+            `${n ? 'Already in ' + (folder || 'root') : 'This photo'}\n${(f.size / 1048576).toFixed(2)} MB · ${im.naturalWidth || im.videoWidth || '?'}×${im.naturalHeight || im.videoHeight || '?'}\nmodified ${new Date(f.lastModified).toLocaleString()}` +
+            Object.entries(meta[n]).map(([k, v]) => `\n${k}: ${v}`).join('');
         im.onload = im.onloadedmetadata = cap; im.src = u; cap();
         return u;
     });

@@ -273,9 +273,10 @@ async function background(r) {
         await Promise.all(files.slice(k, k + 100).map(async e => e.f = await (e.h ? e.h.getFile().catch(() => null) : read(await dir(e.dir), e.file))));
     if (!live()) return;
     const at = new Map(photos.map(p => [where(p.at), p]));
-    for (const e of files) if (e.f && at.has(where(e))) Object.assign(at.get(where(e)), { f: e.f, time: e.f.lastModified });
+    // A date in the name beats the modified date, which copying often resets.
+    for (const e of files) if (e.f && at.has(where(e))) { const p = at.get(where(e)); Object.assign(p, { f: e.f, time: nameDate(p.name) || e.f.lastModified }); }
     order();
-    log(`read size and dates of ${files.length} files in ${took(t)}, sorted by modified date`);
+    log(`read size and dates of ${files.length} files in ${took(t)}, ${photos.filter(p => nameDate(p.name)).length} photos have a date in the name, sorted by it, else by modified date`);
 
     // Date taken from EXIF beats the modified date, which copying often resets.
     t = performance.now();
@@ -296,7 +297,16 @@ async function background(r) {
     progress('');
 }
 
-// Sorts by p.time (modified date, later EXIF date taken), then name; stays on the current photo.
+// Date and optional time in names like VID-20230716-WA0006.mp4, "2023-12-08 15.37.08.jpg", 20250829_193447.jpg
+// or 2023_07_16T10-20-30.jpg, as local-time milliseconds; NaN when there is none or it is not a real date.
+function nameDate(name) {
+    const m = name.match(/(?<!\d)((?:19|20)\d\d)[-_ ]?(\d\d)[-_ ]?(\d\d)(?:[T_\- ]?(\d\d)[-_.:]?(\d\d)[-_.:]?(\d\d))?(?!\d)/);
+    if (!m) return NaN;
+    const [y, mo, d, h, mi, s] = m.slice(1).map(x => +(x ?? 0)), date = new Date(y, mo - 1, d, h, mi, s);
+    return date.getMonth() === mo - 1 && date.getDate() === d && h < 24 && mi < 60 && s < 60 ? date.getTime() : NaN;
+}
+
+// Sorts by p.time (date in the name, else modified date; later EXIF date taken), then name; stays on the current photo.
 function order() {
     const cur = photos[i];
     photos.sort((a, b) => (a.time ?? 0) - (b.time ?? 0) || byName(a.name, b.name));
@@ -572,6 +582,10 @@ document.addEventListener('keydown', e => {
     else if (/^[1-9]$/.test(e.key) && shown[e.key - 1]) move(shown[e.key - 1]);
 });
 identical([new File(['ab'], 'a'), new File(['ab'], 'b'), new File(['ac'], 'c')]).then(g => console.assert(JSON.stringify(g) === '[[0,1]]', 'identical'));
+console.assert([
+    ['VID-20230716-WA0006.mp4', [2023, 6, 16]], ['2023-12-08 15.37.08.jpg', [2023, 11, 8, 15, 37, 8]], ['20250829_193447.jpg', [2025, 7, 29, 19, 34, 47]],
+    ['IMG_2023_07_16T10-20-30.jpg', [2023, 6, 16, 10, 20, 30]], ['2023-12-13 10.16.01-1.jpg', [2023, 11, 13, 10, 16, 1]],
+].every(([n, d]) => nameDate(n) === new Date(...d).getTime()) && [nameDate('IMG_1234.jpg'), nameDate('20231340.jpg'), nameDate('120230716.jpg')].every(Number.isNaN), 'nameDate');
 console.assert(stamp(23417) === '00:23.417' && stamp(61000.4) === '01:01.000', 'stamp');
 addEventListener('beforeunload', e => { if (pending) e.preventDefault(); }); // don't lose queued moves
 </script>

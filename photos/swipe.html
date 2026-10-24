@@ -238,7 +238,7 @@ async function pick() {
         if (root !== r) return; // another folder got opened
         if (h.kind === 'file' && IMG.test(h.name)) {
             // dir: folder shown in the UI (updated instantly), at: where the file really is (updated by the background queue)
-            photos.push({ name: h.name, idx: photos.length, dir: '', at: { dir: '', file: h.name }, pending: 0 });
+            photos.push({ name: h.name, h, idx: photos.length, dir: '', at: { dir: '', file: h.name }, pending: 0 });
             if (photos.length === 1) render();
             else if (photos.length % 100 === 0) progress(`listing ${photos.length}`);
         } else if (h.kind === 'directory' && !h.name.startsWith('.')) tags.push(h.name);
@@ -254,21 +254,23 @@ async function pick() {
 async function background(r) {
     const live = () => root === r; // stop when another folder gets opened
 
-    // Snapshot of every media file with its size and dates, taken inside the move queue so no file is mid-move.
+    // Snapshot of every media file with its size and dates. Each folder is listed inside the move queue,
+    // so no file is mid-move while its folder is counted; the queue is held one folder at a time only.
     let t = performance.now();
     const files = [];
     progress('reading file info');
-    await exclusive(async () => {
-        for (const p of photos) if (!p.at.dir) files.push({ dir: '', file: p.at.file });
-        for (const d of tags) {
-            if (!live()) return;
+    for (const p of photos) if (!p.at.dir) files.push({ dir: '', file: p.at.file, h: p.at.file === p.name ? p.h : null });
+    for (const d of tags) {
+        if (!live()) return;
+        await exclusive(async () => {
             let n = 0;
-            for await (const h of (await dir(d)).values()) if (h.kind === 'file' && IMG.test(h.name)) { files.push({ dir: d, file: h.name }); n++; }
+            for await (const h of (await dir(d)).values()) if (h.kind === 'file' && IMG.test(h.name)) { files.push({ dir: d, file: h.name, h }); n++; }
             base.set(d, n - photos.filter(p => p.at.dir === d).length); // our photos are counted by p.dir
-        }
-        for (let k = 0; k < files.length && live(); k += 100)
-            await Promise.all(files.slice(k, k + 100).map(async e => e.f = await read(await dir(e.dir), e.file)));
-    });
+        });
+    }
+    // Outside the queue: a file moved meanwhile fails to read and is left out (null).
+    for (let k = 0; k < files.length && live(); k += 100)
+        await Promise.all(files.slice(k, k + 100).map(async e => e.f = await (e.h ? e.h.getFile().catch(() => null) : read(await dir(e.dir), e.file))));
     if (!live()) return;
     const at = new Map(photos.map(p => [where(p.at), p]));
     for (const e of files) if (e.f && at.has(where(e))) Object.assign(at.get(where(e)), { f: e.f, time: e.f.lastModified });

@@ -19,7 +19,13 @@
     footer button { background: var(--c, #2a2a2a); }
     footer .on { box-shadow: inset 0 0 0 3px #fff; }
     footer #trash.on { background: #dc2626; }
-    main { flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; }
+    #row { flex: 1; min-height: 0; display: flex; position: relative; }
+    aside { width: 320px; min-width: 160px; max-width: 90vw; resize: horizontal; overflow: auto; background: #111; border-right: 1px solid #2a2a2a; }
+    #log { list-style: none; padding: 8px; display: flex; flex-direction: column; gap: 6px; font-size: .75rem; line-height: 1.4; overflow-wrap: anywhere; }
+    #log time { color: #888; font-variant-numeric: tabular-nums; margin-right: 6px; }
+    #log button { padding: 4px 8px; margin-left: 6px; }
+    @media (max-width: 700px) { aside { position: absolute; inset: 0 auto 0 0; z-index: 1; } }
+    main { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; justify-content: center; }
     main :is(img, video) { max-width: 100%; max-height: 100%; object-fit: contain; }
     main .arrow { position: absolute; top: 0; bottom: 0; width: 56px; background: transparent; border-radius: 0; font-size: 2rem; color: #fff8; }
     #prev { left: 0; } #next { right: 0; }
@@ -39,8 +45,11 @@
 <header>
     <div id="info"><div id="name">Photo Triage</div><div id="meta">Pick a folder to start</div></div>
     <label><input type="checkbox" id="autoplay" checked> Autoplay</label>
+    <button id="logToggle" aria-label="Toggle log">Log</button>
     <button class="primary" id="pick">Open folder</button>
 </header>
+<div id="row">
+<aside><ol id="log" aria-live="polite"></ol></aside>
 <main>
     <div id="empty">
         <p>Photos and videos in the picked folder are shown one by one.<br>Subfolders become tags; 🗑 moves to <code>.trash</code>.</p>
@@ -51,6 +60,7 @@
     <button class="arrow" id="prev" hidden aria-label="Previous">‹</button>
     <button class="arrow" id="next" hidden aria-label="Next">›</button>
 </main>
+</div>
 <footer id="bar" hidden></footer>
 <dialog id="dupe">
     <form method="dialog">
@@ -67,7 +77,7 @@
 const IMG = /\.(jpe?g|png|gif|webp|avif|bmp|mp4|m4v|mov|webm)$/i, VID = /\.(mp4|m4v|mov|webm)$/i, TRASH = '.trash', AHEAD = 3, KEEP = 5;
 const $ = s => document.querySelector(s);
 const img = $('main img'), vid = $('main video'), bar = $('#bar'), dupe = $('#dupe');
-let root, loading = '', photos = [], tags = [], shown = [], base = new Map(), i = 0, handles = new Map(), cache = new Map(), queue = Promise.resolve(), pending = 0;
+let t0 = performance.now(), root, loading = '', photos = [], tags = [], shown = [], base = new Map(), i = 0, handles = new Map(), cache = new Map(), queue = Promise.resolve(), pending = 0;
 
 // Autoplay setting, on unless turned off earlier.
 const auto = $('#autoplay');
@@ -120,9 +130,24 @@ const hue = s => {
 };
 const status = text => $('#meta').textContent = text;
 
+// Log panel: in memory only, a fresh one per opened folder. Hidden by default on phones.
+const aside = $('aside'), logList = $('#log');
+aside.hidden = matchMedia('(max-width: 700px)').matches;
+$('#logToggle').onclick = () => aside.hidden = !aside.hidden;
+// Milliseconds as MM:SS.mmm
+const stamp = ms => { ms = Math.round(ms); return `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${(ms % 60000 / 1000).toFixed(3).padStart(6, '0')}`; };
+const took = t => stamp(performance.now() - t);
+function log(text, ...buttons) {
+    const li = document.createElement('li'), atEnd = aside.scrollTop + aside.clientHeight >= aside.scrollHeight - 4;
+    li.append(Object.assign(document.createElement('time'), { textContent: stamp(performance.now() - t0) }), text, ...buttons);
+    logList.append(li);
+    if (atEnd) aside.scrollTop = aside.scrollHeight;
+}
+
 async function pick() {
     try { root = await showDirectoryPicker({ mode: 'readwrite' }); }
     catch (e) { if (e.name !== 'AbortError') alert(e.message); return; }
+    t0 = performance.now(); logList.replaceChildren(); log(`opened folder "${root.name}"`);
     cache.forEach(u => u.then(URL.revokeObjectURL));
     photos = []; tags = []; base = new Map(); loading = ''; handles = new Map(); cache = new Map();
     const dirs = [];
@@ -132,6 +157,7 @@ async function pick() {
     }
     const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true });
     photos.sort((a, b) => byName(a.name, b.name)); tags.sort(byName);
+    log(`listed ${photos.length} photos and ${tags.length} folders`);
     // dir: folder shown in the UI (updated instantly), at: where the file really is (updated by the background queue)
     photos.forEach((p, n) => Object.assign(p, { idx: n, dir: '', at: { dir: '', file: p.name }, pending: 0 }));
     i = 0; render();
@@ -307,7 +333,7 @@ function enqueue(p, to) {
     p.dir = to;
     pending++; p.pending++;
     p.busy = queue = queue.then(() => relocate(p, to))
-        .catch(e => alert(`Moving "${p.name}" failed: ${e.message}`))
+        .catch(e => { log(`⚠️ moving ${p.name} failed: ${e.message}`); alert(`Moving "${p.name}" failed: ${e.message}`); })
         .finally(() => {
             pending--; if (!--p.pending) p.dir = p.at.dir;
             if (VID.test(p.name)) { cache.get(p)?.then(URL.revokeObjectURL); cache.delete(p); if (photos[i] === p) return render(); }
@@ -336,6 +362,7 @@ document.addEventListener('keydown', e => {
     else if (e.key === 'Delete' || e.key === 'Backspace') move(TRASH);
     else if (/^[1-9]$/.test(e.key) && shown[e.key - 1]) move(shown[e.key - 1]);
 });
+console.assert(stamp(23417) === '00:23.417' && stamp(61000.4) === '01:01.000', 'stamp');
 addEventListener('beforeunload', e => { if (pending) e.preventDefault(); }); // don't lose queued moves
 </script>
 </body>

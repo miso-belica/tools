@@ -129,6 +129,8 @@ const hue = s => {
     return (Math.imul(h ^ h >>> 15, 0x2c1b3c6d) >>> 0) % 360;
 };
 const status = text => $('#meta').textContent = text;
+const progress = text => { loading = text; ui(); };
+const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true });
 
 // Log panel: in memory only, a fresh one per opened folder. Hidden by default on phones.
 const aside = $('aside'), logList = $('#log');
@@ -149,25 +151,28 @@ async function pick() {
     catch (e) { if (e.name !== 'AbortError') alert(e.message); return; }
     t0 = performance.now(); logList.replaceChildren(); log(`opened folder "${root.name}"`);
     cache.forEach(u => u.then(URL.revokeObjectURL));
-    photos = []; tags = []; base = new Map(); loading = ''; handles = new Map(); cache = new Map();
-    const dirs = [];
-    for await (const h of root.values()) {
-        if (h.kind === 'file' && IMG.test(h.name)) photos.push({ name: h.name });
-        else if (h.kind === 'directory') { dirs.push(h); if (!h.name.startsWith('.')) tags.push(h.name); }
+    photos = []; tags = []; base = new Map(); handles = new Map(); cache = new Map(); i = 0; progress('listing');
+    const r = root, dirs = [];
+    // Triage starts with the first photo found, in disk order; the background sorts them later.
+    for await (const h of r.values()) {
+        if (root !== r) return; // another folder got opened
+        if (h.kind === 'file' && IMG.test(h.name)) {
+            // dir: folder shown in the UI (updated instantly), at: where the file really is (updated by the background queue)
+            photos.push({ name: h.name, idx: photos.length, dir: '', at: { dir: '', file: h.name }, pending: 0 });
+            if (photos.length === 1) render();
+            else if (photos.length % 100 === 0) progress(`listing ${photos.length}`);
+        } else if (h.kind === 'directory') { dirs.push(h); if (!h.name.startsWith('.')) tags.push(h.name); }
     }
-    const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true });
-    photos.sort((a, b) => byName(a.name, b.name)); tags.sort(byName);
-    log(`listed ${photos.length} photos and ${tags.length} folders`);
-    // dir: folder shown in the UI (updated instantly), at: where the file really is (updated by the background queue)
-    photos.forEach((p, n) => Object.assign(p, { idx: n, dir: '', at: { dir: '', file: p.name }, pending: 0 }));
-    i = 0; render();
+    tags.sort(byName);
+    log(`listed ${photos.length} photos and ${tags.length} folders in ${took(t0)}`);
+    progress('');
+    if (!photos.length) render();
     background(root, dirs);
 }
 
 // Runs while triage is already going: the already-sorted check first, then folder counts for the tag order.
 async function background(r, dirs) {
     const live = () => root === r; // stop when another folder gets opened
-    const progress = text => { loading = text; ui(); };
 
     // Root photos with an identical copy in a subfolder were already sorted (e.g. copied there earlier).
     const sorted = [];

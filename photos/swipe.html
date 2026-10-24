@@ -77,7 +77,7 @@
 const IMG = /\.(jpe?g|png|gif|webp|avif|bmp|mp4|m4v|mov|webm)$/i, VID = /\.(mp4|m4v|mov|webm)$/i, TRASH = '.trash', AHEAD = 3, KEEP = 5;
 const $ = s => document.querySelector(s);
 const img = $('main img'), vid = $('main video'), bar = $('#bar'), dupe = $('#dupe');
-let t0 = performance.now(), root, loading = '', photos = [], tags = [], shown = [], base = new Map(), i = 0, handles = new Map(), cache = new Map(), queue = Promise.resolve(), pending = 0;
+let t0 = performance.now(), touched = false, root, loading = '', photos = [], tags = [], shown = [], base = new Map(), i = 0, handles = new Map(), cache = new Map(), queue = Promise.resolve(), pending = 0;
 
 // Autoplay setting, on unless turned off earlier.
 const auto = $('#autoplay');
@@ -231,7 +231,7 @@ async function pick() {
     catch (e) { if (e.name !== 'AbortError') alert(e.message); return; }
     t0 = performance.now(); logList.replaceChildren(); log(`opened folder "${root.name}"`);
     cache.forEach(u => u.then(URL.revokeObjectURL));
-    photos = []; tags = []; base = new Map(); handles = new Map(); cache = new Map(); i = 0; progress('listing');
+    photos = []; tags = []; base = new Map(); handles = new Map(); cache = new Map(); i = 0; touched = false; progress('listing');
     const r = root;
     // Triage starts with the first photo found, in disk order; the background sorts them later.
     for await (const h of r.values()) {
@@ -311,7 +311,7 @@ function order() {
     const cur = photos[i];
     photos.sort((a, b) => (a.time ?? 0) - (b.time ?? 0) || byName(a.name, b.name));
     photos.forEach((p, n) => p.idx = n);
-    i = Math.max(0, photos.indexOf(cur));
+    i = touched ? Math.max(0, photos.indexOf(cur)) : 0; // start from the first photo until the user moves around
     render();
 }
 
@@ -525,8 +525,11 @@ function move(target) {
     const p = photos[i]; if (!p || dupe.open) return;
     const to = p.dir === target ? '' : target;
     if (to && to !== TRASH && !tags.includes(to)) tags.push(to);
-    if (to && i < photos.length - 1) i++;
+    touched = true;
     enqueue(p, to);
+    // Next photo still to triage, wrapping around to the start
+    const next = to && [...photos.slice(i + 1), ...photos.slice(0, i)].find(q => !q.dir);
+    if (next) i = next.idx;
     render();
 }
 
@@ -562,7 +565,7 @@ function addTag() {
     move(name);
 }
 
-function go(d) { const n = i + d; if (n >= 0 && n < photos.length) { i = n; render(); } }
+function go(d) { const n = i + d; touched = true; if (n >= 0 && n < photos.length) { i = n; render(); } }
 
 $('#pick').onclick = pick;
 $('#prev').onclick = () => go(-1);

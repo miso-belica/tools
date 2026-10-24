@@ -246,7 +246,7 @@ async function pick() {
     background(r);
 }
 
-// Runs while triage is already going: the already-sorted check first, then folder counts for the tag order.
+// Runs while triage is already going: file info and folder counts, sort by modified date, then by EXIF date, then duplicates.
 async function background(r) {
     const live = () => root === r; // stop when another folder gets opened
 

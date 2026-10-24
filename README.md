@@ -10,4 +10,4 @@
 1. [NutriTrack](https://miso-belica.github.io/tools/nutrition-tracker.html)
 1. [Rodinný tanier](https://miso-belica.github.io/tools/food-monitor.html)
 1. [Photo Organizer](https://miso-belica.github.io/tools/photos/organizer.html)
-1. [Photo Triage](https://miso-belica.github.io/tools/photos/swipe.html)
+1. [Photo Triage](https://miso-belica.github.io/tools/photos/triage.html)

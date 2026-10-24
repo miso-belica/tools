@@ -81,11 +81,11 @@ let t0 = performance.now(), touched = false, root, loading = '', photos = [], ta
 
 // Autoplay setting, on unless turned off earlier.
 const auto = $('#autoplay');
-try { auto.checked = localStorage.getItem('swipe.autoplay') !== 'off'; } catch {}
+try { auto.checked = localStorage.getItem('triage.autoplay') !== 'off'; } catch {}
 vid.autoplay = auto.checked;
 auto.onchange = () => {
     vid.autoplay = auto.checked;
-    try { localStorage.setItem('swipe.autoplay', auto.checked ? 'on' : 'off'); } catch {}
+    try { localStorage.setItem('triage.autoplay', auto.checked ? 'on' : 'off'); } catch {}
 };
 
 if (!('showDirectoryPicker' in window)) $('#unsupported').hidden = false;

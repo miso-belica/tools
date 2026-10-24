@@ -52,7 +52,7 @@
 <aside><ol id="log" aria-live="polite"></ol></aside>
 <main>
     <div id="empty">
-        <p>Photos and videos in the picked folder are shown one by one.<br>Subfolders become tags; 🗑 moves to <code>.trash</code>.</p>
+        <p>Photos and videos in the picked folder are shown one by one.<br>Subfolders become tags; 🗑 moves to <code>.trash</code>, undo from the log.</p>
         <p id="unsupported" hidden>⚠️ This browser can't open folders. Use Chrome.</p>
     </div>
     <img alt="" hidden>
@@ -90,11 +90,19 @@ auto.onchange = () => {
 
 if (!('showDirectoryPicker' in window)) $('#unsupported').hidden = false;
 
-const dir = name => {
-    if (!name) return root;
-    if (!handles.has(name)) handles.set(name, root.getDirectoryHandle(name, { create: true }));
-    return handles.get(name);
+// Folder by path relative to root, like "Holidays" or ".trash/manual/_root"; created when missing.
+const dir = path => {
+    if (!path) return root;
+    if (!handles.has(path)) {
+        const k = path.lastIndexOf('/'), parent = k < 0 ? root : dir(path.slice(0, k));
+        handles.set(path, Promise.resolve(parent).then(d => d.getDirectoryHandle(path.slice(k + 1), { create: true })));
+    }
+    return handles.get(path);
 };
+const where = loc => (loc.dir ? loc.dir + '/' : '') + loc.file;
+// Every trash subfolder shows as the one 🗑 tag.
+const tagOf = d => d.startsWith(TRASH) ? TRASH : d;
+const photoAt = loc => photos.find(p => p.at.dir === loc.dir && p.at.file === loc.file);
 const read = (d, name) => d.getFileHandle(name).then(h => h.getFile(), () => null);
 // indexedDB.cmp compares binary keys byte by byte: a fast native equality check
 const same = async (a, b) => a.size === b.size && indexedDB.cmp(await a.arrayBuffer(), await b.arrayBuffer()) === 0;
@@ -194,12 +202,12 @@ async function background(r, dirs) {
     for (const t of [...tags]) {
         if (!live()) return;
         progress(`counting ${t}`);
-        await (queue = queue.then(async () => {
+        await exclusive(async () => {
             if (!live()) return;
             let n = 0;
             for await (const f of (await dir(t)).values()) if (f.kind === 'file' && IMG.test(f.name)) n++;
             base.set(t, n - photos.filter(p => p.at.dir === t).length); // our photos are counted by p.dir
-        }).catch(() => {}));
+        });
     }
     progress('');
 }
@@ -292,36 +300,43 @@ async function choose(mine, theirs, folder) {
     return new Promise(resolve => dupe.onclose = () => { urls.forEach(URL.revokeObjectURL); resolve(dupe.returnValue); });
 }
 
+// Moves a file into folder `to` (as name_2… when the name is taken) and keeps the photo there in sync.
+async function put(from, to, name = from.file) {
+    const dst = await dir(to), file = await freeName(dst, name), p = photoAt(from);
+    await moveFile(await dir(from.dir), from.file, dst, file);
+    const at = { dir: to, file };
+    if (p) { p.at = at; if (!p.pending) settle(p); }
+    else for (const [d, n] of [[from.dir, -1], [to, 1]]) if (base.has(d)) base.set(d, base.get(d) + n);
+    return at;
+}
+
+// Moves a file to .trash/<kind>/<its folder>/ and logs it with an undo button.
+async function trash(loc, kind) {
+    const at = await put(loc, `${TRASH}/${kind}/${loc.dir || '_root'}`);
+    log(`trashed ${where(loc)} → ${where(at)}`, once('Undo', () => task(async () => log(`restored ${where(await put(at, loc.dir, loc.file))}`))));
+    return at;
+}
+
 // The real file operation, run in the background queue one at a time.
 async function relocate(p, to) {
-    const { dir: from, file } = p.at;
-    if (from === to) return;
-    const src = await dir(from), dst = await dir(to), trash = await dir(TRASH);
-    const mine = await read(src, file), theirs = to === TRASH ? null : await read(dst, p.name);
-    let at = { dir: to, file: p.name };
-    if (to === TRASH) {
-        at.file = await freeName(trash, p.name);
-        await moveFile(src, file, trash, at.file);
-    } else if (!theirs) {
-        await moveFile(src, file, dst, p.name);
+    const from = p.at;
+    if (tagOf(from.dir) === to) return;
+    if (to === TRASH) return trash(from, 'manual');
+    const mine = await read(await dir(from.dir), from.file), there = { dir: to, file: p.name }, theirs = await read(await dir(to), p.name);
+    if (!theirs) {
+        await put(from, to, p.name);
+        log(`moved ${where(from)} → ${to || 'root'}`);
     } else if (await same(mine, theirs)) {
-        await src.removeEntry(file); // identical copy is already there
+        // shortcut: undoing this trash restores the file untracked (not shown until the folder is reopened), fine while rare
+        await trash(from, 'duplicates'); // identical copy is already there
+        p.at = there;
         if (base.has(to)) base.set(to, base.get(to) - 1); // ...and is now counted as this photo
     } else {
         const keep = await choose(mine, theirs, to);
-        if (keep === 'mine') {
-            await moveFile(dst, p.name, trash, await freeName(trash, p.name));
-            if (base.has(to)) base.set(to, base.get(to) - 1);
-            await moveFile(src, file, dst, p.name);
-        } else if (keep === 'theirs') {
-            at = { dir: TRASH, file: await freeName(trash, p.name) };
-            await moveFile(src, file, trash, at.file);
-        } else if (keep === 'both') {
-            at.file = await freeName(dst, p.name);
-            await moveFile(src, file, dst, at.file);
-        } else at = p.at;
+        if (keep === 'mine') { await trash(there, 'replaced'); await put(from, to, p.name); }
+        else if (keep === 'theirs') await trash(from, 'replaced');
+        else if (keep === 'both') { const at = await put(from, to, p.name); log(`moved ${where(from)} → ${where(at)}`); }
     }
-    p.at = at;
 }
 
 // Tapping the folder the photo is already in moves it back to the root.
@@ -334,16 +349,30 @@ function move(target) {
     render();
 }
 
+// File work runs in one queue, one operation at a time.
+const exclusive = fn => queue = queue.then(fn).catch(e => log(`⚠️ ${e.message}`));
+function task(fn) {
+    pending++; ui();
+    return exclusive(fn).finally(() => { pending--; ui(); });
+}
+// Button that disables itself once clicked, unless the action resolves to false (skipped).
+function once(label, fn) {
+    const b = button(label, false, async () => { b.disabled = true; if (await fn() === false) b.disabled = false; });
+    return b;
+}
+
 function enqueue(p, to) {
-    p.dir = to;
-    pending++; p.pending++;
-    p.busy = queue = queue.then(() => relocate(p, to))
-        .catch(e => { log(`⚠️ moving ${p.name} failed: ${e.message}`); alert(`Moving "${p.name}" failed: ${e.message}`); })
-        .finally(() => {
-            pending--; if (!--p.pending) p.dir = p.at.dir;
-            if (VID.test(p.name)) { cache.get(p)?.then(URL.revokeObjectURL); cache.delete(p); if (photos[i] === p) return render(); }
-            ui();
-        });
+    p.dir = to; p.pending++;
+    p.busy = task(() => relocate(p, to)
+        .catch(e => { alert(`Moving "${p.name}" failed: ${e.message}`); throw new Error(`moving ${p.name} failed: ${e.message}`); })
+        .finally(() => { p.pending--; settle(p); }));
+}
+
+// After a photo's file moved: show its real folder and drop a video URL pointing at the old place.
+function settle(p) {
+    if (!p.pending) p.dir = tagOf(p.at.dir);
+    if (VID.test(p.name)) { cache.get(p)?.then(URL.revokeObjectURL); cache.delete(p); if (photos[i] === p) return render(); }
+    ui();
 }
 
 function addTag() {

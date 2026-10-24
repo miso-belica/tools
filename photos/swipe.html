@@ -211,6 +211,27 @@ async function pick() {
 async function background(r, dirs) {
     const live = () => root === r; // stop when another folder gets opened
 
+    // Snapshot of every media file with its size and dates, taken inside the move queue so no file is mid-move.
+    let t = performance.now();
+    const files = [];
+    progress('reading file info');
+    await exclusive(async () => {
+        for (const p of photos) if (!p.at.dir) files.push({ dir: '', file: p.at.file });
+        for (const d of tags) {
+            if (!live()) return;
+            let n = 0;
+            for await (const h of (await dir(d)).values()) if (h.kind === 'file' && IMG.test(h.name)) { files.push({ dir: d, file: h.name }); n++; }
+            base.set(d, n - photos.filter(p => p.at.dir === d).length); // our photos are counted by p.dir
+        }
+        for (let k = 0; k < files.length && live(); k += 100)
+            await Promise.all(files.slice(k, k + 100).map(async e => e.f = await read(await dir(e.dir), e.file)));
+    });
+    if (!live()) return;
+    const at = new Map(photos.map(p => [where(p.at), p]));
+    for (const e of files) if (e.f && at.has(where(e))) Object.assign(at.get(where(e)), { f: e.f, time: e.f.lastModified });
+    order();
+    log(`read size and dates of ${files.length} files in ${took(t)}, sorted by modified date`);
+
     // Root photos with an identical copy in a subfolder were already sorted (e.g. copied there earlier).
     const sorted = [];
     for (const [n, p] of photos.entries()) {
@@ -226,19 +247,16 @@ async function background(r, dirs) {
     const todo = sorted.filter(([p]) => !p.dir && !p.pending);
     if (live() && todo.length && confirm(`${todo.length} of ${photos.length} photos in the root already have an identical copy in a subfolder. Remove these root copies?`))
         for (const [p, d] of todo) enqueue(p, d); // relocate() sees the identical copy and only removes the root one
-
-    // Counted inside the move queue, so no file is mid-move while a folder is listed.
-    for (const t of [...tags]) {
-        if (!live()) return;
-        progress(`counting ${t}`);
-        await exclusive(async () => {
-            if (!live()) return;
-            let n = 0;
-            for await (const f of (await dir(t)).values()) if (f.kind === 'file' && IMG.test(f.name)) n++;
-            base.set(t, n - photos.filter(p => p.at.dir === t).length); // our photos are counted by p.dir
-        });
-    }
     progress('');
+}
+
+// Sorts by p.time (modified date, later EXIF date taken), then name; stays on the current photo.
+function order() {
+    const cur = photos[i];
+    photos.sort((a, b) => (a.time ?? 0) - (b.time ?? 0) || byName(a.name, b.name));
+    photos.forEach((p, n) => p.idx = n);
+    i = Math.max(0, photos.indexOf(cur));
+    render();
 }
 
 // Reads the photo into memory once, so its URL keeps working after the file is moved.

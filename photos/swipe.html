@@ -223,6 +223,7 @@ function log(text, ...buttons) {
     li.append(Object.assign(document.createElement('time'), { textContent: stamp(performance.now() - t0) }), text, ...buttons);
     logList.append(li);
     if (atEnd) aside.scrollTop = aside.scrollHeight;
+    return li;
 }
 
 async function pick() {
@@ -413,13 +414,19 @@ async function dropAll(pairs, what) {
     log(`trashed ${moved.length} ${what} in ${took(t)}` + (skipped ? `, skipped ${skipped} that changed since the scan or failed` : ''), ...moved.length ? [undo(moved)] : []);
 }
 
-// Copies spread over several folders: the user keeps one.
-async function decide(kept) {
-    const fresh = (await Promise.all(kept.map(async c => ({ ...c, f: await read(await dir(c.dir), c.file) })))).filter(c => c.f);
-    if (fresh.length < 2) return log(`${kept[0].file}: only one copy left, nothing to decide`);
-    const k = await choose(`Identical copies of "${kept[0].file}". Keep one, the others go to trash.`, fresh.map(c => [where(c), c.f]));
-    if (k === '' || k === 'skip') return false;
-    await dropAll(fresh.filter(c => c !== fresh[k]).map(c => [c, fresh[k]]), `copies of ${kept[0].file}, kept ${where(fresh[k])}`);
+// Sets of copies spread over the same folders: decided one by one, each moved right away; logged as one bulk operation.
+async function decideAll(list, where_) {
+    const t = performance.now(), total = list.length, moved = [];
+    for (let n = 0; n < list.length;) {
+        const fresh = (await Promise.all(list[n].map(async c => ({ ...c, f: await read(await dir(c.dir), c.file) })))).filter(c => c.f);
+        if (fresh.length < 2) { list.splice(n, 1); continue; } // only one copy left
+        const k = await choose(`${total - list.length + n + 1} / ${total}: identical copies of "${fresh[0].file}". Keep one, the others go to trash. ← → keep left or right, Esc stops.`, fresh.map(c => [where(c), c.f]));
+        if (k === '') break;
+        if (k === 'skip') { n++; continue; }
+        for (const c of fresh) if (c !== fresh[k]) { const at = await dropCopy(c, fresh[k]).catch(() => null); if (at) moved.push([c, at]); }
+        list.splice(n, 1);
+    }
+    if (moved.length) log(`trashed ${moved.length} copies from ${where_} in ${took(t)}`, undo(moved));
 }
 
 // Turns groups of identical files into log entries: root copies, then copies within one folder (the older stays), then per photo.
@@ -437,7 +444,18 @@ function plan(sets) {
     const batch = (pairs, text) => pairs.length && log(text, once('Move to trash', () => task(() => dropAll(pairs, 'duplicates'))));
     batch(fromRoot, `${fromRoot.length} root photos have an identical copy in a subfolder`);
     batch(inFolder, `${inFolder.length} duplicates within the same folder (the older copy stays)`);
-    for (const kept of spread) log(`${kept[0].file}: identical copies in ${kept.map(c => c.dir).join(', ')}`, once('Decide', () => task(() => decide(kept))));
+    // Copies spread over subfolders, one entry per set of folders: decide one by one, or keep all in one folder.
+    for (const [key, list] of Map.groupBy(spread.map(k => k.sort((a, b) => byName(a.dir, b.dir))), k => k.map(c => c.dir).join('\n'))) {
+        const dirs = key.split('\n'), names = dirs.join(' and '), text = () => `${list.length} duplicates in ${names}`;
+        // Re-enables the buttons while sets are left, with the count updated.
+        const after = () => { li.childNodes[1].textContent = text(); if (list.length) return false; li.querySelectorAll('button').forEach(b => b.disabled = true); };
+        const li = log(text(), once('Decide', () => task(async () => { await decideAll(list, names); return after(); })),
+            ...dirs.map(d => once(`Keep all in ${d}`, () => task(async () => {
+                await dropAll(list.flatMap(k => { const keep = k.find(c => c.dir === d); return k.filter(c => c !== keep).map(c => [c, keep]); }), `copies, kept all in ${d}`);
+                list.length = 0;
+                return after();
+            }))));
+    }
 }
 
 // Moves a file into folder `to` (as name_2… when the name is taken) and keeps the photo there in sync.

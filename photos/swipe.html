@@ -33,7 +33,7 @@
     dialog { margin: auto; width: min(96vw, 900px); max-height: 96dvh; background: #141414; color: #eee; border: 1px solid #2a2a2a; border-radius: 12px; padding: 12px; }
     dialog::backdrop { background: #000c; }
     dialog form { display: flex; flex-direction: column; gap: 12px; }
-    .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
     figure { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
     figure :is(img, video) { width: 100%; height: 40dvh; object-fit: contain; background: #000; border-radius: 8px; }
     figcaption { max-height: 30dvh; overflow: auto; font-size: .75rem; color: #aaa; line-height: 1.4; overflow-wrap: anywhere; white-space: pre-line; }
@@ -52,7 +52,7 @@
 <aside><ol id="log" aria-live="polite"></ol></aside>
 <main>
     <div id="empty">
-        <p>Photos and videos in the picked folder are shown one by one.<br>Subfolders become tags; 🗑 moves to <code>.trash</code>, undo from the log.</p>
+        <p>Photos and videos in the picked folder are shown one by one.<br>Subfolders become tags; 🗑 moves to <code>.trash</code>, undo from the log.<br>Exact duplicates are found in the background.</p>
         <p id="unsupported" hidden>⚠️ This browser can't open folders. Use Chrome.</p>
     </div>
     <img alt="" hidden>
@@ -65,11 +65,8 @@
 <dialog id="dupe">
     <form method="dialog">
         <p id="dupeTitle"></p>
-        <div class="pair">
-            <figure><img alt=""><figcaption></figcaption><button value="mine" class="primary">Keep this one</button></figure>
-            <figure><img alt=""><figcaption></figcaption><button value="theirs" class="primary">Keep this one</button></figure>
-        </div>
-        <button value="both">Keep both (rename this photo)</button>
+        <div class="pair"></div>
+        <button value="both" id="both">Keep both (rename this photo)</button>
         <button value="">Skip, decide later</button>
     </form>
 </dialog>
@@ -231,7 +228,7 @@ async function pick() {
     t0 = performance.now(); logList.replaceChildren(); log(`opened folder "${root.name}"`);
     cache.forEach(u => u.then(URL.revokeObjectURL));
     photos = []; tags = []; base = new Map(); handles = new Map(); cache = new Map(); i = 0; progress('listing');
-    const r = root, dirs = [];
+    const r = root;
     // Triage starts with the first photo found, in disk order; the background sorts them later.
     for await (const h of r.values()) {
         if (root !== r) return; // another folder got opened
@@ -240,17 +237,17 @@ async function pick() {
             photos.push({ name: h.name, idx: photos.length, dir: '', at: { dir: '', file: h.name }, pending: 0 });
             if (photos.length === 1) render();
             else if (photos.length % 100 === 0) progress(`listing ${photos.length}`);
-        } else if (h.kind === 'directory') { dirs.push(h); if (!h.name.startsWith('.')) tags.push(h.name); }
+        } else if (h.kind === 'directory' && !h.name.startsWith('.')) tags.push(h.name);
     }
     tags.sort(byName);
     log(`listed ${photos.length} photos and ${tags.length} folders in ${took(t0)}`);
     progress('');
     if (!photos.length) render();
-    background(root, dirs);
+    background(r);
 }
 
 // Runs while triage is already going: the already-sorted check first, then folder counts for the tag order.
-async function background(r, dirs) {
+async function background(r) {
     const live = () => root === r; // stop when another folder gets opened
 
     // Snapshot of every media file with its size and dates, taken inside the move queue so no file is mid-move.
@@ -282,21 +279,14 @@ async function background(r, dirs) {
     order();
     log(`read EXIF of ${shots.length} photos in ${took(t)}, ${dates.filter(Boolean).length} have a date taken, sorted by it`);
 
-    // Root photos with an identical copy in a subfolder were already sorted (e.g. copied there earlier).
-    const sorted = [];
-    for (const [n, p] of photos.entries()) {
-        if (!live()) return;
-        if (n % 50 === 0) progress(`checking ${n} / ${photos.length}`);
-        if (p.dir || p.pending) continue; // the user got there first
-        const mine = await read(r, p.name); if (!mine) continue;
-        for (const d of dirs) {
-            const theirs = await read(d, p.name);
-            if (theirs && await same(mine, theirs)) { sorted.push([p, d.name]); break; }
-        }
-    }
-    const todo = sorted.filter(([p]) => !p.dir && !p.pending);
-    if (live() && todo.length && confirm(`${todo.length} of ${photos.length} photos in the root already have an identical copy in a subfolder. Remove these root copies?`))
-        for (const [p, d] of todo) enqueue(p, d); // relocate() sees the identical copy and only removes the root one
+    // Exact duplicates, whatever their names: only files of the same size can match, so only those are compared.
+    t = performance.now();
+    const groups = [...Map.groupBy(files.filter(e => e.f), e => e.f.size).values()].filter(g => g.length > 1);
+    const found = await parallel('identical', groups.map(g => g.map(e => e.f)), live, 'finding duplicates');
+    if (!live()) return;
+    const sets = found.flatMap((r, k) => (r ?? []).map(set => set.map(j => groups[k][j])));
+    log(`compared ${groups.reduce((n, g) => n + g.length, 0)} files of equal size in ${took(t)}, duplicate sets: ${sets.length}`);
+    plan(sets);
     progress('');
 }
 
@@ -378,24 +368,57 @@ async function moveFile(src, from, dst, to) {
     }
 }
 
-// Shows both versions; resolves to 'mine', 'theirs', 'both' or '' (skip).
-async function choose(mine, theirs, folder) {
-    $('#dupeTitle').textContent = `"${mine.name}" already exists in ${folder || 'the root folder'} with different content. Keep one (the other goes to trash) or both?`;
-    const meta = await Promise.all([mine, theirs].map(exif));
-    const urls = [mine, theirs].map((f, n) => {
-        const fig = dupe.querySelectorAll('figure')[n], u = URL.createObjectURL(f);
+// Shows files side by side with all their metadata; resolves to the kept index ('0', '1'…), 'both' or '' (skip).
+async function choose(title, items, both) {
+    $('#dupeTitle').textContent = title;
+    $('#both').hidden = !both;
+    const urls = [];
+    dupe.querySelector('.pair').replaceChildren(...await Promise.all(items.map(async ([label, f], n) => {
+        const fig = document.createElement('figure'), cap = document.createElement('figcaption'), meta = await exif(f), u = URL.createObjectURL(f);
         const im = document.createElement(VID.test(f.name) ? 'video' : 'img');
-        im.controls = im.muted = true;
-        fig.querySelector(':is(img, video)').replaceWith(im);
-        const cap = () => fig.querySelector('figcaption').textContent =
-            `${n ? 'Already in ' + (folder || 'root') : 'This photo'}\n${(f.size / 1048576).toFixed(2)} MB · ${im.naturalWidth || im.videoWidth || '?'}×${im.naturalHeight || im.videoHeight || '?'}\nmodified ${new Date(f.lastModified).toLocaleString()}` +
-            Object.entries(meta[n]).map(([k, v]) => `\n${k}: ${v}`).join('');
-        im.onload = im.onloadedmetadata = cap; im.src = u; cap();
-        return u;
-    });
+        const show = () => cap.textContent = `${label}\n${(f.size / 1048576).toFixed(2)} MB · ${im.naturalWidth || im.videoWidth || '?'}×${im.naturalHeight || im.videoHeight || '?'}\nmodified ${new Date(f.lastModified).toLocaleString()}` +
+            Object.entries(meta).map(([k, v]) => `\n${k}: ${v}`).join('');
+        im.controls = im.muted = true; im.onload = im.onloadedmetadata = show; im.src = u; show(); urls.push(u);
+        fig.append(im, cap, Object.assign(document.createElement('button'), { value: n, className: 'primary', textContent: 'Keep this one' }));
+        return fig;
+    })));
     dupe.returnValue = '';
     dupe.showModal();
     return new Promise(resolve => dupe.onclose = () => { urls.forEach(URL.revokeObjectURL); resolve(dupe.returnValue); });
+}
+
+// Trashes a duplicate after re-checking it still matches the copy that stays: files may have changed since the scan.
+async function dropCopy(c, keep) {
+    const [a, b] = await Promise.all([c, keep].map(async x => read(await dir(x.dir), x.file)));
+    if (a && b && await same(a, b)) await trash(c, 'duplicates');
+    else log(`skipped ${where(c)}: changed since the scan`);
+}
+
+// Copies spread over several folders: the user keeps one.
+async function decide(kept) {
+    const fresh = (await Promise.all(kept.map(async c => ({ ...c, f: await read(await dir(c.dir), c.file) })))).filter(c => c.f);
+    if (fresh.length < 2) return log(`${kept[0].file}: only one copy left, nothing to decide`);
+    const k = await choose(`Identical copies of "${kept[0].file}". Keep one, the others go to trash.`, fresh.map(c => [where(c), c.f]));
+    if (k === '') return false;
+    for (const c of fresh) if (c !== fresh[k]) await dropCopy(c, fresh[k]);
+}
+
+// Turns groups of identical files into log entries: root copies, then copies within one folder (the older stays), then per photo.
+function plan(sets) {
+    const older = (a, b) => a.f.lastModified - b.f.lastModified || byName(a.file, b.file), fromRoot = [], inFolder = [], spread = [];
+    for (const g of sets) {
+        const sub = g.filter(c => c.dir), kept = [];
+        for (const list of Map.groupBy(sub.length ? sub : g, c => c.dir).values()) {
+            list.sort(older); kept.push(list[0]);
+            inFolder.push(...list.slice(1).map(c => [c, list[0]]));
+        }
+        if (sub.length) fromRoot.push(...g.filter(c => !c.dir).map(c => [c, kept[0]]));
+        if (kept.length > 1) spread.push(kept);
+    }
+    const batch = (pairs, text) => pairs.length && log(text, once('Move to trash', () => task(async () => { for (const [c, k] of pairs) await dropCopy(c, k); })));
+    batch(fromRoot, `${fromRoot.length} root photos have an identical copy in a subfolder`);
+    batch(inFolder, `${inFolder.length} duplicates within the same folder (the older copy stays)`);
+    for (const kept of spread) log(`${kept[0].file}: identical copies in ${kept.map(c => c.dir).join(', ')}`, once('Decide', () => task(() => decide(kept))));
 }
 
 // Moves a file into folder `to` (as name_2… when the name is taken) and keeps the photo there in sync.
@@ -430,9 +453,10 @@ async function relocate(p, to) {
         p.at = there;
         if (base.has(to)) base.set(to, base.get(to) - 1); // ...and is now counted as this photo
     } else {
-        const keep = await choose(mine, theirs, to);
-        if (keep === 'mine') { await trash(there, 'replaced'); await put(from, to, p.name); }
-        else if (keep === 'theirs') await trash(from, 'replaced');
+        const keep = await choose(`"${p.name}" already exists in ${to || 'the root folder'} with different content. Keep one (the other goes to trash) or both?`,
+            [['This photo', mine], [`Already in ${to || 'root'}`, theirs]], true);
+        if (keep === '0') { await trash(there, 'replaced'); await put(from, to, p.name); }
+        else if (keep === '1') await trash(from, 'replaced');
         else if (keep === 'both') { const at = await put(from, to, p.name); log(`moved ${where(from)} → ${where(at)}`); }
     }
 }

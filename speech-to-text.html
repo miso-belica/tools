@@ -36,7 +36,12 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 progress { width: 100%; }
 #status { margin: 0; font-size: .9rem; color: var(--dim); min-height: 1.2em; }
 #status.err { color: var(--err); }
-textarea { width: 100%; min-height: 280px; padding: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; line-height: 1.5; resize: vertical; }
+#player { position: sticky; top: 0; z-index: 1; display: grid; gap: 8px; padding: 12px 0; background: var(--panel); }
+#player audio { width: 100%; }
+#player label { display: flex; align-items: center; gap: 8px; font-size: .9rem; color: var(--dim); }
+#text { display: grid; gap: 8px; line-height: 1.5; }
+#text p { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: baseline; }
+#text button { padding: 2px 6px; font: .8rem ui-monospace, monospace; color: var(--accent); }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -75,9 +80,14 @@ textarea { width: 100%; min-height: 280px; padding: 12px; border-radius: 8px; bo
   </section>
 
   <section class="panel" id="result" hidden>
-    <textarea id="text" aria-label="Transcript"></textarea>
+    <div id="player">
+      <audio id="audio" controls></audio>
+      <label><input type="checkbox" id="autoplay"> Play when clicking a time</label>
+    </div>
+    <div id="text" aria-label="Transcript"></div>
     <div class="row">
-      <button id="copy">Copy</button>
+      <button id="copy">Copy text</button>
+      <button id="copySrt">Copy SRT</button>
       <button id="txt">Download .txt</button>
       <button id="srt">Download .srt</button>
     </div>
@@ -139,16 +149,48 @@ const srtTime = s => {
   return `${pad(Math.floor(ms / 3600000))}:${pad(Math.floor(ms / 60000) % 60)}:${pad(Math.floor(ms / 1000) % 60)},${pad(ms % 1000, 3)}`;
 };
 
-const toSrt = (chunks, duration) => chunks
-  .filter(c => c.text.trim())
-  .map((c, i) => `${i + 1}\n${srtTime(c.timestamp[0])} --> ${srtTime(c.timestamp[1] ?? duration)}\n${c.text.trim()}\n`)
+const toSrt = sentences => sentences
+  .map((c, i) => `${i + 1}\n${srtTime(c.start)} --> ${srtTime(c.end)}\n${c.text}\n`)
   .join('\n');
 
-console.assert(srtTime(3723.456) === '01:02:03,456', 'srtTime');
-console.assert(toSrt([{ timestamp: [0, 1.5], text: ' Ahoj' }, { timestamp: [1.5, null], text: ' svet' }], 4)
-  === '1\n00:00:00,000 --> 00:00:01,500\nAhoj\n\n2\n00:00:01,500 --> 00:00:04,000\nsvet\n', 'toSrt');
+// Whisper segments don't align with sentences: split segments at sentence-ending punctuation,
+// time each piece by its character position within the segment, and join pieces until a sentence ends.
+const toSentences = (chunks, duration) => {
+  const out = [];
+  let cur = null;
+  for (const { timestamp: [start, end], text } of chunks) {
+    const stop = end ?? duration;
+    let offset = 0;
+    for (const piece of text.split(/(?<=[.!?…])\s+/)) {
+      const at = t => start + (stop - start) * t / text.length;
+      const pieceStart = at(text.indexOf(piece, offset));
+      offset = text.indexOf(piece, offset) + piece.length;
+      if (!piece.trim()) continue;
+      cur ??= { start: pieceStart, text: '' };
+      cur.text = (cur.text + ' ' + piece.trim()).trim();
+      cur.end = at(offset);
+      if (/[.!?…]["'»“”)]*$/.test(piece.trim())) out.push(cur), cur = null;
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
+};
 
-let file, result, duration;
+const clock = s => {
+  const t = Math.floor(s);
+  const mmss = `${Math.floor(t / 60) % 60}:${String(t % 60).padStart(2, '0')}`;
+  return t >= 3600 ? `${Math.floor(t / 3600)}:${mmss.padStart(5, '0')}` : mmss;
+};
+
+console.assert(srtTime(3723.456) === '01:02:03,456', 'srtTime');
+console.assert(clock(65.9) === '1:05' && clock(3725) === '1:02:05', 'clock');
+console.assert(JSON.stringify(toSentences([{ timestamp: [0, 10], text: ' Ahoj svet. Ako sa' }, { timestamp: [10, null], text: ' máš? Dobre' }], 20)
+  .map(c => [c.text, c.start.toFixed(1), c.end.toFixed(1)]))
+  === JSON.stringify([['Ahoj svet.', '0.0', '6.1'], ['Ako sa máš?', '6.7', '14.5'], ['Dobre', '15.5', '20.0']]), 'toSentences');
+console.assert(toSrt([{ start: 0, end: 1.5, text: 'Ahoj.' }])
+  === '1\n00:00:00,000 --> 00:00:01,500\nAhoj.\n', 'toSrt');
+
+let file, sentences, duration;
 const worker = new Worker(URL.createObjectURL(new Blob([$('workerSrc').textContent], { type: 'text/javascript' })), { type: 'module' });
 
 const setStatus = (text, err = false) => {
@@ -159,6 +201,9 @@ const setStatus = (text, err = false) => {
 const pick = f => {
   if (!f) return;
   file = f;
+  URL.revokeObjectURL($('audio').src);
+  $('audio').src = URL.createObjectURL(f);
+  $('result').hidden = true;
   $('dropText').innerHTML = '';
   $('dropText').append('Selected: ', Object.assign(document.createElement('strong'), { textContent: f.name }));
   $('go').disabled = false;
@@ -203,8 +248,18 @@ worker.onmessage = ({ data }) => {
     setStatus(data.text);
   } else if (data.type === 'done') {
     done();
-    result = data.out;
-    $('text').value = result.text.trim();
+    sentences = toSentences(data.out.chunks, duration);
+    $('text').replaceChildren(...sentences.map(c => {
+      const p = document.createElement('p');
+      const b = Object.assign(document.createElement('button'), { textContent: clock(c.start), title: 'Play from here' });
+      b.onclick = () => {
+        // a little before, so the first word isn't clipped
+        $('audio').currentTime = Math.max(0, c.start - 0.5);
+        if ($('autoplay').checked) $('audio').play();
+      };
+      p.append(b, c.text);
+      return p;
+    }));
     $('result').hidden = false;
     setStatus(`Done in ${((performance.now() - startedAt) / 1000).toFixed(0)} s.`);
   } else if (data.type === 'error') {
@@ -225,12 +280,18 @@ const save = (content, ext) => {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
-$('txt').onclick = () => save($('text').value, '.txt');
-$('srt').onclick = () => save(toSrt(result.chunks, duration), '.srt');
-$('copy').onclick = async () => {
-  await navigator.clipboard.writeText($('text').value);
+const plain = () => sentences.map(c => c.text).join(' ');
+const copy = async text => {
+  await navigator.clipboard.writeText(text);
   setStatus('Copied to clipboard.');
 };
+$('txt').onclick = () => save(plain(), '.txt');
+$('srt').onclick = () => save(toSrt(sentences), '.srt');
+$('copy').onclick = () => copy(plain());
+$('copySrt').onclick = () => copy(toSrt(sentences));
+
+try { $('autoplay').checked = localStorage.getItem('stt-autoplay') === '1'; } catch {}
+$('autoplay').onchange = () => { try { localStorage.setItem('stt-autoplay', $('autoplay').checked ? '1' : '0'); } catch {} };
 </script>
 </body>
 </html>

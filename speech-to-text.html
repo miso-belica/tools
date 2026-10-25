@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speech to Text</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#f6f7f9, #0e1014);
+  --panel: light-dark(#fff, #161a21);
+  --line: light-dark(#d9dde3, #2a303b);
+  --text: light-dark(#1b1f24, #e8eaed);
+  --dim: light-dark(#5f6875, #9aa1ac);
+  --accent: light-dark(#2563eb, #6ea8ff);
+  --err: light-dark(#c62828, #ff6b6b);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+body { margin: 0; background: var(--bg); color: var(--text); }
+main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; display: grid; gap: 16px; }
+h1 { margin: 0; font-size: 1.5rem; }
+p.note { margin: 0; color: var(--dim); font-size: .9rem; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; }
+.row label { display: grid; gap: 4px; flex: 1 1 200px; min-width: 0; font-size: .85rem; color: var(--dim); }
+select, button, input[type=file] { font: inherit; }
+select { width: 100%; min-width: 0; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+#drop { border: 2px dashed var(--line); border-radius: 12px; padding: 24px 16px; text-align: center; cursor: pointer; color: var(--dim); }
+#drop.over { border-color: var(--accent); color: var(--accent); }
+#drop strong { color: var(--text); word-break: break-all; }
+#drop input { display: none; }
+button { padding: 10px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+progress { width: 100%; }
+#status { margin: 0; font-size: .9rem; color: var(--dim); min-height: 1.2em; }
+#status.err { color: var(--err); }
+textarea { width: 100%; min-height: 280px; padding: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; line-height: 1.5; resize: vertical; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Speech to Text</h1>
+  <p class="note">Transcribes an audio or video file with Whisper, running entirely in your browser. Your file never leaves your device. The model is downloaded once and then cached.</p>
+
+  <section class="panel">
+    <label id="drop">
+      <input type="file" id="file" accept="audio/*,video/*">
+      <span id="dropText">Drop an audio/video file here or <u>choose one</u></span>
+    </label>
+    <div class="row">
+      <label>Language
+        <select id="language">
+          <option value="slovak">Slovenčina</option>
+          <option value="czech">Čeština</option>
+          <option value="german">Deutsch</option>
+          <option value="english">English</option>
+        </select>
+      </label>
+      <label>Model
+        <select id="model">
+          <option value="tiny">tiny (~40 MB, fastest, rough)</option>
+          <option value="base">base (~80 MB)</option>
+          <option value="small" selected>small (~250 MB, good for SK/CS)</option>
+          <option value="large-v3-turbo">large-v3-turbo (~800 MB, best, needs WebGPU)</option>
+        </select>
+      </label>
+    </div>
+    <button class="primary" id="go" disabled>Transcribe</button>
+    <progress id="bar" hidden></progress>
+    <p id="status" role="status"></p>
+  </section>
+
+  <section class="panel" id="result" hidden>
+    <textarea id="text" aria-label="Transcript"></textarea>
+    <div class="row">
+      <button id="copy">Copy</button>
+      <button id="txt">Download .txt</button>
+      <button id="srt">Download .srt</button>
+    </div>
+  </section>
+</main>
+
+<script type="text/worker" id="workerSrc">
+import { pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1';
+
+let asr, loaded;
+self.onmessage = async ({ data: { audio, model, language } }) => {
+  try {
+    const adapter = navigator.gpu && await navigator.gpu.requestAdapter();
+    const device = adapter ? 'webgpu' : 'wasm';
+    if (loaded !== model) {
+      postMessage({ type: 'status', text: 'Loading model…' });
+      asr = await pipeline('automatic-speech-recognition', `onnx-community/whisper-${model}`, {
+        device,
+        // fp32 large-v3-turbo encoder is ~2.5 GB, so that one uses fp16
+        dtype: adapter
+          ? { encoder_model: model === 'large-v3-turbo' ? 'fp16' : 'fp32', decoder_model_merged: 'q4' }
+          : 'q8',
+        progress_callback: p => p.status === 'progress_total' && postMessage({ type: 'download', progress: p.progress }),
+      });
+      loaded = model;
+    }
+    postMessage({ type: 'status', text: `Transcribing on ${device === 'webgpu' ? 'GPU' : 'CPU (slow)'}…` });
+    const out = await asr(audio, { language, task: 'transcribe', chunk_length_s: 30, stride_length_s: 5, return_timestamps: true });
+    postMessage({ type: 'done', out });
+  } catch (e) {
+    loaded = null;
+    postMessage({ type: 'error', message: e?.message || String(e) });
+  }
+};
+</script>
+
+<script type="module">
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+for (const key of ['language', 'model']) {
+  if ([...$(key).options].some(o => o.value === params.get(key))) $(key).value = params.get(key);
+  $(key).onchange = () => {
+    params.set(key, $(key).value);
+    history.replaceState(null, '', '?' + params);
+  };
+}
+
+const srtTime = s => {
+  const ms = Math.round(s * 1000);
+  const pad = (n, w = 2) => String(n).padStart(w, '0');
+  return `${pad(Math.floor(ms / 3600000))}:${pad(Math.floor(ms / 60000) % 60)}:${pad(Math.floor(ms / 1000) % 60)},${pad(ms % 1000, 3)}`;
+};
+
+const toSrt = (chunks, duration) => chunks
+  .filter(c => c.text.trim())
+  .map((c, i) => `${i + 1}\n${srtTime(c.timestamp[0])} --> ${srtTime(c.timestamp[1] ?? duration)}\n${c.text.trim()}\n`)
+  .join('\n');
+
+console.assert(srtTime(3723.456) === '01:02:03,456', 'srtTime');
+console.assert(toSrt([{ timestamp: [0, 1.5], text: ' Ahoj' }, { timestamp: [1.5, null], text: ' svet' }], 4)
+  === '1\n00:00:00,000 --> 00:00:01,500\nAhoj\n\n2\n00:00:01,500 --> 00:00:04,000\nsvet\n', 'toSrt');
+
+let file, result, duration;
+const worker = new Worker(URL.createObjectURL(new Blob([$('workerSrc').textContent], { type: 'text/javascript' })), { type: 'module' });
+
+const setStatus = (text, err = false) => {
+  $('status').textContent = text;
+  $('status').classList.toggle('err', err);
+};
+
+const pick = f => {
+  if (!f) return;
+  file = f;
+  $('dropText').innerHTML = '';
+  $('dropText').append('Selected: ', Object.assign(document.createElement('strong'), { textContent: f.name }));
+  $('go').disabled = false;
+};
+$('file').onchange = e => pick(e.target.files[0]);
+$('drop').ondragover = e => { e.preventDefault(); $('drop').classList.add('over'); };
+$('drop').ondragleave = () => $('drop').classList.remove('over');
+$('drop').ondrop = e => { e.preventDefault(); $('drop').classList.remove('over'); pick(e.dataTransfer.files[0]); };
+
+$('go').onclick = async () => {
+  $('go').disabled = true;
+  $('bar').hidden = false;
+  $('bar').removeAttribute('value');
+  setStatus('Decoding audio…');
+  try {
+    // Whisper expects 16 kHz mono
+    const ctx = new AudioContext({ sampleRate: 16000 });
+    const buf = await ctx.decodeAudioData(await file.arrayBuffer());
+    ctx.close();
+    duration = buf.duration;
+    const audio = buf.getChannelData(0);
+    worker.postMessage({ audio, model: $('model').value, language: $('language').value }, [audio.buffer]);
+  } catch (e) {
+    done();
+    setStatus(`Cannot decode this file: ${e.message}`, true);
+  }
+};
+
+const done = () => {
+  $('go').disabled = false;
+  $('bar').hidden = true;
+};
+
+let startedAt = 0;
+worker.onmessage = ({ data }) => {
+  if (data.type === 'download') {
+    $('bar').value = data.progress / 100;
+    setStatus(`Downloading model… ${data.progress.toFixed(0)}%`);
+  } else if (data.type === 'status') {
+    $('bar').removeAttribute('value');
+    startedAt = performance.now();
+    setStatus(data.text);
+  } else if (data.type === 'done') {
+    done();
+    result = data.out;
+    $('text').value = result.text.trim();
+    $('result').hidden = false;
+    setStatus(`Done in ${((performance.now() - startedAt) / 1000).toFixed(0)} s.`);
+  } else if (data.type === 'error') {
+    done();
+    setStatus(`Error: ${data.message}`, true);
+  }
+};
+
+worker.onerror = e => {
+  done();
+  setStatus(`Cannot load the speech engine (offline?): ${e.message || 'worker failed'}`, true);
+};
+
+const save = (content, ext) => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
+  a.download = file.name.replace(/\.[^.]+$/, '') + ext;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$('txt').onclick = () => save($('text').value, '.txt');
+$('srt').onclick = () => save(toSrt(result.chunks, duration), '.srt');
+$('copy').onclick = async () => {
+  await navigator.clipboard.writeText($('text').value);
+  setStatus('Copied to clipboard.');
+};
+</script>
+</body>
+</html>

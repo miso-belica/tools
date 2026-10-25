@@ -53,10 +53,11 @@ textarea { width: 100%; min-height: 280px; padding: 12px; border-radius: 8px; bo
     <div class="row">
       <label>Language
         <select id="language">
-          <option value="slovak">Slovenčina</option>
-          <option value="czech">Čeština</option>
-          <option value="german">Deutsch</option>
-          <option value="english">English</option>
+          <option value="sk">Slovenčina</option>
+          <option value="cs">Čeština</option>
+          <option value="de">Deutsch</option>
+          <option value="en">English</option>
+          <option disabled>──────────</option>
         </select>
       </label>
       <label>Model
@@ -116,6 +117,14 @@ self.onmessage = async ({ data: { audio, model, language } }) => {
 <script type="module">
 const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
+// All languages Whisper supports, after the highlighted ones already in the markup
+const english = new Intl.DisplayNames('en', { type: 'language' });
+const native = code => { try { return new Intl.DisplayNames(code, { type: 'language' }).of(code); } catch { return code; } };
+$('language').append(...'zh es ru ko fr ja pt tr pl ca nl ar sv it id hi fi vi he uk el ms ro da hu ta no th ur hr bg lt la mi ml cy te fa lv bn sr az sl kn et mk br eu is hy ne mn bs kk sq sw gl mr pa si km sn yo so af oc ka be tg sd gu am yi lo uz fo ht ps tk nn mt sa lb my bo tl mg as tt haw ln ha ba jw su'
+  .split(' ')
+  .map(code => ({ code, en: english.of(code === 'jw' ? 'jv' : code), own: native(code === 'jw' ? 'jv' : code) }))
+  .sort((a, b) => a.en.localeCompare(b.en))
+  .map(l => new Option(l.own === l.en ? l.en : `${l.own} (${l.en})`, l.code)));
 for (const key of ['language', 'model']) {
   if ([...$(key).options].some(o => o.value === params.get(key))) $(key).value = params.get(key);
   $(key).onchange = () => {

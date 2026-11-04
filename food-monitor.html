@@ -187,6 +187,11 @@ input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent); f
 .tile small { font-weight: 500; font-size: .75rem; }
 .tile small.warn { color: var(--warn); font-weight: 700; }
 .tile small.ok { color: var(--accent); font-weight: 700; }
+.tile.sel { border-color: var(--accent); background: var(--accent-soft); }
+.tile-wrap { position: relative; display: grid; }
+.tile-plus { position: absolute; top: 4px; right: 4px; width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--border); background: var(--card); font-weight: 800; font-size: 1.1rem; color: var(--accent); }
+.tile.sel + .tile-plus { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sticky-next { position: sticky; bottom: 76px; display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: 14px; padding: 10px 12px; border-radius: var(--radius); background: var(--card); border: 1.5px solid var(--accent); box-shadow: var(--shadow); font-size: 1.3rem; }
 .tile.none { background: transparent; border: 2px dashed var(--border); color: var(--dim); }
 .shortcuts { display: grid; gap: 8px; margin-bottom: 14px; }
 .shortcut { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 10px 14px; border-radius: var(--radius-sm); border: 1.5px solid var(--accent); background: var(--accent-soft); font-weight: 600; min-height: 48px; }
@@ -571,7 +576,7 @@ const I18N = {
     needMember: 'Pridaj aspoň jedného člena rodiny.', needProtein: 'Vyber aspoň jeden zdroj bielkovín.', needCarb: 'Vyber aspoň jeden zdroj sacharidov.', needMeal: 'Vyber aspoň jedno jedlo.',
     prevDay: 'Predchádzajúci deň', nextDay: 'Nasledujúci deň', prevWeek: 'Predchádzajúci týždeň', nextWeek: 'Nasledujúci týždeň',
     loggedOf: (a, b) => `${a} z ${b} zapísaných`, nothingYet: 'Zatiaľ nie je čo zapisovať', timeToLog: '⏰ Je čas zapísať dnešné jedlá.',
-    thisWeek: 'tento týždeň', sameAs: 'Rovnako ako', skipNow: 'Preskočiť zatiaľ', andWith: 'A k tomu? 🍽️',
+    thisWeek: 'tento týždeň', sameAs: 'Rovnako ako', skipNow: 'Preskočiť zatiaľ', andWith: 'A k tomu? 🍽️', multiHint: 'Ťukni = hotovo. ＋ = pridať ďalšie (najviac 3).', maxPick: 'Najviac 3.',
     proteins: 'Bielkoviny', carbs: 'Sacharidy', change: 'zmeniť', sameFor: 'Rovnaké jedlo zapísať aj pre:',
     nothing: 'Zatiaľ nič', askLater: (meal, time) => `Na ${meal.toLowerCase()} sa spýtam po ${time}.`, fillYesterday: 'Doplniť včerajšok',
     doneForNow: 'Zatiaľ hotovo', weekOverview: 'Týždenný prehľad', done: 'Hotovo!',
@@ -673,7 +678,7 @@ const I18N = {
     needMember: 'Add at least one family member.', needProtein: 'Pick at least one protein source.', needCarb: 'Pick at least one carb source.', needMeal: 'Pick at least one meal.',
     prevDay: 'Previous day', nextDay: 'Next day', prevWeek: 'Previous week', nextWeek: 'Next week',
     loggedOf: (a, b) => `${a} of ${b} logged`, nothingYet: 'Nothing to log yet', timeToLog: '⏰ Time to log today’s meals.',
-    thisWeek: 'this week', sameAs: 'Same as', skipNow: 'Skip for now', andWith: 'And with it? 🍽️',
+    thisWeek: 'this week', sameAs: 'Same as', skipNow: 'Skip for now', andWith: 'And with it? 🍽️', multiHint: 'Tap = done. ＋ = add another (up to 3).', maxPick: 'Up to 3.',
     proteins: 'Protein', carbs: 'Carbs', change: 'change', sameFor: 'Log the same meal for:',
     nothing: 'Nothing yet', askLater: (meal, time) => `${meal}: I’ll ask after ${time}.`, fillYesterday: 'Fill in yesterday',
     doneForNow: 'Done for now', weekOverview: 'Weekly overview', done: 'Done!',
@@ -775,7 +780,7 @@ const I18N = {
     needMember: 'Aggiungi almeno un membro della famiglia.', needProtein: 'Scegli almeno una fonte di proteine.', needCarb: 'Scegli almeno una fonte di carboidrati.', needMeal: 'Scegli almeno un pasto.',
     prevDay: 'Giorno precedente', nextDay: 'Giorno successivo', prevWeek: 'Settimana precedente', nextWeek: 'Settimana successiva',
     loggedOf: (a, b) => `${a} di ${b} registrati`, nothingYet: 'Ancora niente da registrare', timeToLog: '⏰ È ora di registrare i pasti di oggi.',
-    thisWeek: 'questa settimana', sameAs: 'Come', skipNow: 'Salta per ora', andWith: 'E come contorno? 🍽️',
+    thisWeek: 'questa settimana', sameAs: 'Come', skipNow: 'Salta per ora', andWith: 'E come contorno? 🍽️', multiHint: 'Tocca = fatto. ＋ = aggiungi altro (fino a 3).', maxPick: 'Al massimo 3.',
     proteins: 'Proteine', carbs: 'Carboidrati', change: 'cambia', sameFor: 'Registra lo stesso pasto anche per:',
     nothing: 'Ancora niente', askLater: (meal, time) => `${meal}: te lo chiedo dopo le ${time}.`, fillYesterday: 'Completa ieri',
     doneForNow: 'Fatto per ora', weekOverview: 'Riepilogo settimanale', done: 'Fatto!',
@@ -947,6 +952,11 @@ const laterMeals = date => date === todayIso() ? activeMeals().filter(m => !aska
 const member = id => S().members.find(m => m.id === id);
 
 /* log access: log[date][memberId] = { meals: { lunch: {p, c} }, sweets: [{name, emoji, g}] } */
+// Entry p/c: one id (string, the original format) or up to MAX_PICK ids (array).
+const MAX_PICK = 3;
+const ids = v => [].concat(v ?? []);
+const pack = a => a.length > 1 ? a : a[0];
+const label = (kind, v) => ids(v).map(id => `${item(kind, id).emoji} ${esc(item(kind, id).name)}`).join(', ');
 const entry = (date, mid, meal) => state.log[date]?.[mid]?.meals?.[meal];
 function dayRec(date, mid) {
   const d = state.log[date] ??= {};
@@ -960,7 +970,7 @@ function setEntry(date, mid, meal, val) {
 }
 function countWeek(mid, date, kind, id) {
   let n = 0;
-  for (const d of weekDays(date)) for (const e of Object.values(state.log[d]?.[mid]?.meals ?? {})) if (e[kind] === id) n++;
+  for (const d of weekDays(date)) for (const e of Object.values(state.log[d]?.[mid]?.meals ?? {})) if (ids(e[kind]).includes(id)) n++;
   return n;
 }
 function pending(date) {
@@ -1183,7 +1193,7 @@ function validateStep(step) {
 
 /* ═══════════════════════════ TODAY (quick entry) ═══════════════════════════ */
 
-let flow = null;            // { date, mid, meal, step: 'p'|'c', p, all }
+let flow = null;            // { date, mid, meal, step: 'p'|'c', ps: [ids], cs: [ids], all }
 const skipped = new Set();  // "date|mid|meal" skipped in this session
 const skey = (d, mid, meal) => `${d}|${mid}|${meal}`;
 
@@ -1198,7 +1208,7 @@ function viewToday() {
 
   if (!flow || flow.date !== date || entry(date, flow.mid, flow.meal) || !member(flow.mid)) {
     const next = pend.find(x => !skipped.has(skey(date, x.mid, x.meal)));
-    flow = next ? { date, mid: next.mid, meal: next.meal, step: 'p', p: null, all: false } : null;
+    flow = next ? { date, mid: next.mid, meal: next.meal, step: 'p', ps: [], cs: [], all: false } : null;
   }
 
   return `
@@ -1223,7 +1233,10 @@ function tile(act, kind, it, mid, date) {
     else if (g?.type === 'max') hint = `<small class="${n >= g.n ? 'warn' : ''}">${n}/${g.n} max</small>`;
     else if (n) hint = `<small>${n}× ${T('thisWeek')}</small>`;
   }
-  return `<button class="tile ${it.id === 'none' ? 'none' : ''}" data-act="${act}" data-id="${esc(it.id)}"><span class="e">${it.emoji}</span>${esc(it.name)}${hint}</button>`;
+  const sel = flow[kind === 'p' ? 'ps' : 'cs'].includes(it.id);
+  const btn = `<button class="tile ${it.id === 'none' ? 'none' : ''} ${sel ? 'sel' : ''}" data-act="${act}" data-id="${esc(it.id)}"><span class="e">${it.emoji}</span>${esc(it.name)}${hint}</button>`;
+  if (it.id === 'none') return btn;
+  return `<div class="tile-wrap">${btn}<button class="tile-plus" data-act="plus-${kind}" data-id="${esc(it.id)}" aria-pressed="${sel}" aria-label="${T('add')}: ${esc(it.name)}">${sel ? '✓' : '＋'}</button></div>`;
 }
 
 function questionCard() {
@@ -1235,27 +1248,46 @@ function questionCard() {
     const others = S().members.filter(o => o.id !== mid && entry(date, o.id, meal));
     const shortcuts = others.map(o => {
       const e = entry(date, o.id, meal);
-      return `<button class="shortcut" data-act="same-as" data-id="${o.id}">↺ ${T('sameAs')} ${esc(o.name)}: ${item('p', e.p).emoji} ${esc(item('p', e.p).name)} + ${item('c', e.c).emoji} ${esc(item('c', e.c).name)}</button>`;
+      return `<button class="shortcut" data-act="same-as" data-id="${o.id}">↺ ${T('sameAs')} ${esc(o.name)}: ${label('p', e.p)} + ${label('c', e.c)}</button>`;
     }).join('');
     return `<article class="q-card" data-key="${skey(date, mid, meal)}p">
       ${head}
       <h1 class="q">${esc(question(m, meal, date))}</h1>
-      ${shortcuts ? `<div class="shortcuts">${shortcuts}</div>` : ''}
+      ${shortcuts && !flow.ps.length ? `<div class="shortcuts">${shortcuts}</div>` : ''}
+      <p class="hint">${T('multiHint')}</p>
       <div class="tiles">${selected('p').map(it => tile('pick-p', 'p', it, mid, date)).join('')}${tile('pick-p', 'p', NONE.p, mid, date)}</div>
+      ${nextBar('p')}
       <div class="q-foot"><button class="link" data-act="skip">${T('skipNow')}</button></div>
     </article>`;
   }
 
-  const p = item('p', flow.p);
   const restPending = S().members.filter(o => o.id !== mid && !entry(date, o.id, meal));
   return `<article class="q-card" data-key="${skey(date, mid, meal)}c">
     ${head}
     <h1 class="q">${T('andWith')}</h1>
-    <p class="chosen">${T('proteins')}: <strong>${p.emoji} ${esc(p.name)}</strong> <button class="link" data-act="back-p">${T('change')}</button></p>
+    <p class="chosen">${T('proteins')}: <strong>${label('p', flow.ps)}</strong> <button class="link" data-act="back-p">${T('change')}</button></p>
     <div class="tiles">${selected('c').map(it => tile('pick-c', 'c', it, mid, date)).join('')}${tile('pick-c', 'c', NONE.c, mid, date)}</div>
+    ${nextBar('c')}
     ${restPending.length ? `<div class="q-foot"><label class="check"><input type="checkbox" data-change="flow-all" ${flow.all ? 'checked' : ''}> ${T('sameFor')} ${restPending.map(o => esc(o.name)).join(', ')}</label></div>` : ''}
   </article>`;
 }
+
+// Shown once something was added with ＋: confirm the picks without tapping another tile.
+function nextBar(kind) {
+  const list = flow[kind === 'p' ? 'ps' : 'cs'];
+  if (!list.length) return '';
+  return `<div class="sticky-next"><span>${list.map(id => item(kind, id).emoji).join(' ')}</span><button class="btn primary" data-act="next-${kind}">${kind === 'p' ? T('next') : `✓ ${T('save')}`}</button></div>`;
+}
+
+// 'none' excludes everything else; at most MAX_PICK real items.
+function togglePick(list, id) {
+  if (id === 'none') return list.includes('none') ? [] : ['none'];
+  const l = list.filter(x => x !== 'none');
+  if (l.includes(id)) return l.filter(x => x !== id);
+  if (l.length >= MAX_PICK) { toast(T('maxPick')); return l; }
+  return [...l, id];
+}
+const addPick = (list, id) => list.includes(id) ? list : togglePick(list, id);
 
 function doneCard(date, pend) {
   const later = laterMeals(date);
@@ -1273,35 +1305,38 @@ function doneCard(date, pend) {
 function todaySummary(date) {
   const rows = S().members.map(m => `<div class="mini-row"><span class="who">${esc(m.name)}</span><span class="what">${activeMeals().map(ml => {
     const e = entry(date, m.id, ml.id);
-    if (e) return `<span class="entry-pill" title="${ml.name}">${ml.emoji} ${item('p', e.p).emoji}${item('c', e.c).emoji}</span>`;
+    if (e) return `<span class="entry-pill" title="${ml.name}">${ml.emoji} ${ids(e.p).map(id => item('p', id).emoji).join('')}${ids(e.c).map(id => item('c', id).emoji).join('')}</span>`;
     if (laterMeals(date).includes(ml)) return `<span class="entry-pill missing" title="${ml.name} – ${T('later')}">${ml.emoji} <small>${mealStart(ml.id)}</small></span>`;
     return `<span class="entry-pill missing" title="${ml.name}">${ml.emoji} ?</span>`;
   }).join('')}</span></div>`).join('');
   return `<section class="card"><div class="card-head"><h2>${T('logged')}</h2><a class="btn small" href="${qs({ view: 'day', date })}">${T('editDay')}</a></div><div class="mini">${rows}</div></section>`;
 }
 
-function saveFlowEntry(cId) {
-  const { date, mid, meal, p, all } = flow;
+function saveFlowEntry() {
+  const { date, mid, meal, all } = flow;
+  const p = pack(flow.ps.length ? flow.ps : ['none']), c = pack(flow.cs.length ? flow.cs : ['none']);
   const targets = [mid, ...(all ? S().members.filter(o => o.id !== mid && !entry(date, o.id, meal)).map(o => o.id) : [])];
-  for (const t of targets) setEntry(date, t, meal, { p, c: cId });
+  for (const t of targets) setEntry(date, t, meal, { p, c });
   save();
   flow = null;
-  notifyChecks(date, targets, { p, c: cId });
+  notifyChecks(date, targets, { p, c });
 }
 
 function notifyChecks(date, mids, e) {
   const warns = [], wins = [];
   for (const mid of mids) {
     const m = member(mid);
-    const g = S().goals[e.p];
-    if (g && e.p !== 'none') {
-      const n = countWeek(mid, date, 'p', e.p), it = item('p', e.p);
+    for (const id of ids(e.p)) {
+      const g = S().goals[id];
+      if (!g || id === 'none') continue;
+      const n = countWeek(mid, date, 'p', id), it = item('p', id);
       if (g.type === 'max' && n > g.n) warns.push(T('overP', esc(m.name), `${it.emoji} ${esc(it.name)}`, n, g.n));
       if (g.type === 'min' && n === g.n) wins.push(T('goalMet', m.name, it.emoji, g.n));
     }
-    const a = S().alerts[e.c];
-    if (a && e.c !== 'none') {
-      const n = countWeek(mid, date, 'c', e.c), it = item('c', e.c);
+    for (const id of ids(e.c)) {
+      const a = S().alerts[id];
+      if (!a || id === 'none') continue;
+      const n = countWeek(mid, date, 'c', id), it = item('c', id);
       if (n > a) warns.push(T('overC', esc(m.name), `${it.emoji} ${esc(it.name)}`, n, a));
     }
   }
@@ -1383,7 +1418,7 @@ function viewWeek() {
   ${days.map(d => `<a class="card day-card ${d === t ? 'today' : ''}" href="${qs({ view: 'day', date: d, member: mid })}">
     <div class="dh"><strong>${dayName(d)} ${fmtDate(d)}</strong><small>${d > t ? T('future') : T('edit')}</small></div>
     ${activeMeals().map(ml => { const e = entry(d, mid, ml.id);
-      return `<div class="meal-line"><span>${ml.emoji} ${ml.name}</span><span>${e ? `${item('p', e.p).emoji} ${esc(item('p', e.p).name)} · ${item('c', e.c).emoji} ${esc(item('c', e.c).name)}` : '<small>—</small>'}</span></div>`; }).join('')}
+      return `<div class="meal-line"><span>${ml.emoji} ${ml.name}</span><span>${e ? `${label('p', e.p)} · ${label('c', e.c)}` : '<small>—</small>'}</span></div>`; }).join('')}
   </a>`).join('')}`;
 }
 
@@ -1391,10 +1426,11 @@ function viewWeek() {
 
 function viewDay() {
   const date = validDate(param('date')) ?? todayIso();
-  const opts = (kind, cur) => {
-    const list = selected(kind);
+  const opts = (kind, v) => {
+    const list = selected(kind), cur = ids(v).length > 1 ? null : v;
+    const combo = ids(v).length > 1 ? `<option value="${esc(ids(v).join(','))}" selected>${label(kind, v)}</option>` : '';
     if (cur && cur !== 'none' && !list.some(x => x.id === cur)) list.push(item(kind, cur));
-    return `<option value="">${T('notLogged')}</option>${list.map(it => `<option value="${esc(it.id)}" ${cur === it.id ? 'selected' : ''}>${it.emoji} ${esc(it.name)}</option>`).join('')}<option value="none" ${cur === 'none' ? 'selected' : ''}>🚫 ${NONE[kind].name}</option>`;
+    return `<option value="">${T('notLogged')}</option>${combo}${list.map(it => `<option value="${esc(it.id)}" ${cur === it.id ? 'selected' : ''}>${it.emoji} ${esc(it.name)}</option>`).join('')}<option value="none" ${cur === 'none' ? 'selected' : ''}>🚫 ${NONE[kind].name}</option>`;
   };
   return `
   <div class="day-head">
@@ -1578,8 +1614,7 @@ function makePlan(hist, weeks) {
   let analyzed = 0;
   for (let i = 1; i <= hist; i++) for (const r of Object.values(state.log[addDays(t, -i)] ?? {})) for (const e of Object.values(r.meals ?? {})) {
     analyzed++;
-    if (e.p !== 'none') freq.p[e.p] = (freq.p[e.p] ?? 0) + 1;
-    if (e.c !== 'none') freq.c[e.c] = (freq.c[e.c] ?? 0) + 1;
+    for (const k of ['p', 'c']) for (const id of ids(e[k])) if (id !== 'none') freq[k][id] = (freq[k][id] ?? 0) + 1;
   }
   const main = activeMeals().filter(m => ['lunch', 'dinner'].includes(m.id));
   const meals = main.length ? main : activeMeals();
@@ -1823,9 +1858,13 @@ const ACT = {
   ics() { downloadIcs(); },
 
   /* today */
-  'pick-p'(el) { flow.p = el.dataset.id; flow.step = 'c'; render(); },
+  'pick-p'(el) { flow.ps = addPick(flow.ps, el.dataset.id); flow.step = 'c'; render(); },
+  'plus-p'(el) { flow.ps = togglePick(flow.ps, el.dataset.id); render(); },
+  'next-p'() { flow.step = 'c'; render(); },
   'back-p'() { flow.step = 'p'; render(); },
-  'pick-c'(el) { saveFlowEntry(el.dataset.id); render(); },
+  'pick-c'(el) { flow.cs = addPick(flow.cs, el.dataset.id); saveFlowEntry(); render(); },
+  'plus-c'(el) { flow.cs = togglePick(flow.cs, el.dataset.id); render(); },
+  'next-c'() { saveFlowEntry(); render(); },
   'same-as'(el) {
     const e = entry(flow.date, el.dataset.id, flow.meal);
     const { date, mid, meal } = flow;
@@ -1927,7 +1966,7 @@ const CHANGE = {
   'edit-entry'(el) {
     const { date, mid, meal, kind } = el.dataset;
     const cur = entry(date, mid, meal) ?? {};
-    const next = { p: cur.p ?? 'none', c: cur.c ?? 'none', [kind]: el.value };
+    const next = { p: cur.p ?? 'none', c: cur.c ?? 'none', [kind]: pack(el.value.split(',')) };
     if (!el.value) {
       // clearing one half clears the whole meal record
       setEntry(date, mid, meal, null); save(); render(); toast(T('entryRemoved')); return;

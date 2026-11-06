@@ -926,6 +926,7 @@ const SEED_KEY = 'food-monitor.seed';
 const MIGRATED_KEY = 'food-monitor.migrated'; // legacy localStorage data imported once
 const AWAIT_KEY = 'food-monitor.awaitSync';   // just joined: wait for data before setup
 const SEED_SAVED_KEY = 'food-monitor.seedSaved'; // user confirmed they wrote down the 24 words
+const CACHE_KEY = 'food-monitor.cache'; // local copy of the state: { owner, state } (old version's KEY is never touched)
 const lsGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); return true; } catch { return false; } };
 
@@ -981,17 +982,42 @@ function save() {
   for (const [k, v] of next) if (synced.get(k) !== v) write(k, v);
   for (const k of synced.keys()) if (!next.has(k)) write(k, null);
   synced = written;
+  writeCache(true);
+}
+
+// Local copy in localStorage: shown at once when the DB starts empty (Firefox
+// private window, evicted OPFS, offline). It is never pushed over relay data:
+// only rows the user changes are written, and the whole copy only when the
+// relay turns out to have nothing for this key.
+let cacheOnly = false; // started from the copy; relay not confirmed yet
+let cacheMap = new Map();
+function writeCache(local = false) {
+  if (cacheOnly && !local) return; // half-arrived relay data must not replace a good copy
+  lsSet(CACHE_KEY, JSON.stringify({ owner: appOwner.id, state }));
+}
+function readCache() {
+  try { const c = JSON.parse(lsGet(CACHE_KEY)); return c?.owner === appOwner.id ? normalize(c.state) : null; }
+  catch { return null; }
+}
+function endCacheOnly() {
+  if (!cacheOnly) return;
+  if (pendingWrites > 0) { setTimeout(endCacheOnly, 500); return; }
+  cacheOnly = false;
+  if (rowsToMap().size === 0) { synced = new Map(); save(); } // relay is empty → restore everything from the copy
+  else { pullRemote(); writeCache(); }
 }
 // Apply changes that came from other tabs/devices. Skipped while own writes are
 // in flight (the query would show an older local version); re-run when they land.
 let awaitingSync = lsGet(AWAIT_KEY) === '1';
 function pullRemote() {
   if (pendingWrites > 0) return;
-  const m = rowsToMap();
-  if (m.size && awaitingSync) { awaitingSync = false; lsSet(AWAIT_KEY, null); }
+  const rows = rowsToMap();
+  if (rows.size && awaitingSync) { awaitingSync = false; lsSet(AWAIT_KEY, null); }
+  const m = cacheOnly ? new Map([...cacheMap, ...rows]) : rows;
   if (sameMap(m, synced)) return;
   synced = m;
   state = mapToState(m) ?? defaults();
+  writeCache();
   // Setup was shown only because data hadn't arrived yet → leave the wizard.
   if (S().setupDone && param('view') === 'setup' && param('edit') !== '1') history.replaceState(null, '', '?view=today');
   renderWhenIdle();
@@ -1014,7 +1040,13 @@ await evolu.loadQuery(kvQuery);
 evolu.subscribeQuery(kvQuery)(pullRemote);
 synced = rowsToMap();
 let state = mapToState(synced);
-if (!state) {
+const cached = state ? null : readCache();
+if (cached) {
+  state = cached;
+  cacheMap = stateToMap(cached);
+  synced = new Map(cacheMap);
+  cacheOnly = true;
+} else if (!state) {
   state = defaults();
   // First run of this seed on this device: bring over data from the single-file version.
   const legacy = isNewSeed && !lsGet(MIGRATED_KEY) ? (() => { try { return normalize(JSON.parse(lsGet(KEY))); } catch { return null; } })() : null;
@@ -1024,12 +1056,14 @@ if (!state) {
   // in memory): the data is on the relay, so wait for it instead of showing setup.
   else if (!isNewSeed) awaitingSync = true;
 }
+writeCache();
 
 let syncStatus = 'Syncing';
 evoluRun.deps.syncState.subscribe(() => {
   const st = EvoluLocalFirst.syncStateToOwnerSyncStatus(evoluRun.deps.syncState.get(), evolu.name, appOwner.id);
   syncStatus = st.type === 'Error' ? `Error: ${st.error.type}` : st.type;
   // "Synced" can come just before the downloaded rows reach the query; give them a moment.
+  if (cacheOnly && st.type === 'Synced') setTimeout(endCacheOnly, 3000);
   if (awaitingSync && st.type === 'Synced') setTimeout(() => { if (awaitingSync) { awaitingSync = false; lsSet(AWAIT_KEY, null); pullRemote(); render(); } }, 3000);
   document.querySelectorAll('[data-sync-status]').forEach(el => { el.textContent = syncLabel(); });
 });

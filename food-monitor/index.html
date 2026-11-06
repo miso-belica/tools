@@ -602,7 +602,7 @@ const I18N = {
     nGoals: n => `${n} cieľov`, nLimits: n => `${n} limitov`, everyDayAt: t => `každý deň o ${t}`, off: 'vypnutá',
     premiumActive: 'Premium aktívne', premiumToggle: 'Bez platby – v prototype sa Premium len prepína.',
     data: '💾 Dáta', dataHint: 'Dáta sú uložené v tomto prehliadači a šifrovane sa synchronizujú na zariadenia s rovnakým kľúčom.',
-    syncTitle: 'Synchronizácia zariadení', syncHaveTitle: 'Už používate appku na inom zariadení?', syncHaveHint: 'Na druhom zariadení otvorte Nastavenia → Zobraziť QR kód a naskenujte ho fotoaparátom tohto zariadenia.', syncHint: 'Na druhom zariadení naskenujte QR kód fotoaparátom (alebo zadajte 24 slov). Obe zariadenia potom zdieľajú rovnaké dáta.',
+    syncTitle: 'Synchronizácia zariadení', syncMemory: '⚠️ Tento prehliadač neukladá dáta (súkromné okno?). Po obnovení stránky sa načítajú zo synchronizácie – bez internetu sa neuložené zmeny stratia.', syncHaveTitle: 'Už používate appku na inom zariadení?', syncHaveHint: 'Na druhom zariadení otvorte Nastavenia → Zobraziť QR kód a naskenujte ho fotoaparátom tohto zariadenia.', syncHint: 'Na druhom zariadení naskenujte QR kód fotoaparátom (alebo zadajte 24 slov). Obe zariadenia potom zdieľajú rovnaké dáta.',
     syncStatus: 'Stav', syncOk: '✓ Synchronizované', syncing: 'Synchronizujem…', syncOffline: 'Offline – zmeny sa odošlú neskôr',
     syncShow: '📱 Zobraziť QR kód', syncScan: '📷 Naskenovať QR kód', syncEnter: '⌨️ Zadať kľúč',
     syncQrHint: 'Naskenujte týmto kódom na druhom zariadení (bežným fotoaparátom).', syncSecret: '⚠️ Kto má tento kód, vidí a môže upravovať vaše dáta. Neposielajte ho nikomu cudziemu.',
@@ -713,7 +713,7 @@ const I18N = {
     nGoals: n => `${n} goal${n === 1 ? '' : 's'}`, nLimits: n => `${n} limit${n === 1 ? '' : 's'}`, everyDayAt: t => `every day at ${t}`, off: 'off',
     premiumActive: 'Premium active', premiumToggle: 'No payment – in the prototype Premium is just a toggle.',
     data: '💾 Data', dataHint: 'Data is stored in this browser and synced, encrypted, to devices with the same key.',
-    syncTitle: 'Device sync', syncHaveTitle: 'Already using the app on another device?', syncHaveHint: 'On the other device open Settings → Show QR code and scan it with this device’s camera.', syncHint: 'Scan the QR code with the camera of your other device (or enter the 24 words). Both devices then share the same data.',
+    syncTitle: 'Device sync', syncMemory: '⚠️ This browser doesn’t keep data (private window?). After a reload it’s restored from sync – changes made offline are lost.', syncHaveTitle: 'Already using the app on another device?', syncHaveHint: 'On the other device open Settings → Show QR code and scan it with this device’s camera.', syncHint: 'Scan the QR code with the camera of your other device (or enter the 24 words). Both devices then share the same data.',
     syncStatus: 'Status', syncOk: '✓ Synced', syncing: 'Syncing…', syncOffline: 'Offline – changes will be sent later',
     syncShow: '📱 Show QR code', syncScan: '📷 Scan QR code', syncEnter: '⌨️ Enter key',
     syncQrHint: 'Scan this code on the other device (with its normal camera).', syncSecret: '⚠️ Anyone with this code can see and edit your data. Don’t share it with strangers.',
@@ -824,7 +824,7 @@ const I18N = {
     nGoals: n => `${n} ${n === 1 ? 'obiettivo' : 'obiettivi'}`, nLimits: n => `${n} ${n === 1 ? 'limite' : 'limiti'}`, everyDayAt: t => `ogni giorno alle ${t}`, off: 'disattivato',
     premiumActive: 'Premium attivo', premiumToggle: 'Nessun pagamento – nel prototipo Premium è solo un interruttore.',
     data: '💾 Dati', dataHint: 'I dati sono salvati in questo browser e sincronizzati, cifrati, con i dispositivi che hanno la stessa chiave.',
-    syncTitle: 'Sincronizzazione dispositivi', syncHaveTitle: 'Usi già l’app su un altro dispositivo?', syncHaveHint: 'Sull’altro dispositivo apri Impostazioni → Mostra codice QR e scansionalo con la fotocamera di questo dispositivo.', syncHint: 'Scansiona il codice QR con la fotocamera dell’altro dispositivo (o inserisci le 24 parole). Poi entrambi condividono gli stessi dati.',
+    syncTitle: 'Sincronizzazione dispositivi', syncMemory: '⚠️ Questo browser non conserva i dati (finestra privata?). Dopo il ricaricamento vengono ripristinati dalla sincronizzazione – le modifiche offline vanno perse.', syncHaveTitle: 'Usi già l’app su un altro dispositivo?', syncHaveHint: 'Sull’altro dispositivo apri Impostazioni → Mostra codice QR e scansionalo con la fotocamera di questo dispositivo.', syncHint: 'Scansiona il codice QR con la fotocamera dell’altro dispositivo (o inserisci le 24 parole). Poi entrambi condividono gli stessi dati.',
     syncStatus: 'Stato', syncOk: '✓ Sincronizzato', syncing: 'Sincronizzazione…', syncOffline: 'Offline – le modifiche verranno inviate più tardi',
     syncShow: '📱 Mostra codice QR', syncScan: '📷 Scansiona codice QR', syncEnter: '⌨️ Inserisci chiave',
     syncQrHint: 'Scansiona questo codice sull’altro dispositivo (con la normale fotocamera).', syncSecret: '⚠️ Chi ha questo codice può vedere e modificare i tuoi dati. Non condividerlo con estranei.',
@@ -987,6 +987,8 @@ function pullRemote() {
   if (sameMap(m, synced)) return;
   synced = m;
   state = mapToState(m) ?? defaults();
+  // Setup was shown only because data hadn't arrived yet → leave the wizard.
+  if (S().setupDone && param('view') === 'setup' && param('edit') !== '1') history.replaceState(null, '', '?view=today');
   renderWhenIdle();
 }
 // Re-render for remote changes, but not under the user's fingers: wait until
@@ -1001,7 +1003,10 @@ function renderWhenIdle() {
   busy[0].addEventListener(busy[1], () => { renderQueued = false; renderWhenIdle(); }, { once: true });
 }
 
+const devicePersistence = await evolu.devicePersistence;
 await evolu.loadQuery(kvQuery);
+// Subscribe before any write below, so their onComplete sees fresh rows.
+evolu.subscribeQuery(kvQuery)(pullRemote);
 synced = rowsToMap();
 let state = mapToState(synced);
 if (!state) {
@@ -1010,8 +1015,10 @@ if (!state) {
   const legacy = isNewSeed && !lsGet(MIGRATED_KEY) ? (() => { try { return normalize(JSON.parse(lsGet(KEY))); } catch { return null; } })() : null;
   lsSet(MIGRATED_KEY, '1');
   if (legacy) { state = legacy; save(); }
+  // Known seed but empty local DB (e.g. Firefox private window keeps the DB only
+  // in memory): the data is on the relay, so wait for it instead of showing setup.
+  else if (!isNewSeed) awaitingSync = true;
 }
-evolu.subscribeQuery(kvQuery)(pullRemote);
 
 let syncStatus = 'Syncing';
 evoluRun.deps.syncState.subscribe(() => {
@@ -1614,6 +1621,7 @@ function viewSettings() {
   <section class="card"><h2>🔄 ${T('syncTitle')}</h2>
     <p class="hint" style="margin:0 0 8px">${T('syncHint')}</p>
     <p class="hint" style="margin:0 0 8px">${T('syncStatus')}: <strong data-sync-status>${syncLabel()}</strong></p>
+    ${devicePersistence === 'NotPersisted' ? `<p class="note" style="margin:0 0 8px">${T('syncMemory')}</p>` : ''}
     <div class="row-btns"><button class="btn small" data-act="sync-show">${T('syncShow')}</button></div>
     ${syncJoinButtons()}
   </section>

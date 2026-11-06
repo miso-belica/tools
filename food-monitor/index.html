@@ -287,6 +287,10 @@ dialog {
   background: var(--card); color: var(--text); box-shadow: 0 20px 60px rgb(0 0 0 / .3);
 }
 .qr svg { display: block; width: min(100%, 280px); height: auto; margin: 0 auto 8px; background: #fff; border-radius: 8px; }
+.seed-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 4px 12px; padding-left: 2.2em; margin: 8px 0; font-family: ui-monospace, monospace; font-size: .95rem; }
+.seed-grid li::marker { color: var(--muted); font-size: .8em; }
+.seed-grid li + li { margin-top: 0; }
+.key-card { border: 2px solid var(--warn); }
 .seed { font-family: ui-monospace, monospace; font-size: .9rem; word-spacing: .2em; padding: 8px 0; user-select: all; }
 video.scan { display: block; width: 100%; max-height: 50vh; border-radius: 12px; background: #000; }
 dialog::backdrop { background: rgb(0 0 0 / .45); }
@@ -602,7 +606,7 @@ const I18N = {
     nGoals: n => `${n} cieľov`, nLimits: n => `${n} limitov`, everyDayAt: t => `každý deň o ${t}`, off: 'vypnutá',
     premiumActive: 'Premium aktívne', premiumToggle: 'Bez platby – v prototype sa Premium len prepína.',
     data: '💾 Dáta', dataHint: 'Dáta sú uložené v tomto prehliadači a šifrovane sa synchronizujú na zariadenia s rovnakým kľúčom.',
-    syncTitle: 'Synchronizácia zariadení', syncMemory: '⚠️ Tento prehliadač neukladá dáta (súkromné okno?). Po obnovení stránky sa načítajú zo synchronizácie – bez internetu sa neuložené zmeny stratia.', syncHaveTitle: 'Už používate appku na inom zariadení?', syncHaveHint: 'Na druhom zariadení otvorte Nastavenia → Zobraziť QR kód a naskenujte ho fotoaparátom tohto zariadenia.', syncHint: 'Na druhom zariadení naskenujte QR kód fotoaparátom (alebo zadajte 24 slov). Obe zariadenia potom zdieľajú rovnaké dáta.',
+    syncTitle: 'Synchronizácia zariadení', keyTitle: 'Uložte si záchranný kľúč', keyText: '24 slov je jediný spôsob, ako obnoviť dáta, ak sa vymažú z prehliadača a nemáte iné zariadenie. Zapíšte si ich na papier alebo do správcu hesiel.', keyShow: 'Zobraziť 24 slov', keyWrite: 'Zapíšte si tieto slová v tomto poradí a uložte ich na bezpečné miesto.', keySavedBtn: '✓ Mám ich zapísané', keyIsSaved: 'Záchranný kľúč je zapísaný ✓', keyNotSaved: 'Záchranný kľúč ešte nie je zapísaný – zobraziť', syncMemory: '⚠️ Tento prehliadač neukladá dáta (súkromné okno?). Po obnovení stránky sa načítajú zo synchronizácie – bez internetu sa neuložené zmeny stratia.', syncHaveTitle: 'Už používate appku na inom zariadení?', syncHaveHint: 'Na druhom zariadení otvorte Nastavenia → Zobraziť QR kód a naskenujte ho fotoaparátom tohto zariadenia.', syncHint: 'Na druhom zariadení naskenujte QR kód fotoaparátom (alebo zadajte 24 slov). Obe zariadenia potom zdieľajú rovnaké dáta.',
     syncStatus: 'Stav', syncOk: '✓ Synchronizované', syncing: 'Synchronizujem…', syncOffline: 'Offline – zmeny sa odošlú neskôr',
     syncShow: '📱 Zobraziť QR kód', syncScan: '📷 Naskenovať QR kód', syncEnter: '⌨️ Zadať kľúč',
     syncQrHint: 'Naskenujte týmto kódom na druhom zariadení (bežným fotoaparátom).', syncSecret: '⚠️ Kto má tento kód, vidí a môže upravovať vaše dáta. Neposielajte ho nikomu cudziemu.',
@@ -713,7 +717,7 @@ const I18N = {
     nGoals: n => `${n} goal${n === 1 ? '' : 's'}`, nLimits: n => `${n} limit${n === 1 ? '' : 's'}`, everyDayAt: t => `every day at ${t}`, off: 'off',
     premiumActive: 'Premium active', premiumToggle: 'No payment – in the prototype Premium is just a toggle.',
     data: '💾 Data', dataHint: 'Data is stored in this browser and synced, encrypted, to devices with the same key.',
-    syncTitle: 'Device sync', syncMemory: '⚠️ This browser doesn’t keep data (private window?). After a reload it’s restored from sync – changes made offline are lost.', syncHaveTitle: 'Already using the app on another device?', syncHaveHint: 'On the other device open Settings → Show QR code and scan it with this device’s camera.', syncHint: 'Scan the QR code with the camera of your other device (or enter the 24 words). Both devices then share the same data.',
+    syncTitle: 'Device sync', keyTitle: 'Save your recovery key', keyText: 'The 24 words are the only way to recover your data if it’s cleared from the browser and you have no other device. Write them on paper or in a password manager.', keyShow: 'Show the 24 words', keyWrite: 'Write these words down in this order and keep them somewhere safe.', keySavedBtn: '✓ I’ve written them down', keyIsSaved: 'Recovery key saved ✓', keyNotSaved: 'Recovery key not saved yet – show it', syncMemory: '⚠️ This browser doesn’t keep data (private window?). After a reload it’s restored from sync – changes made offline are lost.', syncHaveTitle: 'Already using the app on another device?', syncHaveHint: 'On the other device open Settings → Show QR code and scan it with this device’s camera.', syncHint: 'Scan the QR code with the camera of your other device (or enter the 24 words). Both devices then share the same data.',
     syncStatus: 'Status', syncOk: '✓ Synced', syncing: 'Syncing…', syncOffline: 'Offline – changes will be sent later',
     syncShow: '📱 Show QR code', syncScan: '📷 Scan QR code', syncEnter: '⌨️ Enter key',
     syncQrHint: 'Scan this code on the other device (with its normal camera).', syncSecret: '⚠️ Anyone with this code can see and edit your data. Don’t share it with strangers.',
@@ -824,7 +828,7 @@ const I18N = {
     nGoals: n => `${n} ${n === 1 ? 'obiettivo' : 'obiettivi'}`, nLimits: n => `${n} ${n === 1 ? 'limite' : 'limiti'}`, everyDayAt: t => `ogni giorno alle ${t}`, off: 'disattivato',
     premiumActive: 'Premium attivo', premiumToggle: 'Nessun pagamento – nel prototipo Premium è solo un interruttore.',
     data: '💾 Dati', dataHint: 'I dati sono salvati in questo browser e sincronizzati, cifrati, con i dispositivi che hanno la stessa chiave.',
-    syncTitle: 'Sincronizzazione dispositivi', syncMemory: '⚠️ Questo browser non conserva i dati (finestra privata?). Dopo il ricaricamento vengono ripristinati dalla sincronizzazione – le modifiche offline vanno perse.', syncHaveTitle: 'Usi già l’app su un altro dispositivo?', syncHaveHint: 'Sull’altro dispositivo apri Impostazioni → Mostra codice QR e scansionalo con la fotocamera di questo dispositivo.', syncHint: 'Scansiona il codice QR con la fotocamera dell’altro dispositivo (o inserisci le 24 parole). Poi entrambi condividono gli stessi dati.',
+    syncTitle: 'Sincronizzazione dispositivi', keyTitle: 'Salva la chiave di recupero', keyText: 'Le 24 parole sono l’unico modo per recuperare i dati se vengono cancellati dal browser e non hai un altro dispositivo. Scrivile su carta o in un gestore di password.', keyShow: 'Mostra le 24 parole', keyWrite: 'Scrivi queste parole in quest’ordine e conservale in un posto sicuro.', keySavedBtn: '✓ Le ho scritte', keyIsSaved: 'Chiave di recupero salvata ✓', keyNotSaved: 'Chiave di recupero non ancora salvata – mostrala', syncMemory: '⚠️ Questo browser non conserva i dati (finestra privata?). Dopo il ricaricamento vengono ripristinati dalla sincronizzazione – le modifiche offline vanno perse.', syncHaveTitle: 'Usi già l’app su un altro dispositivo?', syncHaveHint: 'Sull’altro dispositivo apri Impostazioni → Mostra codice QR e scansionalo con la fotocamera di questo dispositivo.', syncHint: 'Scansiona il codice QR con la fotocamera dell’altro dispositivo (o inserisci le 24 parole). Poi entrambi condividono gli stessi dati.',
     syncStatus: 'Stato', syncOk: '✓ Sincronizzato', syncing: 'Sincronizzazione…', syncOffline: 'Offline – le modifiche verranno inviate più tardi',
     syncShow: '📱 Mostra codice QR', syncScan: '📷 Scansiona codice QR', syncEnter: '⌨️ Inserisci chiave',
     syncQrHint: 'Scansiona questo codice sull’altro dispositivo (con la normale fotocamera).', syncSecret: '⚠️ Chi ha questo codice può vedere e modificare i tuoi dati. Non condividerlo con estranei.',
@@ -921,6 +925,7 @@ function normalize(s) {
 const SEED_KEY = 'food-monitor.seed';
 const MIGRATED_KEY = 'food-monitor.migrated'; // legacy localStorage data imported once
 const AWAIT_KEY = 'food-monitor.awaitSync';   // just joined: wait for data before setup
+const SEED_SAVED_KEY = 'food-monitor.seedSaved'; // user confirmed they wrote down the 24 words
 const lsGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); return true; } catch { return false; } };
 
@@ -1365,6 +1370,8 @@ function viewToday() {
     ${date < t ? `<a class="icon-btn" href="${qs({ view: 'today', date: addDays(date, 1) })}" aria-label="${T('nextDay')}">›</a>` : '<span class="icon-btn" style="visibility:hidden"></span>'}
   </div>
   ${bar(done, total)}
+  ${lsGet(SEED_SAVED_KEY) ? '' : `<section class="card key-card"><h2>🔑 ${T('keyTitle')}</h2><p class="hint" style="margin:0 0 8px">${T('keyText')}</p>
+    <div class="row-btns"><button class="btn small primary" data-act="key-show">${T('keyShow')}</button></div></section>`}
   ${reminderDue() && date === t && pend.length ? `<div class="banner">${T('timeToLog')}</div>` : ''}
   ${flow ? questionCard() : doneCard(date, pend)}
   ${todaySummary(date)}
@@ -1621,6 +1628,7 @@ function viewSettings() {
   <section class="card"><h2>🔄 ${T('syncTitle')}</h2>
     <p class="hint" style="margin:0 0 8px">${T('syncHint')}</p>
     <p class="hint" style="margin:0 0 8px">${T('syncStatus')}: <strong data-sync-status>${syncLabel()}</strong></p>
+    <p class="hint" style="margin:0 0 8px">🔑 ${lsGet(SEED_SAVED_KEY) ? T('keyIsSaved') : `<a href="#" data-act="key-show">${T('keyNotSaved')}</a>`}</p>
     ${devicePersistence === 'NotPersisted' ? `<p class="note" style="margin:0 0 8px">${T('syncMemory')}</p>` : ''}
     <div class="row-btns"><button class="btn small" data-act="sync-show">${T('syncShow')}</button></div>
     ${syncJoinButtons()}
@@ -2066,7 +2074,14 @@ const ACT = {
       await wait(250);
     }
   },
-  'dlg-close'() { $dlg.close(); },
+  'key-show'() {
+    dialog(`<h2>🔑 ${T('keyTitle')}</h2><p class="hint" style="margin:0 0 8px">${T('keyWrite')}</p>
+      <ol class="seed-grid">${seed.split(' ').map(w => `<li>${esc(w)}</li>`).join('')}</ol>
+      <p class="note">${T('syncSecret')}</p>
+      <div class="row-btns"><button class="btn small" data-act="sync-copy">${T('syncCopy')}</button>
+        <button class="btn primary" data-act="key-saved">${T('keySavedBtn')}</button></div>`);
+  },
+  'key-saved'() { lsSet(SEED_SAVED_KEY, '1'); $dlg.close(); toast(T('saved')); render(); },
   'sync-skip'() { awaitingSync = false; lsSet(AWAIT_KEY, null); render(); },
 
   /* settings */
@@ -2275,6 +2290,7 @@ function joinSync(text) {
   if (!confirm(T('syncJoinConfirm'))) return;
   if (!lsSet(SEED_KEY, m)) { toast(T('saveFail')); return; }
   lsSet(AWAIT_KEY, '1'); lsSet(MIGRATED_KEY, '1');
+  lsSet(SEED_SAVED_KEY, null); // a different key: remind again
   location.replace(location.pathname + '?view=today'); // reopen with the new key
 }
 

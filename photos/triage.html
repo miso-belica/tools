@@ -9,14 +9,14 @@
     body { font-family: system-ui, sans-serif; background: #0a0a0a; color: #eee; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
     header, footer { display: flex; gap: 8px; align-items: center; padding: 10px 12px; background: #141414; }
     header { border-bottom: 1px solid #2a2a2a; }
-    footer { border-top: 1px solid #2a2a2a; overflow-x: auto; }
+    footer { border-top: 1px solid #2a2a2a; flex-wrap: wrap; max-height: 42dvh; overflow-y: auto; }
     #info { flex: 1; min-width: 0; }
     #name { font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #meta { font-size: .75rem; color: #888; }
     header label { display: flex; gap: 6px; align-items: center; font-size: .85rem; color: #aaa; flex-shrink: 0; cursor: pointer; }
     button { font: inherit; color: #fff; background: #2a2a2a; border: none; border-radius: 8px; padding: 12px 16px; cursor: pointer; flex-shrink: 0; }
     button.primary { background: #3b82f6; }
-    footer button { background: var(--c, #2a2a2a); }
+    footer button { background: var(--c, #2a2a2a); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     footer button[data-k]::before { content: attr(data-k); font-size: .65rem; opacity: .6; margin-right: 6px; }
     footer button.rep::after { content: '␣'; font-size: .65rem; opacity: .6; margin-left: 6px; }
     footer .on { box-shadow: inset 0 0 0 3px #fff; }
@@ -30,6 +30,8 @@
     main { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; justify-content: center; }
     main :is(img, video) { max-width: 100%; max-height: 100%; object-fit: contain; }
     main .arrow { position: absolute; top: 0; bottom: 0; width: 56px; background: transparent; border-radius: 0; font-size: 2rem; color: #fff8; }
+    #when { position: absolute; bottom: 8px; left: 50%; translate: -50%; max-width: 90%; padding: 2px 10px; border-radius: 99px; background: #0009; color: #fff; font-size: .75rem; white-space: nowrap; pointer-events: none; }
+    main:has(video:not([hidden])) #when { bottom: auto; top: 8px; } /* keeps clear of the native video controls */
     #prev { left: 0; } #next { right: 0; }
     #empty { text-align: center; color: #888; padding: 20px; line-height: 1.6; }
     dialog { margin: auto; width: min(96vw, 900px); max-height: 96dvh; background: #141414; color: #eee; border: 1px solid #2a2a2a; border-radius: 12px; padding: 12px; }
@@ -62,6 +64,7 @@
     </div>
     <img alt="" hidden>
     <video controls playsinline hidden></video>
+    <div id="when" hidden></div>
     <button class="arrow" id="prev" hidden aria-label="Previous">‹</button>
     <button class="arrow" id="next" hidden aria-label="Next">›</button>
 </main>
@@ -348,8 +351,10 @@ function ui() {
     const p = photos[i];
     img.hidden = vid.hidden = bar.hidden = $('#prev').hidden = $('#next').hidden = !p;
     $('#empty').hidden = !!p;
+    $('#when').hidden = !p?.time; // time is unknown until the file dates are read
     if (!p) { $('#name').textContent = root?.name ?? 'Photo Triage'; status(root ? 'All sorted 🎉 No photos left in the root folder' : 'Pick a folder to start'); return; }
     $('#name').textContent = p.name;
+    $('#when').textContent = p.time ? new Date(p.time).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
     (VID.test(p.name) ? img : vid).hidden = true;
     status(`${i + 1} / ${photos.length}` + (p.dir ? ` · ${p.dir === TRASH ? 'trash' : p.dir}` : '') +
         ` · ${photos.filter(x => !x.dir).length} left` + (pending ? ` · saving ${pending}…` : '') + (loading ? ` · ${loading}…` : ''));

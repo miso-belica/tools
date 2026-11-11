@@ -17,6 +17,8 @@
     button { font: inherit; color: #fff; background: #2a2a2a; border: none; border-radius: 8px; padding: 12px 16px; cursor: pointer; flex-shrink: 0; }
     button.primary { background: #3b82f6; }
     footer button { background: var(--c, #2a2a2a); }
+    footer button[data-k]::before { content: attr(data-k); font-size: .65rem; opacity: .6; margin-right: 6px; }
+    footer button.rep::after { content: '␣'; font-size: .65rem; opacity: .6; margin-left: 6px; }
     footer .on { box-shadow: inset 0 0 0 3px #fff; }
     footer #trash.on { background: #dc2626; }
     #row { flex: 1; min-height: 0; display: flex; position: relative; }
@@ -77,7 +79,7 @@
 const IMG = /\.(jpe?g|png|gif|webp|avif|bmp|mp4|m4v|mov|webm)$/i, VID = /\.(mp4|m4v|mov|webm)$/i, TRASH = '.trash', AHEAD = 3, KEEP = 5;
 const $ = s => document.querySelector(s);
 const img = $('main img'), vid = $('main video'), bar = $('#bar'), dupe = $('#dupe');
-let t0 = performance.now(), touched = false, root, loading = '', photos = [], tags = [], shown = [], base = new Map(), i = 0, handles = new Map(), cache = new Map(), queue = Promise.resolve(), pending = 0;
+let t0 = performance.now(), touched = false, root, loading = '', photos = [], tags = [], base = new Map(), i = 0, handles = new Map(), cache = new Map(), queue = Promise.resolve(), pending = 0, last = ''; // last: target Space repeats
 
 // Autoplay setting, on unless turned off earlier.
 const auto = $('#autoplay');
@@ -231,7 +233,7 @@ async function pick() {
     catch (e) { if (e.name !== 'AbortError') alert(e.message); return; }
     t0 = performance.now(); logList.replaceChildren(); log(`opened folder "${root.name}"`);
     cache.forEach(u => u.then(URL.revokeObjectURL));
-    photos = []; tags = []; base = new Map(); handles = new Map(); cache = new Map(); i = 0; touched = false; progress('listing');
+    photos = []; tags = []; base = new Map(); handles = new Map(); cache = new Map(); i = 0; touched = false; last = ''; progress('listing');
     const r = root;
     // Triage starts with the first photo found, in disk order; the background sorts them later.
     for await (const h of r.values()) {
@@ -268,6 +270,12 @@ async function background(r) {
             base.set(d, n - photos.filter(p => p.at.dir === d).length); // our photos are counted by p.dir
         });
     }
+    // Freeze the label order once the counts are known (most used first, stable so ties stay alphabetical); new labels are appended later.
+    if (!live()) return;
+    const count = new Map(base);
+    for (const x of photos) count.set(x.dir, (count.get(x.dir) ?? 0) + 1);
+    tags.sort((a, b) => (count.get(b) ?? 0) - (count.get(a) ?? 0));
+    render();
     // Outside the queue: a file moved meanwhile fails to read and is left out (null).
     for (let k = 0; k < files.length && live(); k += 100)
         await Promise.all(files.slice(k, k + 100).map(async e => e.f = await (e.h ? e.h.getFile().catch(() => null) : read(await dir(e.dir), e.file))));
@@ -345,19 +353,17 @@ function ui() {
     (VID.test(p.name) ? img : vid).hidden = true;
     status(`${i + 1} / ${photos.length}` + (p.dir ? ` · ${p.dir === TRASH ? 'trash' : p.dir}` : '') +
         ` · ${photos.filter(x => !x.dir).length} left` + (pending ? ` · saving ${pending}…` : '') + (loading ? ` · ${loading}…` : ''));
-    // Most used tags first; sort is stable, so ties stay alphabetical.
-    const count = new Map(base);
-    for (const x of photos) count.set(x.dir, (count.get(x.dir) ?? 0) + 1);
-    shown = tags.toSorted((a, b) => (count.get(b) ?? 0) - (count.get(a) ?? 0));
     bar.replaceChildren(
         button('🗑', p.dir === TRASH, () => move(TRASH), 'trash'),
-        ...shown.map(t => {
+        ...tags.map((t, n) => {
             const b = button(t, p.dir === t, () => move(t));
             b.style.setProperty('--c', `hsl(${hue(t)} 55% 32%)`);
+            if (n < 10) b.dataset.k = (n + 1) % 10;
             return b;
         }),
         button('＋', false, addTag),
     );
+    [...bar.children].find(b => b.textContent === (last === TRASH ? '🗑' : last))?.classList.add('rep');
 }
 
 async function render() {
@@ -526,6 +532,7 @@ function move(target) {
     const to = p.dir === target ? '' : target;
     if (to && to !== TRASH && !tags.includes(to)) tags.push(to);
     touched = true;
+    if (to) last = to;
     enqueue(p, to);
     // Next photo still to triage, wrapping around to the start
     const next = to && [...photos.slice(i + 1), ...photos.slice(0, i)].find(q => !q.dir);
@@ -579,10 +586,13 @@ document.addEventListener('keydown', e => {
         if (keep !== undefined) { e.preventDefault(); dupe.close(String(keep)); }
         return;
     }
-    if (e.key === 'ArrowLeft') go(-1);
+    if (e.key === ' ') { // preventDefault also stops a focused button/checkbox/video from reacting
+        e.preventDefault();
+        if (last && !e.repeat && photos[i]?.dir !== last) move(last); // never un-move a photo already in last
+    } else if (e.key === 'ArrowLeft') go(-1);
     else if (e.key === 'ArrowRight') go(1);
     else if (e.key === 'Delete' || e.key === 'Backspace') move(TRASH);
-    else if (/^[1-9]$/.test(e.key) && shown[e.key - 1]) move(shown[e.key - 1]);
+    else if (/^\d$/.test(e.key) && tags[(+e.key + 9) % 10]) move(tags[(+e.key + 9) % 10]); // 1-9, then 0 as the tenth
 });
 identical([new File(['ab'], 'a'), new File(['ab'], 'b'), new File(['ac'], 'c')]).then(g => console.assert(JSON.stringify(g) === '[[0,1]]', 'identical'));
 console.assert([

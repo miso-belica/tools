@@ -58,6 +58,7 @@
     border: 1px solid var(--line); background: var(--bg); font-size: 1.1rem;
   }
   .code-input { text-transform: uppercase; letter-spacing: .15em; font-weight: 700; }
+  .warnings { padding-left: 1.2em; margin: .5em 0 1em; display: grid; gap: .35em; }
   pre.sample {
     background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
     padding: 12px; overflow: auto; font-size: .85rem; margin: 10px 0 0;
@@ -333,9 +334,11 @@ const plain = source => md(source).textContent.replace(/\s+/g, ' ').trim();
 // for any other text, speaker notes that only the phone remote shows.
 // Optional front matter: title, time (seconds per question, 0 = no limit),
 // points (multiplier for every question, default 1), scoring (speed | flat).
-function parseQuiz(source, fallbackTitle = 'Quiz') {
+function parseQuiz(source, fallbackTitle = 'Quiz', { local = false } = {}) {
   const lines = source.replace(/\r\n?/g, '\n').split('\n');
   const meta = {};
+  const warnings = [];                          // { step (1-based) | null, text }
+  const isNum = v => String(v).trim() !== '' && Number.isFinite(Number(v));
   if (/^---\s*$/.test(lines[0] ?? '')) {
     const end = lines.findIndex((l, i) => i > 0 && /^---\s*$/.test(l));
     const body = end > 0 ? lines.slice(1, end).filter(l => l.trim()) : [];
@@ -357,18 +360,27 @@ function parseQuiz(source, fallbackTitle = 'Quiz') {
   const defaultTime = num(meta.time, DEFAULT_TIME);
   const mult = (v, d) => (Number.isFinite(Number(v)) && String(v).trim() !== '' ? Math.max(0, Math.min(100, Number(v))) : d);
   const defaultPoints = mult(meta.points, 1);
+  for (const key of Object.keys(meta)) {
+    if (!['title', 'time', 'points', 'scoring'].includes(key)) warnings.push({ step: null, text: `Unknown setting “${key}” at the top of the file. Known: title, time, points, scoring.` });
+  }
+  if ('time' in meta && !isNum(meta.time)) warnings.push({ step: null, text: `time: “${meta.time}” is not a number of seconds; using ${DEFAULT_TIME}.` });
+  if ('points' in meta && !isNum(meta.points)) warnings.push({ step: null, text: `points: “${meta.points}” is not a number; using 1.` });
+  if ('scoring' in meta && !/^(speed|flat)$/i.test(meta.scoring)) warnings.push({ step: null, text: `scoring: “${meta.scoring}” is not “speed” or “flat”; using speed.` });
   const TASK = /^\s*[-*+]\s+\[( |x|X)\]\s+(.*)$/;
   const SETTING = /^(time|multi|points|double)\s*(?::\s*(.*))?$/i;
 
   // HTML comments on their own lines stay invisible on GitHub. A known
   // setting configures the question; anything else is a speaker note.
   function takeComments(chunk) {
-    const rest = [], set = {}, notes = [];
+    const rest = [], set = {}, notes = [], odd = [];
     const take = text => {
       const inner = text.replace(/^\s*<!--/, '').replace(/-->\s*$/, '').trim();
       const m = inner.match(SETTING);
       if (m) set[m[1].toLowerCase()] = (m[2] ?? '').trim();
-      else if (inner) notes.push(inner.replace(/^notes?\s*:\s*/i, ''));
+      else if (inner) {
+        notes.push(inner.replace(/^notes?\s*:\s*/i, ''));
+        if (/^[a-z]+\s*:\s*[\d.]+$/i.test(inner)) odd.push(`“${inner}” is not a known setting, so it became a speaker note. Settings: time, points, double, multi.`);
+      }
     };
     let fenced = false, open = null;
     for (const line of chunk) {
@@ -377,21 +389,38 @@ function parseQuiz(source, fallbackTitle = 'Quiz') {
       if (!fenced && /^\s*<!--/.test(line)) { if (/-->\s*$/.test(line)) take(line); else open = [line]; continue; }
       rest.push(line);
     }
-    if (open) rest.push(...open); // never closed: leave the text alone
-    return { rest, set, notes: notes.join('\n\n').slice(0, 4000) };
+    if (open) { rest.push(...open); odd.push('A comment starting with <!-- is never closed with -->.'); } // leave the text alone
+    if (fenced) odd.push('A code block is opened but never closed.');
+    return { rest, set, notes: notes.join('\n\n').slice(0, 4000), odd };
   }
 
   const steps = [];
   for (const raw of chunks) {
     if (!raw.some(l => l.trim())) continue;
-    const { rest: chunk, set, notes } = takeComments(raw);
+    const { rest: chunk, set, notes, odd } = takeComments(raw);
     const taskIdx = chunk.flatMap((l, i) => (TASK.test(l) ? [i] : []));
+    const warn = text => warnings.push({ step: steps.length + 1, text });
+    odd.forEach(warn);
+    const body = chunk.join('\n');
+    if (local && /!\[[^\]]*\]\((?!https?:|data:)[^)]+\)|<img[^>]+src=["']?(?!https?:|data:)/i.test(body)) {
+      warn('A picture uses a relative link. That only works when the quiz is loaded from a URL (?src=…), not from a file.');
+    }
+    if (/data:image\/[^)\s"']{60000,}/.test(body)) warn('An embedded picture is large; it may be slow or fail to reach phones. Link to it instead.');
     if (taskIdx.length < 2) {
-      if (chunk.some(l => l.trim()) || notes) steps.push({ type: 'slide', md: chunk.join('\n').trim(), notes });
+      if (!chunk.some(l => l.trim()) && !notes) continue;
+      if (taskIdx.length === 1) warn('Looks like a question but has only one option, so it is shown as a slide.');
+      else if (Object.keys(set).length) warn(`“${Object.keys(set).join(', ')}” has no effect on a slide without options.`);
+      steps.push({ type: 'slide', md: chunk.join('\n').trim(), notes });
       continue;
     }
     const options = taskIdx.map(i => { const m = chunk[i].match(TASK); return { text: m[2].trim(), correct: m[1] !== ' ' }; });
     const correct = options.flatMap((o, i) => (o.correct ? [i] : []));
+    if (!chunk.slice(0, taskIdx[0]).some(l => l.trim())) warn('The question has no text above its options.');
+    if (new Set(options.map(o => o.text.toLowerCase())).size < options.length) warn('Two options have the same text.');
+    if (options.length > 8) warn(`${options.length} options is a lot to fit on a phone.`);
+    if ('time' in set && !isNum(set.time)) warn(`time: “${set.time}” is not a number of seconds.`);
+    if ('points' in set && !isNum(set.points)) warn(`points: “${set.points}” is not a number.`);
+    if (!correct.length && ('points' in set || 'double' in set)) warn('Points are set, but no option is marked [x], so this is a poll without points.');
     steps.push({
       type: 'question', correct, notes,
       text: chunk.slice(0, taskIdx[0]).join('\n').trim(),
@@ -408,7 +437,8 @@ function parseQuiz(source, fallbackTitle = 'Quiz') {
   const h1 = source.match(/^#\s+(.+)$/m)?.[1];
   // scoring: speed (default) gives up to 1000 points, fewer for slower answers; flat gives 1 per question.
   const scoring = /^flat$/i.test(meta.scoring ?? '') ? 'flat' : 'speed';
-  return { title: (meta.title || h1 || fallbackTitle).slice(0, 80), scoring, steps };
+  if (!steps.some(s => s.type === 'question')) warnings.push({ step: null, text: 'There are no questions. A question is a slide with a task list: “- [x] right” and “- [ ] wrong”.' });
+  return { title: (meta.title || h1 || fallbackTitle).slice(0, 80), scoring, steps, warnings };
 }
 
 // ───────────────────────── landing ─────────────────────────
@@ -474,10 +504,20 @@ async function landing(message) {
   const status = h('p', { class: 'muted', role: 'status' });
   const fail = e => { status.textContent = ''; error.textContent = e.message ?? String(e); };
 
-  const start = async (text, name, src) => {
-    error.textContent = '';
+  const review = h('div');
+  const start = async (text, name, src, confirmed = false) => {
+    error.textContent = ''; review.replaceChildren();
     try {
-      const quiz = parseQuiz(text, name);
+      const quiz = parseQuiz(text, name, { local: !src });
+      if (quiz.warnings.length && !confirmed) {
+        status.textContent = '';
+        return review.replaceChildren(
+          h('p', null, h('strong', null, `“${quiz.title}” has ${quiz.warnings.length} thing${quiz.warnings.length === 1 ? '' : 's'} to check:`)),
+          h('ul', { class: 'warnings' }, quiz.warnings.map(w => h('li', null, w.step ? h('strong', null, `Step ${w.step}: `) : null, w.text))),
+          h('div', { class: 'row' },
+            h('button', { class: 'btn primary', onclick: () => start(text, name, src, true) }, 'Start anyway'),
+            h('button', { class: 'btn', onclick: () => review.replaceChildren() }, 'Cancel')));
+      }
       status.textContent = 'Connecting…';
       await createHost(text, quiz, name, src);
     } catch (e) { fail(e); }
@@ -527,7 +567,7 @@ async function landing(message) {
       h('button', { class: 'btn primary', onclick: () => file.click() }, 'Open quiz file'),
       h('button', { class: 'btn', onclick: () => start(FORMAT_SAMPLE, 'Sample quiz', null) }, 'Try the sample'),
       file),
-    status, error,
+    status, error, review,
     resumeLinks(),
     h('details', null,
       h('summary', null, 'File format'),

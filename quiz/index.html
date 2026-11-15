@@ -615,7 +615,7 @@ function runHost(room, S, quiz, client) {
     if (!given[id]) {
       if (q !== S.i || !S.open || !Number.isInteger(a) || a < 0 || a >= s.options.length) return tell(id, { t: 'late', q });
       given[id] = { a, ms: Date.now() - S.startedAt }; // first answer is final
-      save(); updateLive();
+      save(); updateLive(); finishEarly();
     }
     tell(id, { t: 'ack', q, a: given[id].a });
   }
@@ -629,6 +629,13 @@ function runHost(room, S, quiz, client) {
       S.deadline = s.time ? Date.now() + s.time * 1000 : 0;
     }
     commit();
+  }
+  // Everyone has answered: reveal without waiting for the timer. The short
+  // pause lets the last player see their answer was received.
+  function finishEarly() {
+    const ids = Object.keys(S.players), i = S.i;
+    if (!S.open || !ids.length || !ids.every(id => S.answers[i]?.[id])) return;
+    setTimeout(() => { if (S.open && S.i === i) closeQuestion(); }, 800);
   }
   function closeQuestion() { S.open = false; S.deadline = 0; S.done[S.i] = true; commit(); }
   function commit() { save(); publishState(); render(); }

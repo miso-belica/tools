@@ -73,6 +73,8 @@
   .p-timer { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.3rem; }
   .p-q { font-size: 1.25rem; font-weight: 650; }
   .p-q :first-child { margin-top: 0; }
+  .p-slide { margin: auto 0; font-size: 1.15rem; overflow-wrap: anywhere; }
+  .p-slide.md img { max-height: 40dvh; }
 
   /* phone: big answer buttons at the bottom, same left/right layout as the big screen */
   .p-bottom { margin-top: auto; display: grid; gap: 12px; }
@@ -708,6 +710,8 @@ function runHost(room, S, quiz, client) {
     const s = { v: 1, phase: ph, title: quiz.title, n: Object.keys(S.players).length };
     if (base) s.base = base; // phones resolve relative image links the same way the host does
     if (ph === 'slide' || ph === 'question' || ph === 'reveal') { s.i = S.i; s.total = steps.length; }
+    // Remote players cannot see the big screen, so phones get the slide too.
+    if (ph === 'slide' && step().md.length <= 30000) s.md = step().md;
     if (ph === 'question' || ph === 'reveal') s.q = { text: step().text, options: step().options, multi: step().multi, points: step().correct.length ? step().points : 1 };
     if (ph === 'question') s.left = secondsLeft();
     if (ph === 'reveal') { s.correct = step().correct; s.poll = !step().correct.length; }
@@ -1095,7 +1099,11 @@ function startPlayer() {
       + (mine[3] >= 2 ? ` · 🔥 ${mine[3]} in a row` : ''));
 
     if (state.phase === 'lobby') return center(h('div', { class: 'p-big' }, '👋'), h('h2', null, `You're in, ${name}!`), h('p', { class: 'muted' }, 'Watch the big screen. The quiz starts soon.'));
-    if (state.phase === 'slide') return center(h('div', { class: 'p-big' }, '👀'), h('p', null, 'Look at the big screen.'));
+    if (state.phase === 'slide') {
+      return typeof state.md === 'string' && state.md.trim()
+        ? h('div', { class: 'p-slide md' }, md(state.md, { base: typeof state.base === 'string' ? state.base : undefined }))
+        : center(h('div', { class: 'p-big' }, '👀'), h('p', null, 'Look at the big screen.'));
+    }
     if (state.phase === 'end') return center(h('div', { class: 'p-big' }, '🏁'), h('h2', null, 'Finished!'), standing ?? h('p', { class: 'muted' }, 'Thanks for playing.'));
 
     const q = state.q ?? { text: '', options: [] };

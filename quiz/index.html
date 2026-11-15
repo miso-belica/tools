@@ -159,6 +159,7 @@
   .board li { display: flex; gap: .6em; align-items: baseline; }
   .board .rk { width: 1.6em; color: var(--muted); font-variant-numeric: tabular-nums; }
   .board .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .board .streak { font-size: .85em; white-space: nowrap; }
   .board .sc { font-weight: 800; font-variant-numeric: tabular-nums; }
   .explain { font-size: .8em; color: var(--muted); text-align: center; }
   .lobby { display: grid; gap: 1.2em; grid-template-columns: 1fr; align-items: center; text-align: center; }
@@ -585,14 +586,15 @@ function runHost(room, S, quiz, client) {
   }
 
   function standings() {
-    const table = Object.fromEntries(Object.entries(S.players).map(([id, p]) => [id, { id, name: p.name, score: 0, ms: 0, gained: 0 }]));
+    const table = Object.fromEntries(Object.entries(S.players).map(([id, p]) => [id, { id, name: p.name, score: 0, ms: 0, gained: 0, streak: 0 }]));
     steps.forEach((s, idx) => {
       if (s.type !== 'question' || !S.done[idx] || !s.correct.length) return;
-      for (const [id, ans] of Object.entries(S.answers[idx] ?? {})) {
+      for (const row of Object.values(table)) {
+        const ans = S.answers[idx]?.[row.id];
+        if (!ans || !isRight(s.correct, ans.a)) { row.streak = 0; continue; } // wrong or no answer ends a streak
         const points = award(s, ans);
-        if (!table[id] || !isRight(s.correct, ans.a)) continue;
-        table[id].score += points; table[id].ms += ans.ms;
-        if (idx === S.i) table[id].gained = points;
+        row.score += points; row.ms += ans.ms; row.streak++;
+        if (idx === S.i) row.gained = points;
       }
     });
     return Object.values(table)
@@ -610,7 +612,7 @@ function runHost(room, S, quiz, client) {
     if (ph === 'question' || ph === 'reveal') s.q = { text: step().text, options: step().options, multi: step().multi, points: step().correct.length ? step().points : 1 };
     if (ph === 'question') s.left = secondsLeft();
     if (ph === 'reveal') { s.correct = step().correct; s.poll = !step().correct.length; }
-    if (ph === 'reveal' || ph === 'end') s.r = Object.fromEntries(standings().map(p => [p.id, [p.score, p.rank, p.gained]]));
+    if (ph === 'reveal' || ph === 'end') s.r = Object.fromEntries(standings().map(p => [p.id, [p.score, p.rank, p.gained, p.streak]]));
     client.publish(`${TOPIC}/${room}/state`, JSON.stringify(s), { qos: 1, retain: true });
   }
   const publishSoon = () => { stateTimer ||= setTimeout(publishState, 300); };
@@ -741,7 +743,8 @@ function runHost(room, S, quiz, client) {
     return h('aside', { class: 'board' }, h('h3', null, title),
       list.length
         ? h('ol', null, list.slice(0, limit).map(p => h('li', null,
-            h('span', { class: 'rk' }, p.rank + '.'), h('span', { class: 'nm' }, p.name), h('span', { class: 'sc' }, p.score))))
+            h('span', { class: 'rk' }, p.rank + '.'), h('span', { class: 'nm' }, p.name), p.streak >= 2 && h('span', { class: 'streak', title: `${p.streak} correct in a row` }, `🔥${p.streak}`),
+            h('span', { class: 'sc' }, p.score))))
         : h('p', { class: 'muted' }, 'No players.'));
   }
 
@@ -939,7 +942,8 @@ function startPlayer() {
     if (!name) return nameForm();
     if (!state) return center(h('div', { class: 'p-big' }, '⏳'), h('p', null, waited ? `Waiting for the host of room ${room}…` : 'Connecting…'));
     const mine = state.r?.[id];
-    const standing = mine && h('p', { class: 'muted' }, `${mine[0]} point${mine[0] === 1 ? '' : 's'} · place ${mine[1]} of ${Object.keys(state.r).length}`);
+    const standing = mine && h('p', { class: 'muted' }, `${mine[0]} point${mine[0] === 1 ? '' : 's'} · place ${mine[1]} of ${Object.keys(state.r).length}`
+      + (mine[3] >= 2 ? ` · 🔥 ${mine[3]} in a row` : ''));
 
     if (state.phase === 'lobby') return center(h('div', { class: 'p-big' }, '👋'), h('h2', null, `You're in, ${name}!`), h('p', { class: 'muted' }, 'Watch the big screen. The quiz starts soon.'));
     if (state.phase === 'slide') return center(h('div', { class: 'p-big' }, '👀'), h('p', null, 'Look at the big screen.'));

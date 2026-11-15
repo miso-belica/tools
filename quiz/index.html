@@ -331,28 +331,60 @@ function parseQuiz(source, fallbackTitle = 'Quiz') {
 
 // ───────────────────────── landing ─────────────────────────
 const FORMAT_SAMPLE = `---
-title: My quiz
+title: Sample quiz
 time: 20
 ---
 
-# Welcome
-Any Markdown slide.
+# Sample quiz
+
+Slides are separated by a line with three dashes.
+
+A slide with a task list is a **question**. Everything else is a plain slide.
 
 ---
 
-## Capital of Australia?
+## What is the capital of Australia?
+
 - [ ] Sydney
 - [x] Canberra
 - [ ] Melbourne
+- [ ] Perth
 
-Shown after the reveal.
+Text after the options is shown only after the reveal: Canberra was built as a compromise between Sydney and Melbourne.
+
+---
+
+## Which one is **not** a programming language?
+
+<!-- time: 30 -->
+
+- [ ] Rust
+- [ ] Kotlin
+- [x] Granite
+- [ ] Elixir
 
 ---
 
 ## Tabs or spaces?
-<!-- time: 30 -->
+
+No option is marked, so this is a poll and gives no points.
+
 - [ ] Tabs
-- [ ] Spaces`;
+- [ ] Spaces
+- [ ] Whatever the formatter does
+
+---
+
+## How many bits are in a byte?
+
+- [ ] 4
+- [x] 8
+- [ ] 16
+
+---
+
+# Thanks for playing!
+`;
 
 async function landing(message) {
   document.title = 'Live Quiz';
@@ -411,7 +443,7 @@ async function landing(message) {
     h('p', { class: 'muted' }, 'Open a Markdown file with slides and questions, or drop it here. It stays in this browser.'),
     h('div', { class: 'row' },
       h('button', { class: 'btn primary', onclick: () => file.click() }, 'Open quiz file'),
-      h('button', { class: 'btn', onclick: () => fromUrl('sample.md') }, 'Try the sample'),
+      h('button', { class: 'btn', onclick: () => start(FORMAT_SAMPLE, 'Sample quiz', null) }, 'Try the sample'),
       file),
     status, error,
     resumeLinks(),

@@ -84,6 +84,12 @@
   .p-opts .opt .letter { font-size: 1.15em; }
   .p-submit { padding: .9em; font-size: 1.1rem; }
 
+  /* phone remote */
+  .r-info h2 { margin: .4em 0; overflow-wrap: anywhere; }
+  .r-info p { margin: .3em 0; }
+  .r-next { min-height: 32dvh; font-size: 1.7rem; border-radius: var(--radius); }
+  .r-back { min-height: 11dvh; font-size: 1.2rem; border-radius: var(--radius); }
+
   /* ---------- answer options (host + player) ---------- */
   .opts { display: grid; gap: 12px; grid-template-columns: 1fr; width: 100%; padding: 0; margin: 0; list-style: none; }
   .opt {
@@ -238,6 +244,22 @@ function store(key, value) {
     else localStorage.setItem(key, JSON.stringify(value));
     return true;
   } catch { return undefined; }
+}
+
+// ── Remote-control channel: AES-GCM with a key that only travels in the QR
+// code (URL fragment), because the broker is public.
+const b64u = bytes => btoa(Array.from(bytes, b => String.fromCharCode(b)).join('')).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+const unb64u = text => Uint8Array.from(atob(text.replaceAll('-', '+').replaceAll('_', '/')), c => c.charCodeAt(0));
+const newKey = () => b64u(crypto.getRandomValues(new Uint8Array(16)));
+const importKey = k => crypto.subtle.importKey('raw', unb64u(k), 'AES-GCM', false, ['encrypt', 'decrypt']);
+async function seal(key, obj) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(obj)));
+  return b64u(iv) + '.' + b64u(new Uint8Array(data));
+}
+async function unseal(key, text) {
+  const [iv, data] = String(text).split('.');
+  return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64u(iv) }, key, unb64u(data))));
 }
 
 function customBroker() {
@@ -567,14 +589,27 @@ function runHost(room, S, quiz, client) {
     if (S.broker) p.set('broker', S.broker);
     return `${location.origin}${location.pathname}?${p}`;
   })();
-  let showJoin = false;
+  let overlay = null;                           // null | 'join' | 'remote'
   let stateTimer = 0;
+  // Phone remote: paired to the first device that scans the QR code.
+  const canRemote = !!crypto.subtle;
+  if (canRemote && !S.remoteKey) { S.remoteKey = newKey(); S.remoteDev = null; S.remoteN = 0; }
+  let rcKey = canRemote ? importKey(S.remoteKey) : null;
+  let rcChain = Promise.resolve();
+  let rcTimer = 0;
+  const remoteUrl = () => {
+    const p = new URLSearchParams({ remote: room });
+    if (S.broker) p.set('broker', S.broker);
+    return `${location.origin}${location.pathname}?${p}#${S.remoteKey}`;
+  };
   let lastPublish = 0;
 
   const step = () => steps[S.i];
   const phase = () => (S.ended ? 'end' : S.i < 0 ? 'lobby' : step().type === 'slide' ? 'slide' : S.open ? 'question' : 'reveal');
   const secondsLeft = () => (S.deadline ? Math.max(0, Math.ceil((S.deadline - Date.now()) / 1000)) : null);
   const save = () => { S.ts = Date.now(); store(HOST_KEY + room, S); };
+  const stepTitle = st => (st ? plain(st.type === 'slide' ? st.md.split('\n').find(l => l.trim()) ?? '' : st.text).slice(0, 100) : '');
+  const nextLabel = ph => (ph === 'lobby' ? 'Start' : ph === 'question' ? 'Reveal answers' : S.i === steps.length - 1 ? 'Finish' : 'Next');
 
   // Points for one answer. Speed scoring: full marks for an instant answer,
   // sliding down to half at the time limit (no limit = always full marks).
@@ -616,18 +651,55 @@ function runHost(room, S, quiz, client) {
     client.publish(`${TOPIC}/${room}/state`, JSON.stringify(s), { qos: 1, retain: true });
   }
   const publishSoon = () => { stateTimer ||= setTimeout(publishState, 300); };
+
+  function publishRemote() {
+    clearTimeout(rcTimer); rcTimer = 0;
+    if (!canRemote) return;
+    const ph = phase();
+    const info = {
+      seq: Date.now(), dev: S.remoteDev, title: quiz.title, phase: ph, i: S.i, total: steps.length,
+      now: ph === 'lobby' ? 'Lobby' : ph === 'end' ? 'Final results' : stepTitle(step()),
+      upcoming: ph === 'end' ? '' : S.open ? 'Answers' : S.i < steps.length - 1 ? stepTitle(steps[S.i + 1]) : 'Final results',
+      nextLabel: nextLabel(ph), canNext: ph !== 'end', canBack: !(S.open || ph === 'lobby'),
+      left: S.open ? secondsLeft() : null, timed: S.open && !!S.deadline,
+      answered: S.open ? Object.keys(S.answers[S.i] ?? {}).length : null, players: Object.keys(S.players).length,
+    };
+    // Serialised so a slow encryption cannot leave an older message retained.
+    rcChain = rcChain.then(async () => {
+      client.publish(`${TOPIC}/${room}/rc/out`, await seal(await rcKey, info), { qos: 1, retain: true });
+    }).catch(() => {});
+  }
+  const publishRemoteSoon = () => { rcTimer ||= setTimeout(publishRemote, 300); };
+
+  async function onRemote(payload) {
+    let msg;
+    try { msg = await unseal(await rcKey, payload.toString()); } catch { return; } // wrong key
+    if (typeof msg?.dev !== 'string' || !ID_RE.test(msg.dev) || !(msg.n > (S.remoteN ?? 0))) return; // replayed
+    if (S.remoteDev && S.remoteDev !== msg.dev) return;   // someone else is already paired
+    const paired = !S.remoteDev;
+    S.remoteDev = msg.dev; S.remoteN = msg.n; save();
+    if (msg.cmd === 'next') next(); else if (msg.cmd === 'back') back(); else publishRemote();
+    if (paired) render();
+  }
+  function unpairRemote() {
+    S.remoteKey = newKey(); S.remoteDev = null; S.remoteN = 0; rcKey = importKey(S.remoteKey);
+    save(); publishRemote(); render();
+  }
   const tell = (id, msg) => client.publish(`${TOPIC}/${room}/out/${id}`, JSON.stringify(msg), { qos: 1 });
 
-  client.on('connect', () => { client.subscribe(`${TOPIC}/${room}/in/+`, { qos: 1 }); publishState(); render(); });
+  const online = () => { client.subscribe([`${TOPIC}/${room}/in/+`, `${TOPIC}/${room}/rc/in`], { qos: 1 }); publishState(); publishRemote(); };
+  client.on('connect', () => { online(); render(); });
   client.on('close', render);
   client.on('message', (topic, payload) => {
+    if (payload.length > 2000) return;
+    if (topic.endsWith('/rc/in')) return void (canRemote && onRemote(payload));
     const id = topic.split('/').pop();
-    if (!ID_RE.test(id) || payload.length > 2000) return;
+    if (!ID_RE.test(id)) return;
     let msg;
     try { msg = JSON.parse(payload.toString()); } catch { return; }
     if (msg?.t === 'join') onJoin(id, msg); else if (msg?.t === 'answer') onAnswer(id, msg);
   });
-  if (client.connected) { client.subscribe(`${TOPIC}/${room}/in/+`, { qos: 1 }); publishState(); }
+  if (client.connected) online();
 
   function onJoin(id, msg) {
     if (!S.players[id]) {
@@ -640,7 +712,7 @@ function runHost(room, S, quiz, client) {
         name = `${name} ${n}`;
       }
       S.players[id] = { name };
-      save(); render();
+      save(); render(); publishRemoteSoon();
     }
     tell(id, { t: 'joined', name: S.players[id].name, q: S.i, a: S.answers[S.i]?.[id]?.a ?? null });
     publishSoon(); // also refreshes the timer for whoever just (re)connected
@@ -658,7 +730,7 @@ function runHost(room, S, quiz, client) {
     if (!given[id]) {
       if (q !== S.i || !S.open || !valid) return tell(id, { t: 'late', q });
       given[id] = { a, ms: Date.now() - S.startedAt }; // first answer is final
-      save(); updateLive(); finishEarly();
+      save(); updateLive(); finishEarly(); publishRemoteSoon();
     }
     tell(id, { t: 'ack', q, a: given[id].a });
   }
@@ -681,7 +753,7 @@ function runHost(room, S, quiz, client) {
     setTimeout(() => { if (S.open && S.i === i) closeQuestion(); }, 800);
   }
   function closeQuestion() { S.open = false; S.deadline = 0; S.done[S.i] = true; commit(); }
-  function commit() { save(); publishState(); render(); }
+  function commit() { save(); publishState(); publishRemote(); render(); }
   function next() {
     if (S.ended) return;
     if (S.i >= 0 && S.open) return closeQuestion();
@@ -696,7 +768,7 @@ function runHost(room, S, quiz, client) {
 
   setInterval(() => {
     if (S.open && S.deadline && Date.now() >= S.deadline) return closeQuestion();
-    if (S.open && Date.now() - lastPublish > 5000) publishState(); // keep phone timers honest
+    if (S.open && Date.now() - lastPublish > 5000) { publishState(); publishRemote(); } // keep phone timers honest
     updateLive();
   }, 250);
 
@@ -705,8 +777,8 @@ function runHost(room, S, quiz, client) {
     if ([' ', 'ArrowRight', 'PageDown', 'Enter'].includes(e.key)) { e.preventDefault(); next(); }
     else if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); back(); }
     else if (e.key === 'f') toggleFullscreen();
-    else if (e.key === 'j') { showJoin = !showJoin; render(); }
-    else if (e.key === 'Escape' && showJoin) { showJoin = false; render(); }
+    else if (e.key === 'j') { overlay = overlay ? null : 'join'; render(); }
+    else if (e.key === 'Escape' && overlay) { overlay = null; render(); }
   });
   const toggleFullscreen = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.())?.catch?.(() => {});
 
@@ -718,10 +790,10 @@ function runHost(room, S, quiz, client) {
     if (answered && S.open) answered.textContent = `${Object.keys(S.answers[S.i] ?? {}).length} / ${Object.keys(S.players).length} answered`;
   }
 
-  function qrNode() {
+  function qrNode(url = joinUrl, label = 'QR code with the join link') {
     const qr = qrcode(0, 'M');
-    qr.addData(joinUrl); qr.make();
-    const box = h('div', { class: 'qr', role: 'img', 'aria-label': 'QR code with the join link' });
+    qr.addData(url); qr.make();
+    const box = h('div', { class: 'qr', role: 'img', 'aria-label': label });
     box.innerHTML = qr.createSvgTag({ scalable: true, margin: 2 }); // generated by the library, no user input in markup
     return box;
   }
@@ -737,6 +809,18 @@ function runHost(room, S, quiz, client) {
         h('div', { class: 'join-code mono' }, room),
         h('div', { class: 'muted' }, names.length ? `${names.length} joined` : 'Waiting for players…'),
         h('ul', { class: 'chips' }, names.slice(-60).map(n => h('li', null, n)))));
+  }
+
+  function remoteInfo() {
+    return h('div', { class: 'lobby' },
+      qrNode(remoteUrl(), 'QR code with the remote control link'),
+      h('div', { onclick: e => e.stopPropagation() },
+        h('h2', null, 'Phone remote'),
+        S.remoteDev
+          ? [h('p', null, '✓ A phone is paired. Nobody else can use this code.'),
+             h('button', { class: 'btn', onclick: unpairRemote }, 'Unpair and make a new code')]
+          : [h('p', null, 'Scan with the phone you will present from. It gets Next and Back buttons.'),
+             h('p', { class: 'muted' }, 'Do this before you share your screen: the first phone to scan it becomes the remote.')]));
   }
 
   function board(list, limit, title) {
@@ -792,15 +876,14 @@ function runHost(room, S, quiz, client) {
       : ph === 'end' ? endView()
       : ph === 'slide' ? h('div', { class: 'slide md' }, md(step().md, { base }))
       : questionView(step(), ph === 'reveal');
-    const nextLabel = ph === 'lobby' ? 'Start' : ph === 'question' ? 'Reveal answers' : S.i === steps.length - 1 ? 'Finish' : 'Next';
-
     app.replaceChildren(h('div', { class: 'host' },
       h('header', { class: 'bar' },
         h('span', { class: 'dot' + (client.connected ? ' on' : ''), title: client.connected ? 'Connected' : 'Reconnecting…' }),
         h('span', { class: 'title grow' }, quiz.title),
         h('span', { class: 'mono' }, room),
         h('span', { class: 'muted' }, `${Object.keys(S.players).length} 👤`),
-        h('button', { class: 'btn', onclick: () => { showJoin = !showJoin; render(); }, title: 'Show join code (J)' }, 'Join code'),
+        canRemote && h('button', { class: 'btn', onclick: () => { overlay = overlay === 'remote' ? null : 'remote'; render(); }, title: 'Control the quiz from your phone' }, S.remoteDev ? 'Remote ✓' : 'Remote'),
+        h('button', { class: 'btn', onclick: () => { overlay = overlay === 'join' ? null : 'join'; render(); }, title: 'Show join code (J)' }, 'Join code'),
         h('button', { class: 'btn', onclick: toggleFullscreen, title: 'Fullscreen (F)' }, '⛶')),
       h('section', { class: 'stage' }, stage),
       h('footer', { class: 'bar bottom' },
@@ -808,8 +891,9 @@ function runHost(room, S, quiz, client) {
         h('span', { class: 'muted' }, S.i >= 0 && !S.ended ? `${S.i + 1} / ${steps.length}` : ''),
         h('span', { class: 'grow muted', id: 'answered' }),
         h('span', { class: 'timer', id: 'timer', 'aria-live': 'off' }),
-        ph !== 'end' && h('button', { class: 'btn primary', onclick: next, title: 'Next (Space / →)' }, nextLabel + ' →')),
-      showJoin && ph !== 'lobby' && h('div', { class: 'overlay', onclick: () => { showJoin = false; render(); } }, joinInfo()),
+        ph !== 'end' && h('button', { class: 'btn primary', onclick: next, title: 'Next (Space / →)' }, nextLabel(ph) + ' →')),
+      overlay === 'join' && ph !== 'lobby' && h('div', { class: 'overlay', onclick: () => { overlay = null; render(); } }, joinInfo()),
+      overlay === 'remote' && h('div', { class: 'overlay', onclick: () => { overlay = null; render(); } }, remoteInfo()),
     ));
     updateLive();
   }
@@ -1001,8 +1085,67 @@ function startPlayer() {
   render();
 }
 
+// ───────────────────────── phone remote ─────────────────────────
+async function startRemote() {
+  const room = (params.get('remote') ?? '').toUpperCase();
+  const keyText = location.hash.slice(1);
+  let key = null;
+  try { if (ROOM_RE.test(room) && crypto.subtle) key = await importKey(keyText); } catch { /* bad key */ }
+  if (!key) return landing('That remote link is not valid. Scan the code on the host screen again.');
+
+  let dev = store('quiz:remote-dev');
+  if (typeof dev !== 'string' || !ID_RE.test(dev)) { dev = randomId(); store('quiz:remote-dev', dev); }
+  let info = null, recvAt = 0, invalid = false, lastN = 0;
+
+  const client = openClient(brokerFor(room));
+  const send = async cmd => {
+    lastN = Math.max(Date.now(), lastN + 1);          // strictly increasing: the host drops replays
+    client.publish(`${TOPIC}/${room}/rc/in`, await seal(key, { dev, n: lastN, cmd }), { qos: 1 });
+  };
+  client.on('connect', () => { client.subscribe(`${TOPIC}/${room}/rc/out`, { qos: 1 }); send('hello'); render(); });
+  client.on('close', render);
+  client.on('message', async (topic, payload) => {
+    if (payload.length > 20000) return;
+    try {
+      const msg = await unseal(key, payload.toString());
+      if (info && msg.seq < info.seq) return;
+      info = msg; recvAt = Date.now(); invalid = false;
+    } catch { invalid = true; }                        // host made a new code
+    render();
+  });
+  const left = () => (info?.left != null ? Math.max(0, Math.ceil(info.left - (Date.now() - recvAt) / 1000)) : null);
+  setInterval(() => { const t = document.getElementById('r-timer'); if (t) t.textContent = left() ?? ''; }, 250);
+  const press = cmd => { navigator.vibrate?.(15); navigator.wakeLock?.request('screen').catch(() => {}); send(cmd); };
+
+  function render() {
+    document.title = info?.title ? `Remote · ${info.title}` : 'Remote · Live Quiz';
+    const foreign = info?.dev && info.dev !== dev;
+    const ready = client.connected && info && !invalid && !foreign;
+    app.replaceChildren(
+      ...(!client.connected ? [h('div', { class: 'banner', role: 'status' }, 'Connecting…')] : []),
+      h('div', { class: 'page' },
+        h('div', { class: 'p-head' }, h('span', null, info?.title ?? 'Live Quiz'), h('span', null, `Remote · ${room}`)),
+        invalid ? h('p', { class: 'error' }, 'This remote link was replaced. Scan the new code on the host screen.')
+          : foreign ? h('p', { class: 'error' }, 'Another phone is already paired as the remote.')
+          : !info ? h('p', { class: 'muted' }, 'Waiting for the host…')
+          : h('section', { class: 'card r-info' },
+              h('div', { class: 'p-head' },
+                h('span', null, info.phase === 'lobby' || info.phase === 'end' ? '' : `${info.i + 1} / ${info.total}`),
+                h('span', null, `${info.players} 👤`)),
+              h('h2', null, info.now || '—'),
+              info.answered != null && h('p', null, h('strong', null, `${info.answered} / ${info.players} answered`),
+                info.timed && [' · ', h('span', { class: 'p-timer', id: 'r-timer' }, left() ?? ''), ' s']),
+              info.upcoming && h('p', { class: 'muted' }, 'Next: ', info.upcoming)),
+        h('div', { class: 'p-bottom' },
+          h('button', { class: 'btn primary r-next', disabled: !ready || !info.canNext, onclick: () => press('next') }, (info?.nextLabel ?? 'Next') + ' →'),
+          h('button', { class: 'btn r-back', disabled: !ready || !info.canBack, onclick: () => press('back') }, '← Back'))));
+  }
+  render();
+}
+
 // ───────────────────────── boot ─────────────────────────
-if (params.has('room')) startPlayer();
+if (params.has('remote')) startRemote();
+else if (params.has('room')) startPlayer();
 else if (params.has('host')) resumeHost();
 else landing();
 </script>

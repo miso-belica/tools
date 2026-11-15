@@ -305,7 +305,7 @@ const plain = source => md(source).textContent.replace(/\s+/g, ' ').trim();
 //   - [x] correct   - [ ] wrong      (none marked = poll, no points;
 //                                     several marked = tick all that apply)
 // Optional front matter: title, time (seconds per question, 0 = no limit),
-// points (multiplier for every question, default 1).
+// points (multiplier for every question, default 1), scoring (speed | flat).
 function parseQuiz(source, fallbackTitle = 'Quiz') {
   const lines = source.replace(/\r\n?/g, '\n').split('\n');
   const meta = {};
@@ -359,7 +359,9 @@ function parseQuiz(source, fallbackTitle = 'Quiz') {
   }
   if (!steps.length) throw new Error('The file has no slides or questions.');
   const h1 = source.match(/^#\s+(.+)$/m)?.[1];
-  return { title: (meta.title || h1 || fallbackTitle).slice(0, 80), steps };
+  // scoring: speed (default) gives up to 1000 points, fewer for slower answers; flat gives 1 per question.
+  const scoring = /^flat$/i.test(meta.scoring ?? '') ? 'flat' : 'speed';
+  return { title: (meta.title || h1 || fallbackTitle).slice(0, 80), scoring, steps };
 }
 
 // ───────────────────────── landing ─────────────────────────
@@ -573,12 +575,24 @@ function runHost(room, S, quiz, client) {
   const secondsLeft = () => (S.deadline ? Math.max(0, Math.ceil((S.deadline - Date.now()) / 1000)) : null);
   const save = () => { S.ts = Date.now(); store(HOST_KEY + room, S); };
 
+  // Points for one answer. Speed scoring: full marks for an instant answer,
+  // sliding down to half at the time limit (no limit = always full marks).
+  function award(s, ans) {
+    if (!ans || !isRight(s.correct, ans.a)) return 0;
+    if (quiz.scoring === 'flat') return s.points;
+    const used = s.time ? Math.min(1, Math.max(0, ans.ms / (s.time * 1000))) : 0;
+    return Math.round(1000 * s.points * (1 - used / 2));
+  }
+
   function standings() {
-    const table = Object.fromEntries(Object.entries(S.players).map(([id, p]) => [id, { id, name: p.name, score: 0, ms: 0 }]));
+    const table = Object.fromEntries(Object.entries(S.players).map(([id, p]) => [id, { id, name: p.name, score: 0, ms: 0, gained: 0 }]));
     steps.forEach((s, idx) => {
       if (s.type !== 'question' || !S.done[idx] || !s.correct.length) return;
       for (const [id, ans] of Object.entries(S.answers[idx] ?? {})) {
-        if (table[id] && isRight(s.correct, ans.a)) { table[id].score += s.points; table[id].ms += ans.ms; }
+        const points = award(s, ans);
+        if (!table[id] || !isRight(s.correct, ans.a)) continue;
+        table[id].score += points; table[id].ms += ans.ms;
+        if (idx === S.i) table[id].gained = points;
       }
     });
     return Object.values(table)
@@ -596,7 +610,7 @@ function runHost(room, S, quiz, client) {
     if (ph === 'question' || ph === 'reveal') s.q = { text: step().text, options: step().options, multi: step().multi, points: step().correct.length ? step().points : 1 };
     if (ph === 'question') s.left = secondsLeft();
     if (ph === 'reveal') { s.correct = step().correct; s.poll = !step().correct.length; }
-    if (ph === 'reveal' || ph === 'end') s.r = Object.fromEntries(standings().map(p => [p.id, [p.score, p.rank]]));
+    if (ph === 'reveal' || ph === 'end') s.r = Object.fromEntries(standings().map(p => [p.id, [p.score, p.rank, p.gained]]));
     client.publish(`${TOPIC}/${room}/state`, JSON.stringify(s), { qos: 1, retain: true });
   }
   const publishSoon = () => { stateTimer ||= setTimeout(publishState, 300); };
@@ -940,7 +954,7 @@ function startPlayer() {
     if (revealed) {
       verdict = state.poll ? ['🗳️', picked ? 'Thanks for voting!' : 'Poll closed.']
         : !picked ? ['⌛', 'No answer this time.']
-        : isRight(correct, picked.a) ? ['✅', 'Correct!'] : ['❌', 'Not quite.'];
+        : isRight(correct, picked.a) ? ['✅', mine?.[2] > 1 ? `Correct! +${mine[2]}` : 'Correct!'] : ['❌', 'Not quite.'];
     }
     return [
       h('div', { class: 'p-head' },

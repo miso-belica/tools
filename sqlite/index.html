@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>SQLite on GitHub</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: light-dark(#f6f4ef, #14161c);
+    --surface: light-dark(#ffffff, #1e212a);
+    --line: light-dark(#d9d5cb, #343846);
+    --text: light-dark(#1c1d22, #eceef4);
+    --muted: light-dark(#666a75, #9a9fb0);
+    --accent: light-dark(#2f5fd0, #86a8ff);
+    --good: light-dark(#1d8a4e, #58d08d);
+    --bad: light-dark(#c23b3b, #ff8d8d);
+    --radius: 14px;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text); line-height: 1.4;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+  #app {
+    max-width: 1280px; margin: 0 auto; display: grid; gap: 14px;
+    padding: max(14px, env(safe-area-inset-top)) 14px calc(24px + env(safe-area-inset-bottom));
+  }
+  h1, h2 { margin: 0; line-height: 1.15; }
+  h1 { font-size: 1.3rem; }
+  h2 { font-size: 1.05rem; }
+  a { color: var(--accent); }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+  .muted { color: var(--muted); }
+  .small { font-size: .85rem; }
+  .btn { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .45em .85em; font-weight: 600; }
+  .btn.primary { background: var(--accent); border-color: transparent; color: light-dark(#fff, #10131c); }
+  .btn.danger { color: var(--bad); }
+  .btn:disabled { opacity: .4; cursor: default; }
+  :is(.btn, input, textarea, select, td, th):focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; display: grid; gap: 10px; min-width: 0; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .grow { flex: 1; min-width: 0; }
+  input[type=text], input[type=password], textarea, select {
+    padding: .45em .65em; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); font-size: 1rem; max-width: 100%;
+  }
+  textarea { width: 100%; resize: vertical; min-height: 2.4em; max-height: 40vh; field-sizing: content; font-family: var(--mono); font-size: .92rem; }
+  #status:empty { display: none; }
+  #status { margin: 0; padding: .55em .8em; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+  #status.error { border-color: var(--bad); color: var(--bad); }
+  #status.ok { border-color: var(--good); }
+
+  main { display: grid; gap: 14px; min-width: 0; }
+  #objects { display: flex; gap: 6px; flex-wrap: wrap; align-content: start; }
+  #objects h3 { flex-basis: 100%; margin: 6px 0 0; font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  #objects h3:first-child { margin-top: 0; }
+  #objects button { background: none; border: 1px solid var(--line); border-radius: 999px; padding: .25em .75em; text-align: left; overflow-wrap: anywhere; }
+  #objects button[aria-current] { background: var(--accent); border-color: transparent; color: light-dark(#fff, #10131c); }
+  @media (min-width: 860px) {
+    main { grid-template-columns: 230px minmax(0, 1fr); align-items: start; }
+    #objects button { flex-basis: 100%; border-radius: 9px; border-color: transparent; }
+    #console, #pending { grid-column: 1 / -1; }
+  }
+
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; max-height: 70vh; overflow-y: auto; }
+  table { border-collapse: collapse; font-size: .9rem; width: max-content; min-width: 100%; }
+  th, td { padding: .35em .7em; border-bottom: 1px solid var(--line); text-align: left; max-width: 34ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  th { position: sticky; top: 0; background: var(--surface); z-index: 1; font-size: .82rem; }
+  th button { all: unset; cursor: pointer; font-weight: 700; }
+  th small { color: var(--muted); font-weight: 400; margin-left: .4em; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.null { color: var(--muted); font-style: italic; }
+  pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono); font-size: .88rem; }
+
+  #pending { border-color: var(--accent); position: sticky; bottom: max(8px, env(safe-area-inset-bottom)); box-shadow: 0 4px 24px #0004; z-index: 2; }
+  #pending ol { margin: 0; padding-left: 1.6em; max-height: 22vh; overflow-y: auto; display: grid; gap: 4px; }
+  #pending li code { font-family: var(--mono); font-size: .82rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  #pending li > div { display: flex; gap: 8px; align-items: start; }
+  #pending li button { all: unset; cursor: pointer; color: var(--bad); padding: 0 .4em; font-weight: 700; }
+
+  dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); padding: 16px; width: min(640px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); }
+  dialog::backdrop { background: #0008; }
+  dialog form { display: grid; gap: 12px; }
+  .field { display: grid; gap: 3px; }
+  .field > div { display: flex; justify-content: space-between; gap: 8px; font-size: .85rem; }
+  .field label.null { color: var(--muted); display: flex; gap: 4px; align-items: center; }
+  .error { color: var(--bad); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="row">
+    <h1 class="grow">SQLite on GitHub</h1>
+    <select id="files" aria-label="Database file"></select>
+    <button id="auth" class="btn" type="button">Log in</button>
+  </header>
+  <p class="muted small" id="where" style="margin:0"></p>
+  <p id="status" role="status">Loading…</p>
+
+  <main hidden>
+    <nav id="objects" class="card" aria-label="Database objects"></nav>
+    <section id="view" class="card"></section>
+
+    <section id="console" class="card">
+      <h2>SQL console</h2>
+      <textarea id="sql" rows="2" spellcheck="false" placeholder="SELECT * FROM … (Ctrl+Enter to run)" aria-label="SQL"></textarea>
+      <div class="row">
+        <button id="run" class="btn primary" type="button">Run</button>
+        <span class="muted small grow">Runs on the copy in your browser. Statements that change data are added to pending changes.</span>
+      </div>
+    </section>
+
+    <section id="pending" class="card" hidden>
+      <h2 id="pending-title"></h2>
+      <ol id="pending-list"></ol>
+      <form id="commit" class="row">
+        <input id="message" type="text" class="grow" aria-label="Commit message" autocomplete="off">
+        <button id="commit-btn" class="btn primary">Commit</button>
+        <button id="discard" class="btn danger" type="button">Discard all</button>
+      </form>
+      <p id="pending-hint" class="muted small" style="margin:0"></p>
+    </section>
+  </main>
+</div>
+
+<dialog id="row-dialog"><form method="dialog"></form></dialog>
+
+<dialog id="auth-dialog">
+  <form method="dialog">
+    <h2>Log in with a GitHub token</h2>
+    <p class="small" style="margin:0">
+      Create a <a id="token-link" target="_blank" rel="noopener">fine-grained personal access token</a>
+      limited to the repository <b id="token-repo"></b> with the permission <b>Contents: Read and write</b>.
+      The token is stored only in this browser (<code>localStorage</code>) and is sent only to <code>api.github.com</code>.
+    </p>
+    <input id="token" type="password" autocomplete="off" placeholder="github_pat_…" aria-label="GitHub token">
+    <p id="auth-error" class="error small" style="margin:0" hidden></p>
+    <div class="row">
+      <button class="btn primary" value="save">Save token</button>
+      <button id="logout" class="btn danger" value="logout" type="button">Log out</button>
+      <button class="btn" value="cancel" formnovalidate>Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/sql.js@1.13.0/dist/sql-wasm.js"></script>
+<script type="module">
+const SQL_JS_CDN = 'https://cdn.jsdelivr.net/npm/sql.js@1.13.0/dist/';
+const DATA_DIR = 'sqlite/data';
+const PAGE_SIZE = 50;
+const MAX_RESULT_ROWS = 500;
+const TOKEN_KEY = 'sqlite.githubToken';
+
+// ---------- configuration from the URL ----------
+const startParams = new URLSearchParams(location.search);
+const REPO = (() => {
+  const fromUrl = startParams.get('repo');
+  if (fromUrl && /^[\w.-]+\/[\w.-]+$/.test(fromUrl)) return fromUrl;
+  const pages = location.hostname.match(/^([\w-]+)\.github\.io$/);
+  const first = location.pathname.split('/')[1];
+  return pages && first ? `${pages[1]}/${first}` : 'miso-belica/tools';
+})();
+const REF = startParams.get('ref') || null; // branch; null = default branch
+
+// ---------- state ----------
+const S = {
+  files: [],      // names without ".db"
+  name: null,     // open database
+  db: null,       // sql.js Database with pending changes applied
+  base: null,     // { bytes, sha } exactly as stored on GitHub
+  pending: [],    // [{ sql, params? }] replayable log of changes
+  canPush: false,
+  result: null,   // last console output, shown instead of a table
+  busy: false,
+};
+let token = localStorage.getItem(TOKEN_KEY);
+let SQL;
+
+// ---------- small helpers ----------
+const $ = (sel) => document.querySelector(sel);
+function h(tag, props = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k in el) el[k] = v; else el.setAttribute(k, v === true ? '' : v);
+  }
+  el.append(...kids.flat().filter((k) => k != null && k !== false));
+  return el;
+}
+const ident = (name) => `"${String(name).replaceAll('"', '""')}"`;
+function status(text, kind = '') { const el = $('#status'); el.textContent = text; el.className = kind; }
+const params = () => new URLSearchParams(location.search);
+function setUrl(changes, push = false) {
+  const q = params();
+  for (const [k, v] of Object.entries(changes)) (v == null || v === '') ? q.delete(k) : q.set(k, v);
+  const s = q.toString();
+  history[push ? 'pushState' : 'replaceState'](null, '', s ? `?${s}` : location.pathname);
+}
+function show(value) {
+  if (value === null) return 'NULL';
+  if (value instanceof Uint8Array) return `BLOB (${value.length} bytes)`;
+  return String(value);
+}
+const toBase64 = (u8) => u8.toBase64?.() ?? btoa(Array.from(
+  { length: Math.ceil(u8.length / 0x8000) },
+  (_, i) => String.fromCharCode(...u8.subarray(i * 0x8000, (i + 1) * 0x8000))).join(''));
+async function gitBlobSha(bytes) {
+  const head = new TextEncoder().encode(`blob ${bytes.length}\0`);
+  const all = new Uint8Array(head.length + bytes.length);
+  all.set(head); all.set(bytes, head.length);
+  const digest = await crypto.subtle.digest('SHA-1', all);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ---------- GitHub API ----------
+async function gh(path, { method = 'GET', body, raw = false, auth = token } = {}) {
+  const headers = { Accept: raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json' };
+  if (auth) headers.Authorization = `Bearer ${auth}`;
+  if (method === 'GET' && REF) path += `${path.includes('?') ? '&' : '?'}ref=${encodeURIComponent(REF)}`;
+  const res = await fetch(`https://api.github.com/repos/${REPO}${path}`, {
+    method, headers, cache: 'no-store', body: body && JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const detail = await res.json().then((j) => j.message, () => '');
+    const err = new Error(`GitHub ${res.status}: ${detail || res.statusText}`);
+    err.status = res.status;
+    if (res.headers.get('x-ratelimit-remaining') === '0') err.message += ' — rate limit reached; log in to raise it.';
+    throw err;
+  }
+  return raw ? new Uint8Array(await res.arrayBuffer()) : res.json();
+}
+const filePath = (name) => `/contents/${DATA_DIR}/${encodeURIComponent(name)}.db`;
+async function fetchDb(name) {
+  const bytes = await gh(filePath(name), { raw: true });
+  return { bytes, sha: await gitBlobSha(bytes) };
+}
+async function canPushWith(auth) {
+  if (!auth) return false;
+  return !!(await gh('', { auth })).permissions?.push;
+}
+
+// ---------- database ----------
+function openDb(bytes, log = []) {
+  const db = new SQL.Database(bytes);
+  try {
+    db.exec('PRAGMA foreign_keys = ON; SELECT count(*) FROM sqlite_schema'); // also proves it is a database
+    log.forEach((change, index) => {
+      try {
+        change.params ? db.run(change.sql, change.params) : db.exec(change.sql);
+        // A row edit must hit the same number of rows as when it was made, or it silently did something else.
+        if (change.rows != null && db.getRowsModified() !== change.rows) throw new Error('the row it edited is gone or different');
+      } catch (e) { e.index = index; throw e; }
+    });
+  } catch (e) { db.close(); throw e; }
+  return db;
+}
+function replaceDb(db) { S.db?.close(); S.db = db; }
+function query(sql, bind = []) {
+  const stmt = S.db.prepare(sql);
+  try {
+    stmt.bind(bind);
+    const rows = [];
+    while (stmt.step()) rows.push(stmt.get());
+    return { columns: stmt.getColumnNames(), rows };
+  } finally { stmt.free(); }
+}
+const changeCounter = () => `${query('SELECT total_changes()').rows[0][0]}:${query('PRAGMA schema_version').rows[0][0]}`;
+
+/** Apply one change to the local copy and remember it for the commit. */
+function applyChange(sql, bind) {
+  S.db.run(sql, bind);
+  S.pending.push({ sql, params: bind, rows: S.db.getRowsModified() });
+}
+function objects() {
+  return query(`SELECT type, name, sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'
+    ORDER BY CASE type WHEN 'table' THEN 1 WHEN 'view' THEN 2 WHEN 'index' THEN 3 ELSE 4 END, name`)
+    .rows.map(([type, name, sql]) => ({ type, name, sql }));
+}
+function tableInfo(obj) {
+  const columns = query(`PRAGMA table_xinfo(${ident(obj.name)})`).rows
+    .map((r) => ({ name: r[1], type: r[2], notnull: !!r[3], dflt: r[4], pk: r[5], hidden: r[6] }))
+    .filter((c) => c.hidden !== 1);
+  // Row identity for edits: primary key, otherwise rowid. Views have neither.
+  let key = null;
+  if (obj.type === 'table') {
+    key = columns.filter((c) => c.pk).sort((a, b) => a.pk - b.pk).map((c) => ident(c.name));
+    if (!key.length) {
+      try { query(`SELECT rowid FROM ${ident(obj.name)} LIMIT 0`); key = ['rowid']; } catch { key = null; }
+    }
+  }
+  return { ...obj, columns, key };
+}
+
+// ---------- rendering ----------
+function render() {
+  renderFiles(); renderAuth(); renderObjects(); renderView(); renderPending();
+  $('main').hidden = !S.db;
+}
+function renderFiles() {
+  $('#files').replaceChildren(...S.files.map((f) => h('option', { value: f, selected: f === S.name }, `${f}.db`)));
+  $('#files').hidden = !S.files.length;
+  $('#where').replaceChildren('Files from ',
+    h('a', { href: `https://github.com/${REPO}/tree/${REF ?? 'HEAD'}/${DATA_DIR}`, target: '_blank', rel: 'noopener' },
+      `${REPO}/${DATA_DIR}`), REF ? ` (branch ${REF})` : '');
+}
+function renderAuth() {
+  $('#auth').textContent = !token ? 'Log in' : S.canPush ? 'Logged in ✓' : 'Logged in (read-only)';
+}
+function renderObjects() {
+  if (!S.db) return;
+  const current = S.result ? null : params().get('table');
+  const groups = Object.groupBy(objects(), (o) => o.type);
+  $('#objects').replaceChildren(...Object.entries(groups).flatMap(([type, list]) => [
+    h('h3', {}, type === 'index' ? 'indexes' : `${type}s`),
+    ...list.map((o) => h('button', {
+      type: 'button', ariaCurrent: o.name === current ? 'page' : null,
+      onclick: () => { S.result = null; setUrl({ table: o.name, page: null, sort: null, dir: null }, true); render(); },
+    }, o.name)),
+  ]));
+  if (!$('#objects').children.length) $('#objects').append(h('p', { className: 'muted' }, 'Empty database.'));
+}
+
+function grid(columns, rows, { info, offset = 0, sort, dir } = {}) {
+  const meta = Object.fromEntries((info?.columns ?? []).map((c) => [c.name, c]));
+  const head = h('tr', {}, columns.map((name) => h('th', { scope: 'col', ariaSort: sort === name ? (dir === 'desc' ? 'descending' : 'ascending') : null },
+    info
+      ? h('button', { type: 'button', title: 'Sort', onclick: () => { setUrl({ sort: name, dir: sort === name && dir !== 'desc' ? 'desc' : null, page: null }); render(); } },
+          name, sort === name ? (dir === 'desc' ? ' ↓' : ' ↑') : '')
+      : name,
+    meta[name]?.type && h('small', {}, meta[name].type))));
+  const body = rows.map((row) => {
+    const values = info?.key ? row.slice(info.key.length) : row;
+    const open = (focus) => info && openRow(info, { key: row.slice(0, info.key?.length ?? 0), values }, focus);
+    return h('tr', { onclick: (e) => open(e.target.closest('td')?.dataset.col) },
+      values.map((v, i) => h('td', {
+        className: v === null ? 'null' : typeof v === 'number' ? 'num' : '', tabIndex: info ? 0 : -1,
+        onkeydown: (e) => { if (e.key === 'Enter') open(columns[i]); },
+        'data-col': columns[i],
+      }, show(v))));
+  });
+  if (!rows.length) body.push(h('tr', {}, h('td', { colSpan: columns.length || 1, className: 'null' }, 'No rows')));
+  return h('div', { className: 'scroll' }, h('table', {}, h('thead', {}, head), h('tbody', {}, body)));
+}
+
+function renderView() {
+  if (!S.db) return;
+  const view = $('#view');
+  if (S.result) return view.replaceChildren(...renderResult(S.result));
+  const all = objects();
+  const name = params().get('table');
+  const obj = all.find((o) => o.name === name);
+  if (!obj) return view.replaceChildren(h('p', { className: 'muted' }, name ? `No object named “${name}”.` : 'Choose a table.'));
+  const definition = h('details', {}, h('summary', { className: 'muted small' }, 'Definition'), h('pre', {}, obj.sql ?? '(automatic)'));
+  if (obj.type !== 'table' && obj.type !== 'view') {
+    definition.open = true;
+    return view.replaceChildren(h('h2', {}, obj.name, ' ', h('small', { className: 'muted' }, obj.type)), definition);
+  }
+  let info, total, data, error;
+  const q = params();
+  const page = Math.max(1, Number.parseInt(q.get('page'), 10) || 1);
+  try {
+    info = tableInfo(obj);
+    const sort = info.columns.some((c) => c.name === q.get('sort')) ? q.get('sort') : null;
+    info.sort = sort; info.dir = q.get('dir') === 'desc' ? 'desc' : 'asc';
+    total = query(`SELECT count(*) FROM ${ident(obj.name)}`).rows[0][0];
+    const keyCols = (info.key ?? []).map((k, i) => `${k} AS "__key${i}"`);
+    data = query(`SELECT ${[...keyCols, '*'].join(', ')} FROM ${ident(obj.name)}
+      ${sort ? `ORDER BY ${ident(sort)} ${info.dir}` : ''} LIMIT ${PAGE_SIZE} OFFSET ?`, [(page - 1) * PAGE_SIZE]);
+  } catch (e) { error = e; }
+  if (error) return view.replaceChildren(h('h2', {}, obj.name), h('p', { className: 'error' }, error.message), definition);
+
+  const editable = S.canPush && !!info.key;
+  info.editable = editable;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const go = (p) => { setUrl({ page: p > 1 ? p : null }); render(); };
+  view.replaceChildren(
+    h('div', { className: 'row' },
+      h('h2', { className: 'grow' }, obj.name, ' ', h('small', { className: 'muted' }, `${obj.type} · ${total} rows`)),
+      editable && h('button', { className: 'btn', type: 'button', onclick: () => openRow(info, null) }, '+ Add row')),
+    grid(data.columns.slice(info.key?.length ?? 0), data.rows, { info, sort: info.sort, dir: info.dir }),
+    h('div', { className: 'row' },
+      h('button', { className: 'btn', type: 'button', disabled: page <= 1, onclick: () => go(page - 1) }, '← Prev'),
+      h('span', { className: 'muted small' }, `Page ${page} of ${pages}`),
+      h('button', { className: 'btn', type: 'button', disabled: page >= pages, onclick: () => go(page + 1) }, 'Next →'),
+      h('span', { className: 'muted small grow', style: 'text-align:right' },
+        editable ? 'Tap a row to edit it.' : obj.type === 'view' ? 'Views are read-only.' : !S.canPush ? 'Read-only — log in to edit.' : 'No row identity — edit with SQL.')),
+    definition);
+}
+function renderResult({ sets, changed, error }) {
+  const out = [h('div', { className: 'row' }, h('h2', { className: 'grow' }, 'Query result'),
+    h('button', { className: 'btn', type: 'button', onclick: () => { S.result = null; render(); } }, 'Close'))];
+  if (error) out.push(h('p', { className: 'error' }, error));
+  else if (!sets.length) out.push(h('p', { className: 'muted' }, changed ? 'Done. Added to pending changes.' : 'Done. No rows returned.'));
+  for (const set of sets ?? []) {
+    out.push(grid(set.columns, set.values.slice(0, MAX_RESULT_ROWS)),
+      h('p', { className: 'muted small', style: 'margin:0' },
+        set.values.length > MAX_RESULT_ROWS ? `Showing first ${MAX_RESULT_ROWS} of ${set.values.length} rows.` : `${set.values.length} rows.`));
+  }
+  return out;
+}
+
+function renderPending() {
+  const n = S.pending.length;
+  $('#pending').hidden = !n;
+  if (!n) return;
+  $('#pending-title').textContent = `${n} pending change${n > 1 ? 's' : ''} in ${S.name}.db`;
+  $('#pending-list').replaceChildren(...S.pending.map((p, i) => h('li', {}, h('div', {},
+    h('code', { className: 'grow', title: p.sql }, p.sql, p.params?.length ? `  ← ${JSON.stringify(p.params.map((v) => v instanceof Uint8Array ? 'BLOB' : v))}` : ''),
+    h('button', { type: 'button', title: 'Remove this change', ariaLabel: 'Remove this change', onclick: () => removePending(i) }, '×')))));
+  $('#message').placeholder = defaultMessage();
+  $('#commit-btn').disabled = !S.canPush || S.busy;
+  $('#commit-btn').textContent = S.busy ? 'Committing…' : 'Commit';
+  $('#pending-hint').textContent = S.canPush
+    ? `Commits to ${REPO}${REF ? ` (branch ${REF})` : ''}.`
+    : 'Changes exist only in this browser tab. Log in with write access to commit them.';
+}
+const defaultMessage = () => `sqlite: update ${S.name}.db (${S.pending.length} change${S.pending.length > 1 ? 's' : ''})`;
+
+// ---------- row dialog (view / edit / add) ----------
+function openRow(info, row, focusCol) {
+  const dialog = $('#row-dialog');
+  const form = dialog.querySelector('form');
+  const editable = info.editable;
+  const fields = info.columns.map((col, i) => {
+    const original = row ? row.values[i] : undefined;
+    const blob = original instanceof Uint8Array;
+    const locked = !editable || blob || col.hidden !== 0; // generated columns cannot be written
+    const state = { col, original, dirty: false };
+    state.text = h('textarea', {
+      value: row && original !== null ? show(original) : '', readOnly: locked, rows: 1, id: `f-${i}`,
+      placeholder: row ? '' : col.dflt != null ? `default: ${col.dflt}` : col.pk ? 'automatic' : '',
+      oninput: () => { state.dirty = true; state.isNull.checked = false; },
+    });
+    state.isNull = h('input', { type: 'checkbox', checked: original === null, disabled: locked,
+      onchange: () => { state.dirty = true; if (state.isNull.checked) state.text.value = ''; } });
+    state.el = h('div', { className: 'field' },
+      h('div', {},
+        h('label', { htmlFor: `f-${i}` }, h('b', {}, col.name), ' ',
+          h('span', { className: 'muted' }, [col.type, col.pk && 'PK', col.notnull && 'NOT NULL', col.hidden > 1 && 'generated'].filter(Boolean).join(' · '))),
+        h('label', { className: 'null' }, state.isNull, 'NULL')),
+      state.text);
+    return state;
+  });
+  const error = h('p', { className: 'error small', style: 'margin:0', hidden: true });
+  const fail = (e) => { error.textContent = e.message; error.hidden = false; };
+  const where = () => info.key.map((k) => `${k} IS ?`).join(' AND ');
+  const finish = () => { dialog.close(); S.result = null; render(); };
+
+  const save = () => {
+    const changed = fields.filter((f) => f.dirty && !f.text.readOnly)
+      .map((f) => ({ name: f.col.name, original: f.original, value: f.isNull.checked ? null : coerce(f.text.value, f.original) }))
+      .filter((f) => !row || f.value !== f.original);
+    try {
+      const table = ident(info.name);
+      if (row) {
+        if (!changed.length) return dialog.close();
+        applyChange(`UPDATE ${table} SET ${changed.map((c) => `${ident(c.name)} = ?`).join(', ')} WHERE ${where()}`,
+          [...changed.map((c) => c.value), ...row.key]);
+      } else if (changed.length) {
+        applyChange(`INSERT INTO ${table} (${changed.map((c) => ident(c.name)).join(', ')}) VALUES (${changed.map(() => '?').join(', ')})`,
+          changed.map((c) => c.value));
+      } else {
+        applyChange(`INSERT INTO ${table} DEFAULT VALUES`, []);
+      }
+      finish();
+    } catch (e) { fail(e); }
+  };
+  const remove = () => {
+    if (!confirm('Delete this row?')) return;
+    try { applyChange(`DELETE FROM ${ident(info.name)} WHERE ${where()}`, [...row.key]); finish(); }
+    catch (e) { fail(e); }
+  };
+
+  form.onsubmit = (e) => { if (e.submitter?.value === 'save') { e.preventDefault(); save(); } };
+  form.replaceChildren(
+    h('h2', {}, row ? (editable ? 'Edit row' : 'Row') : 'Add row', ' ', h('small', { className: 'muted' }, info.name)),
+    ...fields.map((f) => f.el),
+    !row && h('p', { className: 'muted small', style: 'margin:0' }, 'Fields you leave untouched get their default value.'),
+    error,
+    h('div', { className: 'row' },
+      editable && h('button', { className: 'btn primary', value: 'save' }, row ? 'Save' : 'Add'),
+      editable && row && h('button', { className: 'btn danger', type: 'button', onclick: remove }, 'Delete row'),
+      h('button', { className: 'btn', value: 'cancel' }, editable ? 'Cancel' : 'Close')));
+  dialog.showModal();
+  (fields.find((f) => f.col.name === focusCol) ?? fields[0])?.text.focus();
+}
+/** Keep numbers numeric when the cell held a number; otherwise SQLite column affinity decides. */
+function coerce(text, original) {
+  const t = text.trim();
+  return typeof original === 'number' && t !== '' && String(Number(t)) === t ? Number(t) : text;
+}
+
+// ---------- pending changes ----------
+function removePending(index) {
+  const rest = S.pending.filter((_, i) => i !== index);
+  try { replaceDb(openDb(S.base.bytes, rest)); }
+  catch (e) { return status(`Cannot remove that change: a later change depends on it (${e.message}).`, 'error'); }
+  S.pending = rest; S.result = null;
+  status(''); render();
+}
+function discardAll() {
+  if (!confirm(`Discard ${S.pending.length} pending change(s)?`)) return;
+  replaceDb(openDb(S.base.bytes)); S.pending = []; S.result = null;
+  status('Pending changes discarded.'); render();
+}
+
+function runConsole() {
+  const sql = $('#sql').value.trim();
+  if (!sql || !S.db) return;
+  setUrl({ sql: sql.length <= 2000 ? sql : null }); // keep links a sane length
+  const before = changeCounter();
+  try {
+    const sets = S.db.exec(sql);
+    try { S.db.exec('BEGIN; COMMIT'); } catch { throw new Error('The script left a transaction open. Add COMMIT or ROLLBACK.'); }
+    const changed = changeCounter() !== before;
+    if (changed) S.pending.push({ sql });
+    S.result = { sets, changed };
+  } catch (e) {
+    // A failed script may have applied its first statements: restore the state before it.
+    replaceDb(openDb(S.base.bytes, S.pending));
+    S.result = { error: e.message };
+  }
+  render();
+  $('#view').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function commit() {
+  if (S.busy || !S.pending.length || !S.canPush) return;
+  const message = $('#message').value.trim() || defaultMessage();
+  S.busy = true; renderPending();
+  try {
+    for (let attempt = 1; ; attempt++) {
+      const bytes = S.db.export();
+      S.db.exec('PRAGMA foreign_keys = ON'); // export() reopens the database and resets pragmas
+      try {
+        status(`Committing ${S.name}.db…`);
+        const res = await gh(filePath(S.name), { method: 'PUT', body: {
+          message, content: toBase64(bytes), sha: S.base.sha, ...(REF && { branch: REF }) } });
+        S.base = { bytes, sha: res.content.sha };
+        S.pending = []; $('#message').value = '';
+        status(`Committed ${res.commit.sha.slice(0, 7)}: ${message}`, 'ok');
+        break;
+      } catch (e) {
+        const conflict = e.status === 409 || (e.status === 422 && /sha|match/i.test(e.message));
+        if (!conflict || attempt >= 3) throw e;
+        // The file changed on GitHub: replay our changes on top of the fresh copy.
+        status('The file changed on GitHub. Replaying your changes on the new version…');
+        const fresh = await fetchDb(S.name);
+        if (fresh.sha === S.base.sha) throw e; // nothing new to replay onto
+        let db;
+        try { db = openDb(fresh.bytes, S.pending); }
+        catch (re) {
+          throw new Error(`The file changed on GitHub and change #${(re.index ?? 0) + 1} no longer applies (${re.message}). ` +
+            'Nothing was committed. Remove that change, or discard all and reload.');
+        }
+        replaceDb(db); S.base = fresh;
+      }
+    }
+  } catch (e) {
+    status(e.status === 403 || e.status === 404
+      ? `${e.message} — the token lacks “Contents: Read and write” for ${REPO}.` : e.message, 'error');
+  } finally { S.busy = false; render(); }
+}
+
+// ---------- loading & navigation ----------
+async function loadDb(name) {
+  status(`Loading ${name}.db…`);
+  const base = await fetchDb(name);
+  replaceDb(openDb(base.bytes));
+  Object.assign(S, { name, base, pending: [], result: null });
+  status('');
+}
+async function route() {
+  const q = params();
+  let name = q.get('db');
+  if (!name && S.files.length) { name = S.files[0]; setUrl({ db: name }); }
+  try {
+    if (!name) { replaceDb(null); S.name = null; status(`No .db files in ${DATA_DIR}.`); }
+    else if (name !== S.name) {
+      if (!S.files.includes(name)) throw new Error(`No database “${name}.db” in ${DATA_DIR}.`);
+      await loadDb(name);
+      if (!params().get('table')) { const first = objects().find((o) => o.type === 'table'); if (first) setUrl({ table: first.name }); }
+    }
+  } catch (e) { status(e.message, 'error'); }
+  render();
+}
+const okToLeave = () => !S.pending.length || confirm(`Discard ${S.pending.length} pending change(s) in ${S.name}.db?`);
+
+$('#files').onchange = (e) => {
+  if (!okToLeave()) return renderFiles();
+  setUrl({ db: e.target.value, table: null, page: null, sort: null, dir: null }, true);
+  route();
+};
+addEventListener('popstate', () => {
+  if ((params().get('db') ?? S.name) !== S.name && !okToLeave()) return setUrl({ db: S.name });
+  S.result = null; route();
+});
+addEventListener('beforeunload', (e) => { if (S.pending.length) e.preventDefault(); });
+$('#run').onclick = runConsole;
+$('#sql').onkeydown = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runConsole(); } };
+$('#commit').onsubmit = (e) => { e.preventDefault(); commit(); };
+$('#discard').onclick = discardAll;
+
+// ---------- auth ----------
+$('#auth').onclick = () => {
+  $('#token').value = ''; $('#auth-error').hidden = true;
+  $('#logout').hidden = !token;
+  $('#token-repo').textContent = REPO;
+  $('#token-link').href = 'https://github.com/settings/personal-access-tokens/new';
+  $('#auth-dialog').showModal();
+};
+$('#logout').onclick = () => {
+  localStorage.removeItem(TOKEN_KEY); token = null; S.canPush = false;
+  $('#auth-dialog').close(); status('Logged out. Token removed from this browser.'); render();
+};
+$('#auth-dialog form').onsubmit = async (e) => {
+  if (e.submitter?.value !== 'save') return;
+  e.preventDefault();
+  const candidate = $('#token').value.trim();
+  const fail = (text) => { $('#auth-error').textContent = text; $('#auth-error').hidden = false; };
+  if (!candidate) return fail('Paste a token first.');
+  try {
+    const push = await canPushWith(candidate); // verify before storing
+    localStorage.setItem(TOKEN_KEY, candidate); token = candidate; S.canPush = push;
+    $('#auth-dialog').close();
+    status(push ? 'Logged in. You can edit and commit.' : `Token saved, but it has no write access to ${REPO}.`, push ? 'ok' : 'error');
+    render();
+  } catch (err) {
+    fail(err.status === 401 ? 'GitHub rejected this token.' : err.status === 404 ? `This token cannot see ${REPO}.` : err.message);
+  }
+};
+
+// ---------- start ----------
+try {
+  $('#sql').value = startParams.get('sql') ?? ''; // prefilled only; never run automatically
+  const [sql, listing, push] = await Promise.all([
+    initSqlJs({ locateFile: (file) => SQL_JS_CDN + file }),
+    gh(`/contents/${DATA_DIR}`).catch((e) => { if (e.status === 404) return []; throw e; }),
+    canPushWith(token).catch((e) => { if (e.status === 401) status('Stored token is no longer valid. Log in again.', 'error'); return false; }),
+  ]);
+  SQL = sql; S.canPush = push;
+  S.files = listing.filter((f) => f.type === 'file' && f.name.endsWith('.db')).map((f) => f.name.slice(0, -3)).sort();
+  await route();
+} catch (e) { status(e.message, 'error'); }
+</script>
+</body>
+</html>

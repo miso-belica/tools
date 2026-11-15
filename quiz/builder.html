@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Quiz Builder</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: light-dark(#f6f4ef, #14161c);
+    --surface: light-dark(#ffffff, #1e212a);
+    --line: light-dark(#d9d5cb, #343846);
+    --text: light-dark(#1c1d22, #eceef4);
+    --muted: light-dark(#666a75, #9a9fb0);
+    --accent: light-dark(#2f5fd0, #86a8ff);
+    --good: light-dark(#1d8a4e, #58d08d);
+    --bad: light-dark(#c23b3b, #ff8d8d);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text); line-height: 1.4;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+  #app {
+    max-width: 820px; margin: 0 auto; display: grid; gap: 14px;
+    padding: max(18px, env(safe-area-inset-top)) 14px calc(96px + env(safe-area-inset-bottom));
+  }
+  h1, h2 { margin: 0; line-height: 1.15; }
+  a { color: var(--accent); }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  .muted { color: var(--muted); }
+  .btn { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .5em .9em; font-weight: 600; }
+  .btn.primary { background: var(--accent); border-color: transparent; color: light-dark(#fff, #10131c); }
+  .btn.icon { padding: .35em .6em; min-width: 2.3em; }
+  .btn:disabled { opacity: .4; cursor: default; }
+  :is(.btn, input, textarea, select):focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; display: grid; gap: 10px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .grow { flex: 1; min-width: 0; }
+  label.field { display: grid; gap: 3px; font-size: .85rem; color: var(--muted); flex: 1; min-width: 120px; }
+  input[type=text], input[type=number], textarea, select {
+    width: 100%; padding: .5em .65em; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); font-size: 1rem;
+  }
+  textarea { resize: vertical; min-height: 3.2em; field-sizing: content; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: .92rem; }
+  input[type=checkbox] { width: 1.35em; height: 1.35em; accent-color: var(--good); flex: none; }
+  .step-head { display: flex; gap: 6px; align-items: center; }
+  .tag { font-size: .78rem; font-weight: 700; padding: .15em .7em; border-radius: 99px; background: var(--bg); border: 1px solid var(--line); }
+  .option { display: flex; gap: 8px; align-items: center; }
+  .option .letter { width: 1.5em; text-align: center; font-weight: 700; color: var(--muted); flex: none; }
+  details > summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
+  details[open] > summary { margin-bottom: 8px; }
+  pre { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow: auto; font-size: .85rem; margin: 0; white-space: pre-wrap; }
+  .warnings { margin: 0; padding-left: 1.2em; display: grid; gap: .3em; }
+  .dock {
+    position: fixed; inset: auto 0 0 0; z-index: 5; background: var(--surface); border-top: 1px solid var(--line);
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  }
+  .dock .row { max-width: 820px; margin: 0 auto; }
+  .ok { color: var(--good); font-weight: 600; }
+  .warn { color: var(--bad); font-weight: 600; }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<div class="dock"><div class="row" id="dock"></div></div>
+
+<script type="module">
+import { parseQuiz, serializeQuiz, toModel, SAMPLE, DEFAULT_TIME } from './format.js';
+
+const KEY = 'quiz:builder';
+const app = document.getElementById('app');
+
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props ?? {})) {
+    if (v == null || v === false) continue;
+    if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (k === 'class') el.className = v;
+    else if (['value', 'checked', 'disabled', 'hidden', 'open'].includes(k)) el[k] = v;
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  el.append(...kids.flat(Infinity).filter(k => k != null && k !== false));
+  return el;
+}
+const letter = i => String.fromCharCode(65 + (i % 26));
+const nodes = (...kids) => kids.flat(Infinity).filter(k => k != null && k !== false);
+
+// ── model
+const newSlide = (md = '') => ({ type: 'slide', md, notes: '' });
+const newQuestion = () => ({
+  type: 'question', text: '', explain: '', notes: '', multi: false, time: '', points: '',
+  options: [1, 2, 3, 4].map(() => ({ text: '', correct: false })),
+});
+const blank = () => ({ title: '', time: DEFAULT_TIME, points: 1, scoring: 'speed', steps: [newSlide('# My quiz\n\nWelcome!'), newQuestion()] });
+
+function load() {
+  try {
+    const m = JSON.parse(localStorage.getItem(KEY));
+    return Array.isArray(m?.steps) ? m : null;
+  } catch { return null; }
+}
+let model = load() ?? blank();
+let summaryTimer = 0;
+function changed() {
+  // Save right away so closing the tab mid-sentence loses nothing; only the summary is debounced.
+  try { localStorage.setItem(KEY, JSON.stringify(model)); } catch { /* storage full or blocked: keep working in memory */ }
+  clearTimeout(summaryTimer);
+  summaryTimer = setTimeout(summary, 250);
+}
+const markdown = () => serializeQuiz(model);
+const hasContent = s => (s.type === 'slide' ? s.md.trim() || s.notes.trim() : s.text.trim() || s.options.some(o => o.text.trim()));
+const fileName = () => (model.title.trim().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'quiz');
+
+// ── actions
+function replaceWith(next) {
+  if (model.steps.some(hasContent) && !confirm('Replace the quiz you are editing? This cannot be undone.')) return;
+  model = next; changed(); render();
+}
+async function openFile(file) {
+  if (!file) return;
+  if (file.size > 2_000_000) return alert('That file is larger than 2 MB.');
+  try { replaceWith(toModel(parseQuiz(await file.text(), file.name.replace(/\.[^.]+$/, '')))); }
+  catch (e) { alert(e.message); }
+}
+function download() {
+  const url = URL.createObjectURL(new Blob([markdown()], { type: 'text/markdown' }));
+  h('a', { href: url, download: fileName() + '.md' }).click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function hostNow() {
+  try { localStorage.setItem('quiz:draft', JSON.stringify({ md: markdown(), name: model.title.trim() || 'Quiz' })); }
+  catch { return alert('Could not hand the quiz over (browser storage is full or blocked). Download the file and open it on the quiz page instead.'); }
+  location.href = './?draft=1';
+}
+function move(i, by) {
+  const j = i + by;
+  if (j < 0 || j >= model.steps.length) return;
+  [model.steps[i], model.steps[j]] = [model.steps[j], model.steps[i]];
+  changed(); render(); focusStep(j);
+}
+function remove(i) {
+  if (hasContent(model.steps[i]) && !confirm(`Delete step ${i + 1}?`)) return;
+  model.steps.splice(i, 1); changed(); render();
+}
+function add(step, at = model.steps.length) {
+  model.steps.splice(at, 0, step); changed(); render(); focusStep(at);
+}
+function focusStep(i) {
+  const card = app.querySelectorAll('.step')[i];
+  card?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  card?.querySelector('textarea')?.focus({ preventScroll: true });
+}
+
+// ── views
+const text = (label, obj, key, props = {}) => h('label', { class: 'field' }, label,
+  h('textarea', { rows: 2, ...props, value: obj[key] ?? '', oninput: e => { obj[key] = e.target.value; changed(); } }));
+const number = (label, obj, key, props = {}) => h('label', { class: 'field' }, label,
+  h('input', { type: 'number', min: 0, inputmode: 'decimal', ...props, value: obj[key] ?? '', oninput: e => { obj[key] = e.target.value === '' ? '' : Number(e.target.value); changed(); } }));
+
+function stepCard(s, i) {
+  const tag = h('span', { class: 'tag' });
+  const multi = s.type === 'question' && h('input', { type: 'checkbox', onchange: e => { s.multi = e.target.checked; changed(); refresh(); } });
+  const refresh = () => {
+    if (s.type === 'slide') return void (tag.textContent = 'Slide');
+    const marked = s.options.filter(o => o.correct && o.text.trim()).length;
+    tag.textContent = marked === 0 ? 'Poll (no points)' : marked > 1 || s.multi ? 'Multi-select question' : 'Question';
+    multi.checked = marked > 1 || s.multi; multi.disabled = marked > 1; // several correct answers always means multi-select
+  };
+
+  const head = h('div', { class: 'step-head' },
+    h('strong', null, `${i + 1}.`), tag, h('span', { class: 'grow' }),
+    h('button', { class: 'btn icon', title: 'Move up', 'aria-label': `Move step ${i + 1} up`, disabled: i === 0, onclick: () => move(i, -1) }, '↑'),
+    h('button', { class: 'btn icon', title: 'Move down', 'aria-label': `Move step ${i + 1} down`, disabled: i === model.steps.length - 1, onclick: () => move(i, 1) }, '↓'),
+    h('button', { class: 'btn icon', title: 'Duplicate', 'aria-label': `Duplicate step ${i + 1}`, onclick: () => add(structuredClone(s), i + 1) }, '⧉'),
+    h('button', { class: 'btn icon', title: 'Delete', 'aria-label': `Delete step ${i + 1}`, onclick: () => remove(i) }, '✕'));
+  const notes = h('details', { open: !!s.notes.trim() }, h('summary', null, 'Speaker notes (only on the phone remote)'),
+    text('Notes', s, 'notes'));
+
+  let body;
+  if (s.type === 'slide') {
+    body = [text('Slide (Markdown)', s, 'md', { rows: 4, placeholder: '# Heading\n\nText, lists, ![picture](https://…)' }), notes];
+  } else {
+    const list = h('div', { style: 'display:grid;gap:6px' });
+    const drawOptions = () => list.replaceChildren(...s.options.map((o, k) => h('div', { class: 'option' },
+      h('input', { type: 'checkbox', checked: o.correct, title: 'Correct answer', 'aria-label': `Option ${letter(k)} is correct`, onchange: e => { o.correct = e.target.checked; changed(); refresh(); } }),
+      h('span', { class: 'letter' }, letter(k)),
+      h('input', { type: 'text', class: 'grow', value: o.text, placeholder: k < 2 ? 'Answer' : 'Answer (optional)', 'aria-label': `Option ${letter(k)}`, oninput: e => { o.text = e.target.value; changed(); refresh(); } }),
+      h('button', { class: 'btn icon', title: 'Remove option', 'aria-label': `Remove option ${letter(k)}`, disabled: s.options.length <= 2, onclick: () => { s.options.splice(k, 1); changed(); drawOptions(); refresh(); } }, '✕'))));
+    drawOptions();
+    body = [
+      text('Question (Markdown)', s, 'text', { placeholder: '## What is …?' }),
+      h('div', { class: 'muted', style: 'font-size:.85rem' }, 'Tick the correct answers. None ticked = poll. A picture answer is ![alt](https://…/picture.jpg).'),
+      list,
+      h('div', { class: 'row' },
+        h('button', { class: 'btn', onclick: () => { s.options.push({ text: '', correct: false }); changed(); drawOptions(); list.lastChild.querySelector('input[type=text]').focus(); } }, '+ Option'),
+        h('label', { class: 'row', style: 'gap:6px' }, multi, 'Players may tick several')),
+      h('div', { class: 'row' },
+        number('Time limit (s)', s, 'time', { placeholder: `default ${model.time === '' ? DEFAULT_TIME : model.time}` }),
+        number('Points ×', s, 'points', { placeholder: `default ${model.points === '' ? 1 : model.points}`, step: 'any' })),
+      h('details', { open: !!s.explain.trim() }, h('summary', null, 'Explanation (shown after the reveal)'), text('Explanation', s, 'explain')),
+      notes,
+    ];
+  }
+  refresh();
+  return h('section', { class: 'card step' }, head, body);
+}
+
+const summaryBox = h('section', { class: 'card' });
+function summary() {
+  const md = markdown();
+  let warnings = [], error = null;
+  try { warnings = parseQuiz(md, 'Quiz', { local: true }).warnings; } catch (e) { error = e.message; }
+  const wasOpen = summaryBox.querySelector('details')?.open;
+  summaryBox.replaceChildren(...nodes(
+    error ? h('p', { class: 'warn', style: 'margin:0' }, error)
+      : warnings.length
+        ? [h('strong', { class: 'warn' }, `${warnings.length} thing${warnings.length === 1 ? '' : 's'} to check`),
+           h('ul', { class: 'warnings' }, warnings.map(w => h('li', null, w.step ? h('strong', null, `Step ${w.step}: `) : null, w.text)))]
+        : h('span', { class: 'ok' }, '✓ Ready to play'),
+    h('details', { open: wasOpen }, h('summary', null, 'Markdown file'), h('pre', null, md))));
+  for (const b of document.querySelectorAll('[data-needs-quiz]')) b.disabled = !!error;
+}
+
+function render() {
+  document.title = model.title.trim() ? `${model.title.trim()} · Quiz Builder` : 'Quiz Builder';
+  const file = h('input', { type: 'file', accept: '.md,.markdown,.txt,text/markdown,text/plain', hidden: true, onchange: () => openFile(file.files[0]) });
+  app.replaceChildren(...nodes(
+    h('header', { class: 'row' },
+      h('h1', { class: 'grow' }, 'Quiz Builder'),
+      h('a', { href: './' }, '← Live Quiz')),
+    h('section', { class: 'card' },
+      h('label', { class: 'field' }, 'Title',
+        h('input', { type: 'text', value: model.title, placeholder: 'My quiz', oninput: e => { model.title = e.target.value; changed(); } })),
+      h('div', { class: 'row' },
+        number('Seconds per question (0 = no limit)', model, 'time', { placeholder: DEFAULT_TIME }),
+        number('Points ×', model, 'points', { placeholder: 1, step: 'any' }),
+        h('label', { class: 'field' }, 'Scoring',
+          h('select', { onchange: e => { model.scoring = e.target.value; changed(); } },
+            h('option', { value: 'speed', selected: model.scoring !== 'flat' }, 'Faster answers score more'),
+            h('option', { value: 'flat', selected: model.scoring === 'flat' }, '1 point per question')))),
+      h('div', { class: 'row' },
+        h('button', { class: 'btn', onclick: () => file.click() }, 'Open .md file'),
+        h('button', { class: 'btn', onclick: () => replaceWith(toModel(parseQuiz(SAMPLE))) }, 'Load sample'),
+        h('button', { class: 'btn', onclick: () => replaceWith(blank()) }, 'Start over'),
+        file),
+      h('p', { class: 'muted', style: 'margin:0;font-size:.85rem' }, 'Everything is saved in this browser as you type.')),
+    model.steps.map(stepCard),
+    !model.steps.length && h('p', { class: 'muted' }, 'No steps yet. Add a slide or a question below.'),
+    summaryBox,
+  ));
+  summary();
+}
+
+document.getElementById('dock').append(
+  h('button', { class: 'btn', onclick: () => add(newSlide()) }, '+ Slide'),
+  h('button', { class: 'btn', onclick: () => add(newQuestion()) }, '+ Question'),
+  h('span', { class: 'grow' }),
+  h('button', { class: 'btn', 'data-needs-quiz': true, onclick: download }, 'Download .md'),
+  h('button', { class: 'btn primary', 'data-needs-quiz': true, onclick: hostNow }, 'Host now →'));
+
+render();
+</script>
+</body>
+</html>

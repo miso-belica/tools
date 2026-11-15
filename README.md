@@ -14,3 +14,4 @@
 1. [Photo Triage](https://miso-belica.github.io/tools/photos/triage.html)
 1. [Speech to Text](https://miso-belica.github.io/tools/speech-to-text.html)
 1. [Live Quiz](https://miso-belica.github.io/tools/quiz/)
+1. [Live Quiz – builder](https://miso-belica.github.io/tools/quiz/builder.html)

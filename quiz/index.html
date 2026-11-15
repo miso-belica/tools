@@ -87,6 +87,8 @@
   /* phone remote */
   .r-info h2 { margin: .4em 0; overflow-wrap: anywhere; }
   .r-info p { margin: .3em 0; }
+  .r-notes { font-size: 1.1rem; max-height: 34dvh; overflow: auto; }
+  .r-notes > :first-child { margin-top: 0; } .r-notes > :last-child { margin-bottom: 0; }
   .r-next { min-height: 32dvh; font-size: 1.7rem; border-radius: var(--radius); }
   .r-back { min-height: 11dvh; font-size: 1.2rem; border-radius: var(--radius); }
 
@@ -327,6 +329,8 @@ const plain = source => md(source).textContent.replace(/\s+/g, ' ').trim();
 // Slides separated by `---`. A slide with 2+ task-list items is a question:
 //   - [x] correct   - [ ] wrong      (none marked = poll, no points;
 //                                     several marked = tick all that apply)
+// HTML comments hold per-question settings (time, points, double, multi) or,
+// for any other text, speaker notes that only the phone remote shows.
 // Optional front matter: title, time (seconds per question, 0 = no limit),
 // points (multiplier for every question, default 1), scoring (speed | flat).
 function parseQuiz(source, fallbackTitle = 'Quiz') {
@@ -341,37 +345,57 @@ function parseQuiz(source, fallbackTitle = 'Quiz') {
     }
   }
   const chunks = [[]];
-  let fence = false;
+  let fence = false, comment = false;
   for (const line of lines) {
-    if (/^\s*(```|~~~)/.test(line)) fence = !fence;
-    if (!fence && /^-{3,}\s*$/.test(line)) chunks.push([]);
+    if (!comment && /^\s*(```|~~~)/.test(line)) fence = !fence;
+    if (!fence && !comment && /^\s*<!--/.test(line)) comment = true;
+    if (!fence && !comment && /^-{3,}\s*$/.test(line)) chunks.push([]);
     else chunks.at(-1).push(line);
+    if (comment && /-->\s*$/.test(line)) comment = false;
   }
   const num = (v, d) => (Number.isFinite(Number(v)) && String(v).trim() !== '' ? Math.max(0, Math.min(3600, Number(v))) : d);
   const defaultTime = num(meta.time, DEFAULT_TIME);
   const mult = (v, d) => (Number.isFinite(Number(v)) && String(v).trim() !== '' ? Math.max(0, Math.min(100, Number(v))) : d);
   const defaultPoints = mult(meta.points, 1);
   const TASK = /^\s*[-*+]\s+\[( |x|X)\]\s+(.*)$/;
-  const DIRECTIVE = /^\s*<!--\s*(time|multi|points|double)\s*(?::\s*(.*?))?\s*-->\s*$/i;
+  const SETTING = /^(time|multi|points|double)\s*(?::\s*(.*))?$/i;
+
+  // HTML comments on their own lines stay invisible on GitHub. A known
+  // setting configures the question; anything else is a speaker note.
+  function takeComments(chunk) {
+    const rest = [], set = {}, notes = [];
+    const take = text => {
+      const inner = text.replace(/^\s*<!--/, '').replace(/-->\s*$/, '').trim();
+      const m = inner.match(SETTING);
+      if (m) set[m[1].toLowerCase()] = (m[2] ?? '').trim();
+      else if (inner) notes.push(inner.replace(/^notes?\s*:\s*/i, ''));
+    };
+    let fenced = false, open = null;
+    for (const line of chunk) {
+      if (open) { open.push(line); if (/-->\s*$/.test(line)) { take(open.join('\n')); open = null; } continue; }
+      if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+      if (!fenced && /^\s*<!--/.test(line)) { if (/-->\s*$/.test(line)) take(line); else open = [line]; continue; }
+      rest.push(line);
+    }
+    if (open) rest.push(...open); // never closed: leave the text alone
+    return { rest, set, notes: notes.join('\n\n').slice(0, 4000) };
+  }
 
   const steps = [];
-  for (const chunk of chunks) {
-    if (!chunk.some(l => l.trim())) continue;
+  for (const raw of chunks) {
+    if (!raw.some(l => l.trim())) continue;
+    const { rest: chunk, set, notes } = takeComments(raw);
     const taskIdx = chunk.flatMap((l, i) => (TASK.test(l) ? [i] : []));
-    if (taskIdx.length < 2) { steps.push({ type: 'slide', md: chunk.join('\n').trim() }); continue; }
+    if (taskIdx.length < 2) {
+      if (chunk.some(l => l.trim()) || notes) steps.push({ type: 'slide', md: chunk.join('\n').trim(), notes });
+      continue;
+    }
     const options = taskIdx.map(i => { const m = chunk[i].match(TASK); return { text: m[2].trim(), correct: m[1] !== ' ' }; });
-    // Per-question settings live in HTML comments so they stay invisible on GitHub.
-    const set = {};
-    const strip = ls => ls.filter(l => {
-      const m = l.match(DIRECTIVE);
-      if (m) set[m[1].toLowerCase()] = (m[2] ?? '').trim();
-      return !m;
-    }).join('\n').trim();
-    const text = strip(chunk.slice(0, taskIdx[0]));
-    const explain = strip(chunk.slice(taskIdx.at(-1) + 1));
     const correct = options.flatMap((o, i) => (o.correct ? [i] : []));
     steps.push({
-      type: 'question', text, explain, correct,
+      type: 'question', correct, notes,
+      text: chunk.slice(0, taskIdx[0]).join('\n').trim(),
+      explain: chunk.slice(taskIdx.at(-1) + 1).join('\n').trim(),
       options: options.map(o => o.text),
       time: 'time' in set ? num(set.time, defaultTime) : defaultTime,
       // <!-- points: 3 --> multiplies what the question is worth; <!-- double --> is points: 2.
@@ -663,6 +687,7 @@ function runHost(room, S, quiz, client) {
       nextLabel: nextLabel(ph), canNext: ph !== 'end', canBack: !(S.open || ph === 'lobby'),
       left: S.open ? secondsLeft() : null, timed: S.open && !!S.deadline,
       answered: S.open ? Object.keys(S.answers[S.i] ?? {}).length : null, players: Object.keys(S.players).length,
+      notes: (ph === 'lobby' || ph === 'end' ? '' : step().notes) || '',   // speaker notes never go to the big screen
     };
     // Serialised so a slow encryption cannot leave an older message retained.
     rcChain = rcChain.then(async () => {
@@ -1136,6 +1161,7 @@ async function startRemote() {
               info.answered != null && h('p', null, h('strong', null, `${info.answered} / ${info.players} answered`),
                 info.timed && [' · ', h('span', { class: 'p-timer', id: 'r-timer' }, left() ?? ''), ' s']),
               info.upcoming && h('p', { class: 'muted' }, 'Next: ', info.upcoming)),
+        info && !invalid && !foreign && info.notes && h('section', { class: 'card r-notes md' }, md(info.notes)),
         h('div', { class: 'p-bottom' },
           h('button', { class: 'btn primary r-next', disabled: !ready || !info.canNext, onclick: () => press('next') }, (info?.nextLabel ?? 'Next') + ' →'),
           h('button', { class: 'btn r-back', disabled: !ready || !info.canBack, onclick: () => press('back') }, '← Back'))));

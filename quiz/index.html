@@ -73,6 +73,16 @@
   .p-q { font-size: 1.25rem; font-weight: 650; }
   .p-q :first-child { margin-top: 0; }
 
+  /* phone: big answer buttons at the bottom, same left/right layout as the big screen */
+  .p-bottom { margin-top: auto; display: grid; gap: 12px; }
+  .opts.p-opts { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .p-opts .opt {
+    flex-direction: column; justify-content: center; text-align: center; gap: .45em;
+    min-height: clamp(96px, 19dvh, 190px); padding: .7em .5em; font-size: 1.1rem;
+  }
+  .p-opts .opt .txt { flex: none; max-width: 100%; }
+  .p-opts .opt .letter { font-size: 1.15em; }
+
   /* ---------- answer options (host + player) ---------- */
   .opts { display: grid; gap: 12px; grid-template-columns: 1fr; width: 100%; padding: 0; margin: 0; list-style: none; }
   .opt {
@@ -887,18 +897,19 @@ function startPlayer() {
         h('span', null, `Question ${state.i + 1} of ${state.total}`),
         h('span', { class: 'p-timer', id: 'p-timer' }, timeLeft() ?? '')),
       h('div', { class: 'p-q md' }, md(q.text)),
-      h('div', { class: 'opts' }, q.options.map((text, i) => {
-        const cls = ['opt', picked?.a === i && 'picked',
-          revealed ? (correct.includes(i) ? 'correct' : correct.length && 'dim') : picked && picked.a !== i && 'dim'];
-        return h('button', { class: cls.filter(Boolean).join(' '), disabled: revealed || !!picked, onclick: () => answer(i) },
-          h('span', { class: 'letter' }, revealed && correct.includes(i) ? '✓' : letter(i)),
-          h('span', { class: 'txt' }, md(text, { inline: true })));
-      })),
-      h('p', { role: 'status', style: 'text-align:center;margin:0' },
-        verdict ? h('strong', null, `${verdict[0]} ${verdict[1]}`)
-          : late ? 'Too late — the question is closed.'
-          : picked ? (picked.acked ? 'Answer locked in ✓' : 'Sending…') : 'Pick one answer.'),
-      revealed && standing && h('div', { style: 'text-align:center' }, standing),
+      h('div', { class: 'p-bottom' },
+        h('p', { role: 'status', style: 'text-align:center;margin:0' },
+          verdict ? h('strong', null, `${verdict[0]} ${verdict[1]}`)
+            : late ? 'Too late — the question is closed.'
+            : picked ? (picked.acked ? 'Answer locked in ✓' : 'Sending…') : 'Pick one answer.',
+          revealed && standing && h('span', { class: 'muted' }, ' · ', standing.textContent)),
+        h('div', { class: 'opts p-opts' }, q.options.map((text, i) => {
+          const cls = ['opt', picked?.a === i && 'picked',
+            revealed ? (correct.includes(i) ? 'correct' : correct.length && 'dim') : picked && picked.a !== i && 'dim'];
+          return h('button', { class: cls.filter(Boolean).join(' '), disabled: revealed || !!picked, onclick: () => answer(i) },
+            h('span', { class: 'letter' }, revealed && correct.includes(i) ? '✓' : letter(i)),
+            h('span', { class: 'txt' }, md(text, { inline: true })));
+        }))),
     ];
   }
 

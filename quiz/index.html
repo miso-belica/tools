@@ -144,7 +144,8 @@
   .slide h1 { font-size: 2.2em; }
   .question { display: grid; gap: 1em; }
   .question .q-text { font-size: 1.15em; font-weight: 650; text-align: center; }
-  .q-hint { text-align: center; color: var(--muted); font-size: .8em; margin-top: -.6em; }
+  .q-hint { text-align: center; color: var(--muted); font-size: .8em; margin-top: -.6em; display: flex; gap: .6em; justify-content: center; align-items: center; flex-wrap: wrap; }
+  .badge { background: var(--accent); color: light-dark(#fff, #10131c); border-radius: 99px; padding: .1em .7em; font-weight: 700; }
   .reveal { display: grid; gap: 1.2em; grid-template-columns: 1fr; align-items: start; }
   .board { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: .8em 1em; font-size: .8em; }
   .board h3 { font-size: 1em; color: var(--muted); }
@@ -220,6 +221,7 @@ const randomId = () => crypto.randomUUID().replaceAll('-', '').slice(0, 20);
 const letter = i => String.fromCharCode(65 + (i % 26));
 // An answer is one option index, or a sorted list of them for multi-select.
 const picks = a => (Array.isArray(a) ? a : a == null ? [] : [a]);
+const pointsLabel = n => (n === 1 || n == null ? null : n === 2 ? 'Double points' : `×${n} points`);
 const isRight = (correct, a) => { const p = picks(a); return p.length === correct.length && p.every(i => correct.includes(i)); };
 
 function store(key, value) {
@@ -296,7 +298,8 @@ const plain = source => md(source).textContent.replace(/\s+/g, ' ').trim();
 // Slides separated by `---`. A slide with 2+ task-list items is a question:
 //   - [x] correct   - [ ] wrong      (none marked = poll, no points;
 //                                     several marked = tick all that apply)
-// Optional front matter: title, time (seconds per question, 0 = no limit).
+// Optional front matter: title, time (seconds per question, 0 = no limit),
+// points (multiplier for every question, default 1).
 function parseQuiz(source, fallbackTitle = 'Quiz') {
   const lines = source.replace(/\r\n?/g, '\n').split('\n');
   const meta = {};
@@ -317,8 +320,10 @@ function parseQuiz(source, fallbackTitle = 'Quiz') {
   }
   const num = (v, d) => (Number.isFinite(Number(v)) && String(v).trim() !== '' ? Math.max(0, Math.min(3600, Number(v))) : d);
   const defaultTime = num(meta.time, DEFAULT_TIME);
+  const mult = (v, d) => (Number.isFinite(Number(v)) && String(v).trim() !== '' ? Math.max(0, Math.min(100, Number(v))) : d);
+  const defaultPoints = mult(meta.points, 1);
   const TASK = /^\s*[-*+]\s+\[( |x|X)\]\s+(.*)$/;
-  const DIRECTIVE = /^\s*<!--\s*(time|multi)\s*(?::\s*(.*?))?\s*-->\s*$/i;
+  const DIRECTIVE = /^\s*<!--\s*(time|multi|points|double)\s*(?::\s*(.*?))?\s*-->\s*$/i;
 
   const steps = [];
   for (const chunk of chunks) {
@@ -340,6 +345,8 @@ function parseQuiz(source, fallbackTitle = 'Quiz') {
       type: 'question', text, explain, correct,
       options: options.map(o => o.text),
       time: 'time' in set ? num(set.time, defaultTime) : defaultTime,
+      // <!-- points: 3 --> multiplies what the question is worth; <!-- double --> is points: 2.
+      points: 'points' in set ? mult(set.points, defaultPoints) : 'double' in set ? defaultPoints * 2 : defaultPoints,
       // Several correct options, or an explicit <!-- multi -->: players tick all that apply.
       multi: correct.length > 1 || ('multi' in set && !/^(off|no|false|0)$/i.test(set.multi)),
     });
@@ -565,7 +572,7 @@ function runHost(room, S, quiz, client) {
     steps.forEach((s, idx) => {
       if (s.type !== 'question' || !S.done[idx] || !s.correct.length) return;
       for (const [id, ans] of Object.entries(S.answers[idx] ?? {})) {
-        if (table[id] && isRight(s.correct, ans.a)) { table[id].score++; table[id].ms += ans.ms; }
+        if (table[id] && isRight(s.correct, ans.a)) { table[id].score += s.points; table[id].ms += ans.ms; }
       }
     });
     return Object.values(table)
@@ -579,7 +586,7 @@ function runHost(room, S, quiz, client) {
     const ph = phase();
     const s = { v: 1, phase: ph, title: quiz.title, n: Object.keys(S.players).length };
     if (ph === 'slide' || ph === 'question' || ph === 'reveal') { s.i = S.i; s.total = steps.length; }
-    if (ph === 'question' || ph === 'reveal') s.q = { text: step().text, options: step().options, multi: step().multi };
+    if (ph === 'question' || ph === 'reveal') s.q = { text: step().text, options: step().options, multi: step().multi, points: step().correct.length ? step().points : 1 };
     if (ph === 'question') s.left = secondsLeft();
     if (ph === 'reveal') { s.correct = step().correct; s.poll = !step().correct.length; }
     if (ph === 'reveal' || ph === 'end') s.r = Object.fromEntries(standings().map(p => [p.id, [p.score, p.rank]]));
@@ -717,6 +724,12 @@ function runHost(room, S, quiz, client) {
         : h('p', { class: 'muted' }, 'No players.'));
   }
 
+  function hints(s) {
+    const label = s.correct.length ? pointsLabel(s.points) : null;
+    return (s.multi || label) && h('div', { class: 'q-hint' },
+      label && h('span', { class: 'badge' }, label), s.multi && 'Select all that apply');
+  }
+
   function questionView(s, revealed) {
     const given = Object.values(S.answers[S.i] ?? {});
     const counts = s.options.map((_, i) => given.filter(g => picks(g.a).includes(i)).length);
@@ -732,7 +745,7 @@ function runHost(room, S, quiz, client) {
     }));
     const main = h('div', { class: 'question' },
       h('div', { class: 'q-text md' }, md(s.text, { base })),
-      s.multi && h('div', { class: 'q-hint' }, 'Select all that apply'),
+      hints(s),
       opts,
       revealed && s.explain && h('div', { class: 'explain md' }, md(s.explain, { base })));
     return revealed ? h('div', { class: 'reveal' }, main, board(standings(), 5, 'Leaderboard')) : main;
@@ -923,7 +936,7 @@ function startPlayer() {
     }
     return [
       h('div', { class: 'p-head' },
-        h('span', null, `Question ${state.i + 1} of ${state.total}`),
+        h('span', null, `Question ${state.i + 1} of ${state.total}`, pointsLabel(q.points) && [' ', h('span', { class: 'badge' }, pointsLabel(q.points))]),
         h('span', { class: 'p-timer', id: 'p-timer' }, timeLeft() ?? '')),
       h('div', { class: 'p-q md' }, md(q.text)),
       h('div', { class: 'p-bottom' },

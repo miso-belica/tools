@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Live Quiz</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: light-dark(#f6f4ef, #14161c);
+    --surface: light-dark(#ffffff, #1e212a);
+    --line: light-dark(#d9d5cb, #343846);
+    --text: light-dark(#1c1d22, #eceef4);
+    --muted: light-dark(#666a75, #9a9fb0);
+    --accent: light-dark(#2f5fd0, #86a8ff);
+    --good: light-dark(#1d8a4e, #58d08d);
+    --bad: light-dark(#c23b3b, #ff8d8d);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.4;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #app { min-height: 100dvh; display: flex; flex-direction: column; }
+  h1, h2, h3 { line-height: 1.15; margin: 0 0 .5em; text-wrap: balance; }
+  a { color: var(--accent); }
+  a.btn { text-decoration: none; color: inherit; }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  .btn {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: .6em 1.1em; font-weight: 600;
+  }
+  .btn.primary { background: var(--accent); border-color: transparent; color: light-dark(#fff, #10131c); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .muted { color: var(--muted); }
+  .error { color: var(--bad); font-weight: 600; }
+  .mono { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+
+  /* ---------- landing & player ---------- */
+  .page {
+    width: 100%; max-width: 560px; margin: 0 auto; flex: 1;
+    padding: max(20px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+  .card.drop { outline: 3px dashed var(--accent); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .field {
+    flex: 1; min-width: 0; padding: .65em .8em; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); font-size: 1.1rem;
+  }
+  .code-input { text-transform: uppercase; letter-spacing: .15em; font-weight: 700; }
+  pre.sample {
+    background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px; overflow: auto; font-size: .85rem; margin: 10px 0 0;
+  }
+  .banner {
+    position: sticky; top: 0; z-index: 5; text-align: center; padding: 6px;
+    background: var(--bad); color: #fff; font-weight: 600; font-size: .9rem;
+  }
+  .p-head { display: flex; justify-content: space-between; gap: 12px; font-size: .9rem; color: var(--muted); }
+  .p-center { flex: 1; display: grid; place-content: center; text-align: center; gap: 8px; }
+  .p-big { font-size: 3.2rem; line-height: 1; }
+  .p-timer { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.3rem; }
+  .p-q { font-size: 1.25rem; font-weight: 650; }
+  .p-q :first-child { margin-top: 0; }
+
+  /* ---------- answer options (host + player) ---------- */
+  .opts { display: grid; gap: 12px; grid-template-columns: 1fr; width: 100%; padding: 0; margin: 0; list-style: none; }
+  .opt {
+    --h: 255;
+    position: relative; overflow: hidden; isolation: isolate;
+    display: flex; align-items: center; gap: .7em; text-align: left; width: 100%;
+    padding: .7em .9em; border: 0; border-radius: var(--radius);
+    background: oklch(0.5 0.15 var(--h)); color: #fff; font-weight: 600;
+  }
+  .opt:nth-child(6n+1) { --h: 25; }
+  .opt:nth-child(6n+2) { --h: 255; }
+  .opt:nth-child(6n+3) { --h: 150; }
+  .opt:nth-child(6n+4) { --h: 75; }
+  .opt:nth-child(6n+5) { --h: 315; }
+  .opt:nth-child(6n+6) { --h: 200; }
+  .opt .letter {
+    flex: none; width: 1.9em; height: 1.9em; border-radius: 50%;
+    display: grid; place-items: center; background: rgb(255 255 255 / .22); font-weight: 800;
+  }
+  .opt .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .opt .txt p { margin: 0; }
+  .opt .count { flex: none; font-variant-numeric: tabular-nums; font-weight: 800; }
+  button.opt:active { transform: scale(.985); }
+  .opt.picked { outline: 4px solid var(--text); outline-offset: 2px; }
+  .opt.dim { opacity: .55; }
+  .opt.result { background: oklch(0.36 0.07 var(--h)); }
+  .opt.result::before {
+    content: ''; position: absolute; inset: 0 auto 0 0; width: calc(var(--pct, 0) * 1%);
+    background: oklch(0.5 0.15 var(--h)); z-index: -1; transition: width .5s ease;
+  }
+  .opt.correct { outline: 4px solid var(--good); outline-offset: 2px; }
+
+  /* ---------- host (projector) ---------- */
+  .host { flex: 1; display: flex; flex-direction: column; height: 100dvh; }
+  .bar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--surface); font-size: .95rem;
+  }
+  .bar.bottom { border-bottom: 0; border-top: 1px solid var(--line); }
+  .bar .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar .title { font-weight: 700; }
+  .dot { width: .7em; height: .7em; border-radius: 50%; background: var(--bad); display: inline-block; }
+  .dot.on { background: var(--good); }
+  .timer { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 1.3rem; min-width: 2.5ch; text-align: center; }
+  .stage {
+    flex: 1; overflow: auto; display: grid; place-items: center;
+    padding: 3vmin 5vmin; font-size: clamp(1.05rem, 2.4vmin + .45rem, 2.5rem);
+  }
+  .stage > * { width: 100%; max-width: 1300px; }
+  .md img { max-width: 100%; max-height: 60vh; }
+  .md pre { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .7em; overflow: auto; font-size: .8em; }
+  .md code { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+  .md table { border-collapse: collapse; }
+  .md th, .md td { border: 1px solid var(--line); padding: .3em .6em; }
+  .md blockquote { margin: 0; padding-left: 1em; border-left: 4px solid var(--line); color: var(--muted); }
+  .slide { text-align: center; }
+  .slide ul, .slide ol, .slide pre, .slide table { text-align: left; display: inline-block; }
+  .slide h1 { font-size: 2.2em; }
+  .question { display: grid; gap: 1em; }
+  .question .q-text { font-size: 1.15em; font-weight: 650; text-align: center; }
+  .reveal { display: grid; gap: 1.2em; grid-template-columns: 1fr; align-items: start; }
+  .board { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: .8em 1em; font-size: .8em; }
+  .board h3 { font-size: 1em; color: var(--muted); }
+  .board ol { margin: 0; padding: 0; list-style: none; display: grid; gap: .35em; }
+  .board li { display: flex; gap: .6em; align-items: baseline; }
+  .board .rk { width: 1.6em; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .board .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .board .sc { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .explain { font-size: .8em; color: var(--muted); text-align: center; }
+  .lobby { display: grid; gap: 1.2em; grid-template-columns: 1fr; align-items: center; text-align: center; }
+  .qr { background: #fff; border-radius: var(--radius); padding: 8px; width: min(100%, 46vh, 420px); margin: 0 auto; }
+  .qr svg { display: block; width: 100%; height: auto; }
+  .join-url { font-size: .8em; overflow-wrap: anywhere; }
+  .join-code { font-size: 2.2em; font-weight: 800; letter-spacing: .12em; }
+  .chips { display: flex; flex-wrap: wrap; gap: .4em; justify-content: center; padding: 0; margin: .6em 0 0; list-style: none; font-size: .7em; }
+  .chips li { background: var(--surface); border: 1px solid var(--line); border-radius: 99px; padding: .2em .8em; }
+  .end { display: grid; gap: 1em; justify-items: center; text-align: center; }
+  .end .board { font-size: 1em; width: min(100%, 700px); text-align: left; }
+  .overlay {
+    position: fixed; inset: 0; z-index: 10; background: var(--bg); overflow: auto;
+    display: grid; place-items: center; padding: 4vmin; font-size: clamp(1.05rem, 2.4vmin + .45rem, 2.5rem);
+  }
+  @media (min-width: 800px) {
+    .opts.grid { grid-template-columns: 1fr 1fr; }
+    .reveal { grid-template-columns: 3fr 1fr; }
+    .lobby { grid-template-columns: 1fr 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) { .opt.result::before { transition: none; } }
+</style>
+</head>
+<body>
+<main id="app"></main>
+
+<script type="module">
+import mqtt from './vendor/mqtt.esm.js';
+import { marked } from './vendor/marked.esm.js';
+import qrcode from './vendor/qrcode.mjs';
+
+// ───────────────────────── config ─────────────────────────
+// Public brokers reachable over WebSocket on TLS. The first digit of a room
+// code says which one the host picked, so players land on the same broker.
+const BROKERS = [
+  'wss://broker.emqx.io:8084/mqtt',
+  'wss://broker.hivemq.com:8884/mqtt',
+  'wss://test.mosquitto.org:8081/mqtt',
+];
+const TOPIC = 'mb-live-quiz/v1';
+const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const ROOM_RE = /^[0-9][A-Z]{5}$/;
+const ID_RE = /^[\w-]{8,40}$/;
+const DEFAULT_TIME = 20;
+const MAX_PLAYERS = 500;
+const HOST_KEY = 'quiz:host:';
+
+const app = document.getElementById('app');
+const params = new URLSearchParams(location.search);
+
+// ───────────────────────── helpers ─────────────────────────
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props ?? {})) {
+    if (v == null || v === false) continue;
+    if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (k === 'class') el.className = v;
+    else if (k === 'value' || k === 'disabled' || k === 'hidden') el[k] = v;
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  el.append(...kids.flat(Infinity).filter(k => k != null && k !== false));
+  return el;
+}
+
+const randomId = () => crypto.randomUUID().replaceAll('-', '').slice(0, 20);
+const letter = i => String.fromCharCode(65 + (i % 26));
+
+function store(key, value) {
+  try {
+    if (value === undefined) return JSON.parse(localStorage.getItem(key));
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch { return undefined; }
+}
+
+function customBroker() {
+  const b = params.get('broker');
+  return b && /^wss?:\/\/[^\s]+$/.test(b) ? b : null;
+}
+function brokerFor(room) {
+  return customBroker() ?? BROKERS[Number(room[0]) - 1] ?? BROKERS[0];
+}
+
+function openClient(url) {
+  const client = mqtt.connect(url, {
+    clientId: 'lq_' + randomId(), clean: true, keepalive: 30,
+    reconnectPeriod: 2000, connectTimeout: 8000,
+  });
+  client.on('error', () => {}); // reconnect handles it; avoid unhandled 'error'
+  return client;
+}
+
+// ── Markdown → sanitized DOM. The quiz file may come from an untrusted link
+// (?src=) and question text arrives over a public broker, so only an
+// allow-list of tags/attributes survives.
+const OK_TAGS = new Set(('A B BLOCKQUOTE BR CODE DEL DIV EM H1 H2 H3 H4 H5 H6 HR I IMG LI OL P PRE S SMALL ' +
+  'SPAN STRONG SUB SUP TABLE TBODY TD TH THEAD TR U UL').split(' '));
+const OK_ATTRS = { A: ['href', 'title'], IMG: ['src', 'alt', 'title', 'width', 'height'], TD: ['align'], TH: ['align'], OL: ['start'] };
+
+function safeUrl(value, base, protocols) {
+  try {
+    const u = new URL(value, base || location.href);
+    if (protocols.includes(u.protocol)) return u.href;
+    if (u.protocol === 'data:' && protocols.includes('data:image') && /^data:image\//i.test(value)) return value;
+  } catch { /* fall through */ }
+  return null;
+}
+
+function clean(node, base) {
+  for (const el of [...node.children]) {
+    if (!OK_TAGS.has(el.tagName)) { el.remove(); continue; }
+    for (const attr of [...el.attributes]) {
+      if (!(OK_ATTRS[el.tagName] ?? []).includes(attr.name)) el.removeAttribute(attr.name);
+    }
+    if (el.tagName === 'A' && el.hasAttribute('href')) {
+      const url = safeUrl(el.getAttribute('href'), base, ['http:', 'https:', 'mailto:']);
+      if (url) { el.setAttribute('href', url); el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer'); }
+      else el.removeAttribute('href');
+    }
+    if (el.tagName === 'IMG') {
+      const url = safeUrl(el.getAttribute('src') ?? '', base, ['http:', 'https:', 'data:image']);
+      if (url) el.setAttribute('src', url); else { el.remove(); continue; }
+    }
+    clean(el, base);
+  }
+}
+
+function md(source, { inline = false, base } = {}) {
+  const t = document.createElement('template'); // inert: nothing loads or runs
+  const text = String(source ?? '').slice(0, 20000);
+  t.innerHTML = inline ? marked.parseInline(text) : marked.parse(text);
+  clean(t.content, base);
+  return t.content;
+}
+const plain = source => md(source).textContent.replace(/\s+/g, ' ').trim();
+
+// ───────────────────────── quiz format ─────────────────────────
+// Slides separated by `---`. A slide with 2+ task-list items is a question:
+//   - [x] correct   - [ ] wrong      (none marked = poll, no points)
+// Optional front matter: title, time (seconds per question, 0 = no limit).
+function parseQuiz(source, fallbackTitle = 'Quiz') {
+  const lines = source.replace(/\r\n?/g, '\n').split('\n');
+  const meta = {};
+  if (/^---\s*$/.test(lines[0] ?? '')) {
+    const end = lines.findIndex((l, i) => i > 0 && /^---\s*$/.test(l));
+    const body = end > 0 ? lines.slice(1, end).filter(l => l.trim()) : [];
+    if (end > 0 && body.length && body.every(l => /^[\w-]+\s*:/.test(l))) {
+      for (const l of body) meta[l.slice(0, l.indexOf(':')).trim().toLowerCase()] = l.slice(l.indexOf(':') + 1).trim();
+      lines.splice(0, end + 1);
+    }
+  }
+  const chunks = [[]];
+  let fence = false;
+  for (const line of lines) {
+    if (/^\s*(```|~~~)/.test(line)) fence = !fence;
+    if (!fence && /^-{3,}\s*$/.test(line)) chunks.push([]);
+    else chunks.at(-1).push(line);
+  }
+  const num = (v, d) => (Number.isFinite(Number(v)) && String(v).trim() !== '' ? Math.max(0, Math.min(3600, Number(v))) : d);
+  const defaultTime = num(meta.time, DEFAULT_TIME);
+  const TASK = /^\s*[-*+]\s+\[( |x|X)\]\s+(.*)$/;
+
+  const steps = [];
+  for (const chunk of chunks) {
+    if (!chunk.some(l => l.trim())) continue;
+    const taskIdx = chunk.flatMap((l, i) => (TASK.test(l) ? [i] : []));
+    if (taskIdx.length < 2) { steps.push({ type: 'slide', md: chunk.join('\n').trim() }); continue; }
+    const options = taskIdx.map(i => { const m = chunk[i].match(TASK); return { text: m[2].trim(), correct: m[1] !== ' ' }; });
+    let time = defaultTime;
+    const strip = ls => ls.filter(l => {
+      const m = l.match(/^\s*<!--\s*time\s*:\s*(\d+)\s*-->\s*$/i);
+      if (m) time = num(m[1], defaultTime);
+      return !m;
+    }).join('\n').trim();
+    steps.push({
+      type: 'question',
+      text: strip(chunk.slice(0, taskIdx[0])),
+      explain: strip(chunk.slice(taskIdx.at(-1) + 1)),
+      options: options.map(o => o.text),
+      correct: options.flatMap((o, i) => (o.correct ? [i] : [])),
+      time,
+    });
+  }
+  if (!steps.length) throw new Error('The file has no slides or questions.');
+  const h1 = source.match(/^#\s+(.+)$/m)?.[1];
+  return { title: (meta.title || h1 || fallbackTitle).slice(0, 80), steps };
+}
+
+// ───────────────────────── landing ─────────────────────────
+const FORMAT_SAMPLE = `---
+title: My quiz
+time: 20
+---
+
+# Welcome
+Any Markdown slide.
+
+---
+
+## Capital of Australia?
+- [ ] Sydney
+- [x] Canberra
+- [ ] Melbourne
+
+Shown after the reveal.
+
+---
+
+## Tabs or spaces?
+<!-- time: 30 -->
+- [ ] Tabs
+- [ ] Spaces`;
+
+async function landing(message) {
+  document.title = 'Live Quiz';
+  const error = h('p', { class: 'error', role: 'alert' }, message);
+  const status = h('p', { class: 'muted', role: 'status' });
+  const fail = e => { status.textContent = ''; error.textContent = e.message ?? String(e); };
+
+  const start = async (text, name, src) => {
+    error.textContent = '';
+    try {
+      const quiz = parseQuiz(text, name);
+      status.textContent = 'Connecting…';
+      await createHost(text, quiz, name, src);
+    } catch (e) { fail(e); }
+  };
+  const fromFile = async file => {
+    if (!file) return;
+    if (file.size > 2_000_000) return fail(new Error('File is larger than 2 MB.'));
+    await start(await file.text(), file.name.replace(/\.[^.]+$/, ''), null);
+  };
+  const fromUrl = async src => {
+    try {
+      status.textContent = 'Loading quiz…';
+      const url = new URL(src, location.href);
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Unsupported quiz URL.');
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Could not load the quiz (${res.status}).`);
+      await start(await res.text(), decodeURIComponent(url.pathname.split('/').pop().replace(/\.[^.]+$/, '')) || 'Quiz', url.href);
+    } catch (e) { fail(e); }
+  };
+
+  const code = h('input', {
+    class: 'field code-input', placeholder: 'CODE', maxlength: 6, autocapitalize: 'characters',
+    autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Room code', name: 'room',
+  });
+  const joinForm = h('form', {
+    class: 'row',
+    onsubmit: e => {
+      e.preventDefault();
+      const room = code.value.toUpperCase().replace(/[^0-9A-Z]/g, '');
+      if (!ROOM_RE.test(room)) return fail(new Error('A room code is one digit and five letters, like 1ABCDE.'));
+      const p = new URLSearchParams({ room });
+      if (customBroker()) p.set('broker', customBroker());
+      location.search = p;
+    },
+  }, code, h('button', { class: 'btn primary' }, 'Join'));
+
+  const file = h('input', { type: 'file', accept: '.md,.markdown,.txt,text/markdown,text/plain', hidden: true, onchange: () => fromFile(file.files[0]) });
+  const hostCard = h('section', {
+    class: 'card',
+    ondragover: e => { e.preventDefault(); hostCard.classList.add('drop'); },
+    ondragleave: () => hostCard.classList.remove('drop'),
+    ondrop: e => { e.preventDefault(); hostCard.classList.remove('drop'); fromFile(e.dataTransfer.files[0]); },
+  },
+    h('h2', null, 'Host a quiz'),
+    h('p', { class: 'muted' }, 'Open a Markdown file with slides and questions, or drop it here. It stays in this browser.'),
+    h('div', { class: 'row' },
+      h('button', { class: 'btn primary', onclick: () => file.click() }, 'Open quiz file'),
+      h('button', { class: 'btn', onclick: () => fromUrl('sample.md') }, 'Try the sample'),
+      file),
+    status, error,
+    resumeLinks(),
+    h('details', null,
+      h('summary', null, 'File format'),
+      h('pre', { class: 'sample' }, FORMAT_SAMPLE),
+      h('p', { class: 'muted' }, 'Share a hosted file with ', h('code', null, '?src=https://…/quiz.md'), '.')),
+  );
+
+  app.replaceChildren(h('div', { class: 'page' },
+    h('header', null, h('h1', null, 'Live Quiz'),
+      h('p', { class: 'muted' }, 'Slides and questions on the big screen, answers from phones.')),
+    h('section', { class: 'card' }, h('h2', null, 'Join'), joinForm),
+    hostCard,
+  ));
+  if (params.get('src')) await fromUrl(params.get('src'));
+}
+
+function resumeLinks() {
+  const sessions = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key?.startsWith(HOST_KEY)) continue;
+    const s = store(key);
+    if (!s?.ts || Date.now() - s.ts > 7 * 864e5) store(key, null);       // forget week-old games
+    else if (Date.now() - s.ts < 864e5) sessions.push({ room: key.slice(HOST_KEY.length), ...s });
+  }
+  if (!sessions.length) return null;
+  sessions.sort((a, b) => b.ts - a.ts);
+  return h('p', null, 'Resume: ', sessions.slice(0, 3).map((s, i) => [i ? ', ' : '',
+    h('a', { href: hostUrl(s.room, s.src, s.broker) }, `${s.title ?? 'Quiz'} (${s.room})`)]));
+}
+
+function hostUrl(room, src, broker) {
+  const p = new URLSearchParams({ host: room });
+  if (src) p.set('src', src);
+  if (broker) p.set('broker', broker);
+  return '?' + p;
+}
+
+// ───────────────────────── host ─────────────────────────
+async function createHost(source, quiz, name, src) {
+  // Pick the first broker that answers; its index becomes the room's first digit.
+  const custom = customBroker();
+  const candidates = custom ? [[0, custom]] : BROKERS.map((url, i) => [i + 1, url]);
+  let picked = null;
+  for (const [digit, url] of candidates) {
+    const client = openClient(url);
+    const ok = await new Promise(resolve => {
+      const t = setTimeout(() => resolve(false), 7000);
+      client.once('connect', () => { clearTimeout(t); resolve(true); });
+    });
+    if (ok) { picked = { digit, client }; break; }
+    client.end(true);
+  }
+  if (!picked) throw new Error('Could not reach any message broker. Check the connection and try again.');
+
+  const letters = crypto.getRandomValues(new Uint8Array(5));
+  const room = picked.digit + [...letters].map(n => CODE_LETTERS[n % CODE_LETTERS.length]).join('');
+  const session = {
+    source, name, src, broker: custom, title: quiz.title, ts: Date.now(),
+    i: -1, open: false, deadline: 0, startedAt: 0, ended: false,
+    players: {}, answers: {}, done: {},
+  };
+  if (!store(HOST_KEY + room, session)) throw new Error('Could not save the game in this browser (storage is full or blocked).');
+  history.replaceState(null, '', hostUrl(room, src, custom));
+  runHost(room, session, quiz, picked.client);
+}
+
+function resumeHost() {
+  const room = (params.get('host') ?? '').toUpperCase();
+  const session = ROOM_RE.test(room) ? store(HOST_KEY + room) : null;
+  if (!session) return landing('That game is not stored in this browser any more.');
+  try {
+    runHost(room, session, parseQuiz(session.source, session.name), openClient(brokerFor(room)));
+  } catch (e) { landing(e.message); }
+}
+
+function runHost(room, S, quiz, client) {
+  document.title = `${quiz.title} · Live Quiz`;
+  const base = S.src || undefined;
+  const steps = quiz.steps;
+  const joinUrl = (() => {
+    const p = new URLSearchParams({ room });
+    if (S.broker) p.set('broker', S.broker);
+    return `${location.origin}${location.pathname}?${p}`;
+  })();
+  let showJoin = false;
+  let stateTimer = 0;
+  let lastPublish = 0;
+
+  const step = () => steps[S.i];
+  const phase = () => (S.ended ? 'end' : S.i < 0 ? 'lobby' : step().type === 'slide' ? 'slide' : S.open ? 'question' : 'reveal');
+  const secondsLeft = () => (S.deadline ? Math.max(0, Math.ceil((S.deadline - Date.now()) / 1000)) : null);
+  const save = () => { S.ts = Date.now(); store(HOST_KEY + room, S); };
+
+  function standings() {
+    const table = Object.fromEntries(Object.entries(S.players).map(([id, p]) => [id, { id, name: p.name, score: 0, ms: 0 }]));
+    steps.forEach((s, idx) => {
+      if (s.type !== 'question' || !S.done[idx] || !s.correct.length) return;
+      for (const [id, ans] of Object.entries(S.answers[idx] ?? {})) {
+        if (table[id] && s.correct.includes(ans.a)) { table[id].score++; table[id].ms += ans.ms; }
+      }
+    });
+    return Object.values(table)
+      .sort((a, b) => b.score - a.score || a.ms - b.ms || a.name.localeCompare(b.name))
+      .map((p, k) => ({ ...p, rank: k + 1 }));
+  }
+
+  // ── network
+  function publishState() {
+    clearTimeout(stateTimer); stateTimer = 0; lastPublish = Date.now();
+    const ph = phase();
+    const s = { v: 1, phase: ph, title: quiz.title, n: Object.keys(S.players).length };
+    if (ph === 'slide' || ph === 'question' || ph === 'reveal') { s.i = S.i; s.total = steps.length; }
+    if (ph === 'question' || ph === 'reveal') s.q = { text: step().text, options: step().options };
+    if (ph === 'question') s.left = secondsLeft();
+    if (ph === 'reveal') { s.correct = step().correct; s.poll = !step().correct.length; }
+    if (ph === 'reveal' || ph === 'end') s.r = Object.fromEntries(standings().map(p => [p.id, [p.score, p.rank]]));
+    client.publish(`${TOPIC}/${room}/state`, JSON.stringify(s), { qos: 1, retain: true });
+  }
+  const publishSoon = () => { stateTimer ||= setTimeout(publishState, 300); };
+  const tell = (id, msg) => client.publish(`${TOPIC}/${room}/out/${id}`, JSON.stringify(msg), { qos: 1 });
+
+  client.on('connect', () => { client.subscribe(`${TOPIC}/${room}/in/+`, { qos: 1 }); publishState(); render(); });
+  client.on('close', render);
+  client.on('message', (topic, payload) => {
+    const id = topic.split('/').pop();
+    if (!ID_RE.test(id) || payload.length > 2000) return;
+    let msg;
+    try { msg = JSON.parse(payload.toString()); } catch { return; }
+    if (msg?.t === 'join') onJoin(id, msg); else if (msg?.t === 'answer') onAnswer(id, msg);
+  });
+  if (client.connected) { client.subscribe(`${TOPIC}/${room}/in/+`, { qos: 1 }); publishState(); }
+
+  function onJoin(id, msg) {
+    if (!S.players[id]) {
+      if (Object.keys(S.players).length >= MAX_PLAYERS) return;
+      let name = String(msg.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 24) || 'Player';
+      const taken = new Set(Object.values(S.players).map(p => p.name.toLowerCase()));
+      if (taken.has(name.toLowerCase())) {
+        let n = 2;
+        while (taken.has(`${name} ${n}`.toLowerCase())) n++;
+        name = `${name} ${n}`;
+      }
+      S.players[id] = { name };
+      save(); render();
+    }
+    tell(id, { t: 'joined', name: S.players[id].name, q: S.i, a: S.answers[S.i]?.[id]?.a ?? null });
+    publishSoon(); // also refreshes the timer for whoever just (re)connected
+  }
+
+  function onAnswer(id, msg) {
+    if (!S.players[id]) return tell(id, { t: 'who' });
+    const q = Number(msg.q), a = Number(msg.a);
+    const s = steps[q];
+    if (!Number.isInteger(q) || s?.type !== 'question') return;
+    const given = (S.answers[q] ??= {});
+    if (!given[id]) {
+      if (q !== S.i || !S.open || !Number.isInteger(a) || a < 0 || a >= s.options.length) return tell(id, { t: 'late', q });
+      given[id] = { a, ms: Date.now() - S.startedAt }; // first answer is final
+      save(); updateLive();
+    }
+    tell(id, { t: 'ack', q, a: given[id].a });
+  }
+
+  // ── flow
+  function goto(i) {
+    S.i = i; S.ended = false; S.open = false; S.deadline = 0;
+    const s = steps[i];
+    if (s?.type === 'question' && !S.done[i]) {
+      S.open = true; S.startedAt = Date.now();
+      S.deadline = s.time ? Date.now() + s.time * 1000 : 0;
+    }
+    commit();
+  }
+  function closeQuestion() { S.open = false; S.deadline = 0; S.done[S.i] = true; commit(); }
+  function commit() { save(); publishState(); render(); }
+  function next() {
+    if (S.ended) return;
+    if (S.i >= 0 && S.open) return closeQuestion();
+    if (S.i < steps.length - 1) return goto(S.i + 1);
+    S.ended = true; commit();
+  }
+  function back() {
+    if (S.open) return;                       // never abandon a running question
+    if (S.ended) { S.ended = false; return commit(); }
+    if (S.i >= 0) goto(S.i - 1);
+  }
+
+  setInterval(() => {
+    if (S.open && S.deadline && Date.now() >= S.deadline) return closeQuestion();
+    if (S.open && Date.now() - lastPublish > 5000) publishState(); // keep phone timers honest
+    updateLive();
+  }, 250);
+
+  addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.('button, input, textarea, a, summary')) return;
+    if ([' ', 'ArrowRight', 'PageDown', 'Enter'].includes(e.key)) { e.preventDefault(); next(); }
+    else if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); back(); }
+    else if (e.key === 'f') toggleFullscreen();
+    else if (e.key === 'j') { showJoin = !showJoin; render(); }
+    else if (e.key === 'Escape' && showJoin) { showJoin = false; render(); }
+  });
+  const toggleFullscreen = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.())?.catch?.(() => {});
+
+  // ── views
+  function updateLive() {
+    const timer = document.getElementById('timer');
+    if (timer) timer.textContent = S.open ? (secondsLeft() ?? '∞') : '';
+    const answered = document.getElementById('answered');
+    if (answered && S.open) answered.textContent = `${Object.keys(S.answers[S.i] ?? {}).length} / ${Object.keys(S.players).length} answered`;
+  }
+
+  function qrNode() {
+    const qr = qrcode(0, 'M');
+    qr.addData(joinUrl); qr.make();
+    const box = h('div', { class: 'qr', role: 'img', 'aria-label': 'QR code with the join link' });
+    box.innerHTML = qr.createSvgTag({ scalable: true, margin: 2 }); // generated by the library, no user input in markup
+    return box;
+  }
+
+  function joinInfo() {
+    const names = Object.values(S.players).map(p => p.name);
+    return h('div', { class: 'lobby' },
+      qrNode(),
+      h('div', null,
+        h('div', { class: 'muted' }, 'Scan the code or open'),
+        h('div', { class: 'join-url mono' }, location.host + location.pathname),
+        h('div', { class: 'muted' }, 'and enter'),
+        h('div', { class: 'join-code mono' }, room),
+        h('div', { class: 'muted' }, names.length ? `${names.length} joined` : 'Waiting for players…'),
+        h('ul', { class: 'chips' }, names.slice(-60).map(n => h('li', null, n)))));
+  }
+
+  function board(list, limit, title) {
+    return h('aside', { class: 'board' }, h('h3', null, title),
+      list.length
+        ? h('ol', null, list.slice(0, limit).map(p => h('li', null,
+            h('span', { class: 'rk' }, p.rank + '.'), h('span', { class: 'nm' }, p.name), h('span', { class: 'sc' }, p.score))))
+        : h('p', { class: 'muted' }, 'No players.'));
+  }
+
+  function questionView(s, revealed) {
+    const given = Object.values(S.answers[S.i] ?? {});
+    const counts = s.options.map((_, i) => given.filter(g => g.a === i).length);
+    const total = given.length || 1;
+    const opts = h('ol', { class: 'opts grid' }, s.options.map((text, i) => {
+      const isCorrect = s.correct.includes(i);
+      const li = h('li', { class: 'opt' + (revealed ? ' result' + (isCorrect ? ' correct' : s.correct.length ? ' dim' : '') : '') },
+        h('span', { class: 'letter' }, revealed && isCorrect ? '✓' : letter(i)),
+        h('span', { class: 'txt' }, md(text, { inline: true, base })),
+        revealed && h('span', { class: 'count' }, counts[i]));
+      if (revealed) li.style.setProperty('--pct', Math.round(counts[i] / total * 100));
+      return li;
+    }));
+    const main = h('div', { class: 'question' },
+      h('div', { class: 'q-text md' }, md(s.text, { base })), opts,
+      revealed && s.explain && h('div', { class: 'explain md' }, md(s.explain, { base })));
+    return revealed ? h('div', { class: 'reveal' }, main, board(standings(), 5, 'Leaderboard')) : main;
+  }
+
+  function endView() {
+    const list = standings();
+    return h('div', { class: 'end' },
+      h('h1', null, 'Final results'),
+      board(list, 10, `${list.length} player${list.length === 1 ? '' : 's'}`),
+      h('div', { class: 'row' },
+        h('button', { class: 'btn', onclick: () => download('csv') }, 'Download CSV'),
+        h('button', { class: 'btn', onclick: () => download('json') }, 'Download JSON'),
+        h('a', { class: 'btn', href: './' }, 'New quiz')));
+  }
+
+  function render() {
+    const ph = phase();
+    const stage = ph === 'lobby' ? joinInfo()
+      : ph === 'end' ? endView()
+      : ph === 'slide' ? h('div', { class: 'slide md' }, md(step().md, { base }))
+      : questionView(step(), ph === 'reveal');
+    const nextLabel = ph === 'lobby' ? 'Start' : ph === 'question' ? 'Reveal answers' : S.i === steps.length - 1 ? 'Finish' : 'Next';
+
+    app.replaceChildren(h('div', { class: 'host' },
+      h('header', { class: 'bar' },
+        h('span', { class: 'dot' + (client.connected ? ' on' : ''), title: client.connected ? 'Connected' : 'Reconnecting…' }),
+        h('span', { class: 'title grow' }, quiz.title),
+        h('span', { class: 'mono' }, room),
+        h('span', { class: 'muted' }, `${Object.keys(S.players).length} 👤`),
+        h('button', { class: 'btn', onclick: () => { showJoin = !showJoin; render(); }, title: 'Show join code (J)' }, 'Join code'),
+        h('button', { class: 'btn', onclick: toggleFullscreen, title: 'Fullscreen (F)' }, '⛶')),
+      h('section', { class: 'stage' }, stage),
+      h('footer', { class: 'bar bottom' },
+        h('button', { class: 'btn', onclick: back, disabled: S.open || ph === 'lobby', title: 'Back (←)' }, '← Back'),
+        h('span', { class: 'muted' }, S.i >= 0 && !S.ended ? `${S.i + 1} / ${steps.length}` : ''),
+        h('span', { class: 'grow muted', id: 'answered' }),
+        h('span', { class: 'timer', id: 'timer', 'aria-live': 'off' }),
+        ph !== 'end' && h('button', { class: 'btn primary', onclick: next, title: 'Next (Space / →)' }, nextLabel + ' →')),
+      showJoin && ph !== 'lobby' && h('div', { class: 'overlay', onclick: () => { showJoin = false; render(); } }, joinInfo()),
+    ));
+    updateLive();
+  }
+
+  // ── export
+  function download(kind) {
+    const list = standings();
+    const questions = steps.map((s, idx) => ({ s, idx })).filter(x => x.s.type === 'question');
+    let text, type;
+    if (kind === 'json') {
+      type = 'application/json';
+      text = JSON.stringify({
+        title: quiz.title, room, exported: new Date().toISOString(),
+        questions: questions.map(({ s, idx }) => ({ index: idx, text: plain(s.text), options: s.options.map(plain), correct: s.correct })),
+        players: list.map(p => ({
+          rank: p.rank, name: p.name, score: p.score,
+          answers: Object.fromEntries(questions.map(({ idx }) => [idx, S.answers[idx]?.[p.id] ?? null])),
+        })),
+      }, null, 2);
+    } else {
+      type = 'text/csv';
+      // Quote everything; neutralise cells a spreadsheet would run as a formula.
+      const cell = v => { const t = String(v ?? ''); return '"' + (/^[=+\-@\t\r]/.test(t) ? "'" + t : t).replaceAll('"', '""') + '"'; };
+      const rows = [['Rank', 'Name', 'Score', ...questions.map(({ s }, k) => `Q${k + 1}: ${plain(s.text).slice(0, 80)}`)]];
+      for (const p of list) {
+        rows.push([p.rank, p.name, p.score, ...questions.map(({ s, idx }) => {
+          const a = S.answers[idx]?.[p.id]?.a;
+          return a == null ? '' : plain(s.options[a]) + (s.correct.length ? (s.correct.includes(a) ? ' ✓' : ' ✗') : '');
+        })]);
+      }
+      text = '﻿' + rows.map(r => r.map(cell).join(',')).join('\r\n');
+    }
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    h('a', { href: url, download: `${quiz.title.replace(/[^\p{L}\p{N}]+/gu, '-')}-results.${kind}` }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  render();
+}
+
+// ───────────────────────── player ─────────────────────────
+function startPlayer() {
+  const room = (params.get('room') ?? '').toUpperCase();
+  if (!ROOM_RE.test(room)) return landing('That room code does not look right.');
+
+  let id = store('quiz:player');
+  if (typeof id !== 'string' || !ID_RE.test(id)) { id = randomId(); store('quiz:player', id); }
+  let name = store('quiz:joined:' + room);      // name confirmed for this room
+  let joined = false;
+  let state = null, recvAt = 0;
+  let pick = null;                              // { q, a, acked }
+  let late = false;
+  let waited = false;
+
+  const client = openClient(brokerFor(room));
+  const send = msg => client.publish(`${TOPIC}/${room}/in/${id}`, JSON.stringify(msg), { qos: 1 });
+  const sendJoin = () => { if (name) send({ t: 'join', name }); };
+
+  client.on('connect', () => {
+    client.subscribe([`${TOPIC}/${room}/state`, `${TOPIC}/${room}/out/${id}`], { qos: 1 });
+    sendJoin(); render();
+  });
+  client.on('close', render);
+  client.on('message', (topic, payload) => {
+    if (payload.length > 200000) return;
+    let msg;
+    try { msg = JSON.parse(payload.toString()); } catch { return; }
+    if (topic.endsWith('/state')) {
+      if (msg?.v !== 1 || typeof msg.phase !== 'string') return;
+      if (state?.i !== msg.i) late = false;
+      state = msg; recvAt = Date.now();
+      if (pick && pick.q !== msg.i) pick = null;
+    } else if (msg?.t === 'joined') {
+      joined = true; name = String(msg.name).slice(0, 30); store('quiz:joined:' + room, name);
+      if (msg.a != null) pick = { q: msg.q, a: msg.a, acked: true };
+    } else if (msg?.t === 'ack') {
+      if (state?.i === msg.q) pick = { q: msg.q, a: msg.a, acked: true };
+    } else if (msg?.t === 'late') {
+      if (pick?.q === msg.q && !pick.acked) { pick = null; late = true; }
+    } else if (msg?.t === 'who') {
+      sendJoin();
+    } else return;
+    render();
+  });
+
+  // Re-send until the host confirms; a dropped packet must not cost a point.
+  setInterval(() => {
+    if (pick && !pick.acked && state?.phase === 'question' && state.i === pick.q) send({ t: 'answer', q: pick.q, a: pick.a });
+    if (name && !joined && client.connected) sendJoin();
+  }, 2000);
+  setInterval(() => { const t = document.getElementById('p-timer'); if (t) t.textContent = timeLeft() ?? ''; }, 250);
+  setTimeout(() => { waited = true; render(); }, 5000);
+
+  const timeLeft = () => (state?.phase === 'question' && state.left != null
+    ? Math.max(0, Math.ceil(state.left - (Date.now() - recvAt) / 1000)) : null);
+
+  function answer(a) {
+    if (pick || state?.phase !== 'question') return;
+    pick = { q: state.i, a, acked: false };
+    send({ t: 'answer', q: pick.q, a });
+    render();
+  }
+
+  const center = (...kids) => h('div', { class: 'p-center' }, kids);
+
+  function nameForm() {
+    const input = h('input', { class: 'field', maxlength: 24, placeholder: 'Your name', autocomplete: 'nickname', 'aria-label': 'Your name', value: store('quiz:name') ?? '' });
+    return h('section', { class: 'card' },
+      h('h2', null, state?.title ? `Join “${state.title}”` : 'Join the quiz'),
+      h('form', {
+        class: 'row',
+        onsubmit: e => {
+          e.preventDefault();
+          const v = input.value.replace(/\s+/g, ' ').trim().slice(0, 24);
+          if (!v) return input.focus();
+          name = v; store('quiz:name', v); sendJoin(); render();
+        },
+      }, input, h('button', { class: 'btn primary' }, 'Join')),
+      !state && waited && h('p', { class: 'muted' }, `No game found in room ${room} yet. You can still enter your name and wait for the host.`));
+  }
+
+  function body() {
+    if (!name) return nameForm();
+    if (!state) return center(h('div', { class: 'p-big' }, '⏳'), h('p', null, waited ? `Waiting for the host of room ${room}…` : 'Connecting…'));
+    const mine = state.r?.[id];
+    const standing = mine && h('p', { class: 'muted' }, `${mine[0]} point${mine[0] === 1 ? '' : 's'} · place ${mine[1]} of ${Object.keys(state.r).length}`);
+
+    if (state.phase === 'lobby') return center(h('div', { class: 'p-big' }, '👋'), h('h2', null, `You're in, ${name}!`), h('p', { class: 'muted' }, 'Watch the big screen. The quiz starts soon.'));
+    if (state.phase === 'slide') return center(h('div', { class: 'p-big' }, '👀'), h('p', null, 'Look at the big screen.'));
+    if (state.phase === 'end') return center(h('div', { class: 'p-big' }, '🏁'), h('h2', null, 'Finished!'), standing ?? h('p', { class: 'muted' }, 'Thanks for playing.'));
+
+    const q = state.q ?? { text: '', options: [] };
+    const revealed = state.phase === 'reveal';
+    const picked = pick?.q === state.i ? pick : null;
+    const correct = state.correct ?? [];
+    let verdict = null;
+    if (revealed) {
+      verdict = state.poll ? ['🗳️', picked ? 'Thanks for voting!' : 'Poll closed.']
+        : !picked ? ['⌛', 'No answer this time.']
+        : correct.includes(picked.a) ? ['✅', 'Correct!'] : ['❌', 'Not quite.'];
+    }
+    return [
+      h('div', { class: 'p-head' },
+        h('span', null, `Question ${state.i + 1} of ${state.total}`),
+        h('span', { class: 'p-timer', id: 'p-timer' }, timeLeft() ?? '')),
+      h('div', { class: 'p-q md' }, md(q.text)),
+      h('div', { class: 'opts' }, q.options.map((text, i) => {
+        const cls = ['opt', picked?.a === i && 'picked',
+          revealed ? (correct.includes(i) ? 'correct' : correct.length && 'dim') : picked && picked.a !== i && 'dim'];
+        return h('button', { class: cls.filter(Boolean).join(' '), disabled: revealed || !!picked, onclick: () => answer(i) },
+          h('span', { class: 'letter' }, revealed && correct.includes(i) ? '✓' : letter(i)),
+          h('span', { class: 'txt' }, md(text, { inline: true })));
+      })),
+      h('p', { role: 'status', style: 'text-align:center;margin:0' },
+        verdict ? h('strong', null, `${verdict[0]} ${verdict[1]}`)
+          : late ? 'Too late — the question is closed.'
+          : picked ? (picked.acked ? 'Answer locked in ✓' : 'Sending…') : 'Pick one answer.'),
+      revealed && standing && h('div', { style: 'text-align:center' }, standing),
+    ];
+  }
+
+  function render() {
+    document.title = state?.title ? `${state.title} · Live Quiz` : 'Live Quiz';
+    const active = document.activeElement?.tagName === 'INPUT' ? document.activeElement.value : null;
+    app.replaceChildren(
+      ...(!client.connected && waited ? [h('div', { class: 'banner', role: 'status' }, 'Reconnecting…')] : []),
+      h('div', { class: 'page' },
+        h('div', { class: 'p-head' }, h('span', null, state?.title ?? 'Live Quiz'), h('span', null, name ? `${name} · ${room}` : room)),
+        body()));
+    if (active != null) { const input = app.querySelector('input'); if (input) { input.value = active; input.focus(); } }
+  }
+  render();
+}
+
+// ───────────────────────── boot ─────────────────────────
+if (params.has('room')) startPlayer();
+else if (params.has('host')) resumeHost();
+else landing();
+</script>
+</body>
+</html>

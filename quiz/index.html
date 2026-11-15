@@ -82,6 +82,7 @@
   }
   .p-opts .opt .txt { flex: none; max-width: 100%; }
   .p-opts .opt .letter { font-size: 1.15em; }
+  .p-submit { padding: .9em; font-size: 1.1rem; }
 
   /* ---------- answer options (host + player) ---------- */
   .opts { display: grid; gap: 12px; grid-template-columns: 1fr; width: 100%; padding: 0; margin: 0; list-style: none; }
@@ -143,6 +144,7 @@
   .slide h1 { font-size: 2.2em; }
   .question { display: grid; gap: 1em; }
   .question .q-text { font-size: 1.15em; font-weight: 650; text-align: center; }
+  .q-hint { text-align: center; color: var(--muted); font-size: .8em; margin-top: -.6em; }
   .reveal { display: grid; gap: 1.2em; grid-template-columns: 1fr; align-items: start; }
   .board { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: .8em 1em; font-size: .8em; }
   .board h3 { font-size: 1em; color: var(--muted); }
@@ -216,6 +218,9 @@ function h(tag, props, ...kids) {
 
 const randomId = () => crypto.randomUUID().replaceAll('-', '').slice(0, 20);
 const letter = i => String.fromCharCode(65 + (i % 26));
+// An answer is one option index, or a sorted list of them for multi-select.
+const picks = a => (Array.isArray(a) ? a : a == null ? [] : [a]);
+const isRight = (correct, a) => { const p = picks(a); return p.length === correct.length && p.every(i => correct.includes(i)); };
 
 function store(key, value) {
   try {
@@ -289,7 +294,8 @@ const plain = source => md(source).textContent.replace(/\s+/g, ' ').trim();
 
 // ───────────────────────── quiz format ─────────────────────────
 // Slides separated by `---`. A slide with 2+ task-list items is a question:
-//   - [x] correct   - [ ] wrong      (none marked = poll, no points)
+//   - [x] correct   - [ ] wrong      (none marked = poll, no points;
+//                                     several marked = tick all that apply)
 // Optional front matter: title, time (seconds per question, 0 = no limit).
 function parseQuiz(source, fallbackTitle = 'Quiz') {
   const lines = source.replace(/\r\n?/g, '\n').split('\n');
@@ -312,6 +318,7 @@ function parseQuiz(source, fallbackTitle = 'Quiz') {
   const num = (v, d) => (Number.isFinite(Number(v)) && String(v).trim() !== '' ? Math.max(0, Math.min(3600, Number(v))) : d);
   const defaultTime = num(meta.time, DEFAULT_TIME);
   const TASK = /^\s*[-*+]\s+\[( |x|X)\]\s+(.*)$/;
+  const DIRECTIVE = /^\s*<!--\s*(time|multi)\s*(?::\s*(.*?))?\s*-->\s*$/i;
 
   const steps = [];
   for (const chunk of chunks) {
@@ -319,19 +326,22 @@ function parseQuiz(source, fallbackTitle = 'Quiz') {
     const taskIdx = chunk.flatMap((l, i) => (TASK.test(l) ? [i] : []));
     if (taskIdx.length < 2) { steps.push({ type: 'slide', md: chunk.join('\n').trim() }); continue; }
     const options = taskIdx.map(i => { const m = chunk[i].match(TASK); return { text: m[2].trim(), correct: m[1] !== ' ' }; });
-    let time = defaultTime;
+    // Per-question settings live in HTML comments so they stay invisible on GitHub.
+    const set = {};
     const strip = ls => ls.filter(l => {
-      const m = l.match(/^\s*<!--\s*time\s*:\s*(\d+)\s*-->\s*$/i);
-      if (m) time = num(m[1], defaultTime);
+      const m = l.match(DIRECTIVE);
+      if (m) set[m[1].toLowerCase()] = (m[2] ?? '').trim();
       return !m;
     }).join('\n').trim();
+    const text = strip(chunk.slice(0, taskIdx[0]));
+    const explain = strip(chunk.slice(taskIdx.at(-1) + 1));
+    const correct = options.flatMap((o, i) => (o.correct ? [i] : []));
     steps.push({
-      type: 'question',
-      text: strip(chunk.slice(0, taskIdx[0])),
-      explain: strip(chunk.slice(taskIdx.at(-1) + 1)),
+      type: 'question', text, explain, correct,
       options: options.map(o => o.text),
-      correct: options.flatMap((o, i) => (o.correct ? [i] : [])),
-      time,
+      time: 'time' in set ? num(set.time, defaultTime) : defaultTime,
+      // Several correct options, or an explicit <!-- multi -->: players tick all that apply.
+      multi: correct.length > 1 || ('multi' in set && !/^(off|no|false|0)$/i.test(set.multi)),
     });
   }
   if (!steps.length) throw new Error('The file has no slides or questions.');
@@ -555,7 +565,7 @@ function runHost(room, S, quiz, client) {
     steps.forEach((s, idx) => {
       if (s.type !== 'question' || !S.done[idx] || !s.correct.length) return;
       for (const [id, ans] of Object.entries(S.answers[idx] ?? {})) {
-        if (table[id] && s.correct.includes(ans.a)) { table[id].score++; table[id].ms += ans.ms; }
+        if (table[id] && isRight(s.correct, ans.a)) { table[id].score++; table[id].ms += ans.ms; }
       }
     });
     return Object.values(table)
@@ -569,7 +579,7 @@ function runHost(room, S, quiz, client) {
     const ph = phase();
     const s = { v: 1, phase: ph, title: quiz.title, n: Object.keys(S.players).length };
     if (ph === 'slide' || ph === 'question' || ph === 'reveal') { s.i = S.i; s.total = steps.length; }
-    if (ph === 'question' || ph === 'reveal') s.q = { text: step().text, options: step().options };
+    if (ph === 'question' || ph === 'reveal') s.q = { text: step().text, options: step().options, multi: step().multi };
     if (ph === 'question') s.left = secondsLeft();
     if (ph === 'reveal') { s.correct = step().correct; s.poll = !step().correct.length; }
     if (ph === 'reveal' || ph === 'end') s.r = Object.fromEntries(standings().map(p => [p.id, [p.score, p.rank]]));
@@ -608,12 +618,15 @@ function runHost(room, S, quiz, client) {
 
   function onAnswer(id, msg) {
     if (!S.players[id]) return tell(id, { t: 'who' });
-    const q = Number(msg.q), a = Number(msg.a);
+    const q = Number(msg.q);
     const s = steps[q];
     if (!Number.isInteger(q) || s?.type !== 'question') return;
+    const inRange = v => Number.isInteger(v) && v >= 0 && v < s.options.length;
+    const a = s.multi ? [...new Set(picks(msg.a))].sort((x, y) => x - y) : msg.a;
+    const valid = s.multi ? a.length > 0 && a.every(inRange) : inRange(a);
     const given = (S.answers[q] ??= {});
     if (!given[id]) {
-      if (q !== S.i || !S.open || !Number.isInteger(a) || a < 0 || a >= s.options.length) return tell(id, { t: 'late', q });
+      if (q !== S.i || !S.open || !valid) return tell(id, { t: 'late', q });
       given[id] = { a, ms: Date.now() - S.startedAt }; // first answer is final
       save(); updateLive(); finishEarly();
     }
@@ -706,7 +719,7 @@ function runHost(room, S, quiz, client) {
 
   function questionView(s, revealed) {
     const given = Object.values(S.answers[S.i] ?? {});
-    const counts = s.options.map((_, i) => given.filter(g => g.a === i).length);
+    const counts = s.options.map((_, i) => given.filter(g => picks(g.a).includes(i)).length);
     const total = given.length || 1;
     const opts = h('ol', { class: 'opts grid' }, s.options.map((text, i) => {
       const isCorrect = s.correct.includes(i);
@@ -718,7 +731,9 @@ function runHost(room, S, quiz, client) {
       return li;
     }));
     const main = h('div', { class: 'question' },
-      h('div', { class: 'q-text md' }, md(s.text, { base })), opts,
+      h('div', { class: 'q-text md' }, md(s.text, { base })),
+      s.multi && h('div', { class: 'q-hint' }, 'Select all that apply'),
+      opts,
       revealed && s.explain && h('div', { class: 'explain md' }, md(s.explain, { base })));
     return revealed ? h('div', { class: 'reveal' }, main, board(standings(), 5, 'Leaderboard')) : main;
   }
@@ -785,7 +800,7 @@ function runHost(room, S, quiz, client) {
       for (const p of list) {
         rows.push([p.rank, p.name, p.score, ...questions.map(({ s, idx }) => {
           const a = S.answers[idx]?.[p.id]?.a;
-          return a == null ? '' : plain(s.options[a]) + (s.correct.length ? (s.correct.includes(a) ? ' ✓' : ' ✗') : '');
+          return a == null ? '' : picks(a).map(i => plain(s.options[i])).join(' + ') + (s.correct.length ? (isRight(s.correct, a) ? ' ✓' : ' ✗') : '');
         })]);
       }
       text = '﻿' + rows.map(r => r.map(cell).join(',')).join('\r\n');
@@ -809,6 +824,7 @@ function startPlayer() {
   let joined = false;
   let state = null, recvAt = 0;
   let pick = null;                              // { q, a, acked }
+  let sel = [];                                 // multi-select: ticked, not yet submitted
   let late = false;
   let waited = false;
 
@@ -827,7 +843,7 @@ function startPlayer() {
     try { msg = JSON.parse(payload.toString()); } catch { return; }
     if (topic.endsWith('/state')) {
       if (msg?.v !== 1 || typeof msg.phase !== 'string') return;
-      if (state?.i !== msg.i) late = false;
+      if (state?.i !== msg.i) { late = false; sel = []; }
       state = msg; recvAt = Date.now();
       if (pick && pick.q !== msg.i) pick = null;
     } else if (msg?.t === 'joined') {
@@ -858,6 +874,12 @@ function startPlayer() {
     if (pick || state?.phase !== 'question') return;
     pick = { q: state.i, a, acked: false };
     send({ t: 'answer', q: pick.q, a });
+    render();
+  }
+  function tap(i) {
+    if (!state?.q?.multi) return answer(i);
+    if (pick) return;
+    sel = sel.includes(i) ? sel.filter(x => x !== i) : [...sel, i].sort((x, y) => x - y);
     render();
   }
 
@@ -897,7 +919,7 @@ function startPlayer() {
     if (revealed) {
       verdict = state.poll ? ['🗳️', picked ? 'Thanks for voting!' : 'Poll closed.']
         : !picked ? ['⌛', 'No answer this time.']
-        : correct.includes(picked.a) ? ['✅', 'Correct!'] : ['❌', 'Not quite.'];
+        : isRight(correct, picked.a) ? ['✅', 'Correct!'] : ['❌', 'Not quite.'];
     }
     return [
       h('div', { class: 'p-head' },
@@ -908,15 +930,22 @@ function startPlayer() {
         h('p', { role: 'status', style: 'text-align:center;margin:0' },
           verdict ? h('strong', null, `${verdict[0]} ${verdict[1]}`)
             : late ? 'Too late — the question is closed.'
-            : picked ? (picked.acked ? 'Answer locked in ✓' : 'Sending…') : 'Pick one answer.',
+            : picked ? (picked.acked ? 'Answer locked in ✓' : 'Sending…')
+            : q.multi ? 'Tick all that apply, then submit.' : 'Pick one answer.',
           revealed && standing && h('span', { class: 'muted' }, ' · ', standing.textContent)),
         h('div', { class: 'opts p-opts' }, q.options.map((text, i) => {
-          const cls = ['opt', picked?.a === i && 'picked',
-            revealed ? (correct.includes(i) ? 'correct' : correct.length && 'dim') : picked && picked.a !== i && 'dim'];
-          return h('button', { class: cls.filter(Boolean).join(' '), disabled: revealed || !!picked, onclick: () => answer(i) },
+          const on = picked ? picks(picked.a).includes(i) : sel.includes(i);
+          const cls = ['opt', on && 'picked',
+            revealed ? (correct.includes(i) ? 'correct' : correct.length && 'dim') : picked && !on && 'dim'];
+          return h('button', {
+            class: cls.filter(Boolean).join(' '), disabled: revealed || !!picked, onclick: () => tap(i),
+            'aria-pressed': q.multi ? String(on) : null,
+          },
             h('span', { class: 'letter' }, revealed && correct.includes(i) ? '✓' : letter(i)),
             h('span', { class: 'txt' }, md(text, { inline: true })));
-        }))),
+        })),
+        q.multi && !revealed && !picked && h('button', { class: 'btn primary p-submit', disabled: !sel.length, onclick: () => answer(sel) },
+          sel.length ? `Submit ${sel.length} selected` : 'Submit')),
     ];
   }
 

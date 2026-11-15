@@ -80,7 +80,7 @@
     flex-direction: column; justify-content: center; text-align: center; gap: .45em;
     min-height: clamp(96px, 19dvh, 190px); padding: .7em .5em; font-size: 1.1rem;
   }
-  .p-opts .opt .txt { flex: none; max-width: 100%; }
+  .p-opts .opt .txt { flex: none; width: 100%; }
   .p-opts .opt .letter { font-size: 1.15em; }
   .p-submit { padding: .9em; font-size: 1.1rem; }
 
@@ -106,6 +106,12 @@
   .opt .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .opt .txt p { margin: 0; }
   .opt .count { flex: none; font-variant-numeric: tabular-nums; font-weight: 800; }
+  /* picture answers: ![alt](url), optionally followed by a caption */
+  .opt .txt img { display: block; margin: 0 auto .2em; max-width: 100%; max-height: 18vh; object-fit: contain; border-radius: 8px; background: #fff; }
+  .opt:has(.txt img) .txt { text-align: center; }
+  .p-opts .opt .txt img { max-height: 12dvh; }
+  .p-q.md img { max-width: 100%; max-height: 20dvh; }
+  .question .q-text.md img { max-height: 28vh; }
   button.opt:active { transform: scale(.985); }
   .opt.picked { outline: 4px solid var(--text); outline-offset: 2px; }
   .opt.dim { opacity: .55; }
@@ -585,6 +591,7 @@ function runHost(room, S, quiz, client) {
     clearTimeout(stateTimer); stateTimer = 0; lastPublish = Date.now();
     const ph = phase();
     const s = { v: 1, phase: ph, title: quiz.title, n: Object.keys(S.players).length };
+    if (base) s.base = base; // phones resolve relative image links the same way the host does
     if (ph === 'slide' || ph === 'question' || ph === 'reveal') { s.i = S.i; s.total = steps.length; }
     if (ph === 'question' || ph === 'reveal') s.q = { text: step().text, options: step().options, multi: step().multi, points: step().correct.length ? step().points : 1 };
     if (ph === 'question') s.left = secondsLeft();
@@ -925,6 +932,7 @@ function startPlayer() {
     if (state.phase === 'end') return center(h('div', { class: 'p-big' }, '🏁'), h('h2', null, 'Finished!'), standing ?? h('p', { class: 'muted' }, 'Thanks for playing.'));
 
     const q = state.q ?? { text: '', options: [] };
+    const base = typeof state.base === 'string' ? state.base : undefined;
     const revealed = state.phase === 'reveal';
     const picked = pick?.q === state.i ? pick : null;
     const correct = state.correct ?? [];
@@ -938,7 +946,7 @@ function startPlayer() {
       h('div', { class: 'p-head' },
         h('span', null, `Question ${state.i + 1} of ${state.total}`, pointsLabel(q.points) && [' ', h('span', { class: 'badge' }, pointsLabel(q.points))]),
         h('span', { class: 'p-timer', id: 'p-timer' }, timeLeft() ?? '')),
-      h('div', { class: 'p-q md' }, md(q.text)),
+      h('div', { class: 'p-q md' }, md(q.text, { base })),
       h('div', { class: 'p-bottom' },
         h('p', { role: 'status', style: 'text-align:center;margin:0' },
           verdict ? h('strong', null, `${verdict[0]} ${verdict[1]}`)
@@ -955,7 +963,7 @@ function startPlayer() {
             'aria-pressed': q.multi ? String(on) : null,
           },
             h('span', { class: 'letter' }, revealed && correct.includes(i) ? '✓' : letter(i)),
-            h('span', { class: 'txt' }, md(text, { inline: true })));
+            h('span', { class: 'txt' }, md(text, { inline: true, base })));
         })),
         q.multi && !revealed && !picked && h('button', { class: 'btn primary p-submit', disabled: !sel.length, onclick: () => answer(sel) },
           sel.length ? `Submit ${sel.length} selected` : 'Submit')),

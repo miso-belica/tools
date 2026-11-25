@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Blind Review</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: light-dark(#f6f4ef, #14161c);
+    --surface: light-dark(#ffffff, #1e212a);
+    --line: light-dark(#d9d5cb, #343846);
+    --text: light-dark(#1c1d22, #eceef4);
+    --muted: light-dark(#666a75, #9a9fb0);
+    --accent: light-dark(#2f5fd0, #86a8ff);
+    --bad: light-dark(#c23b3b, #ff8d8d);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; line-height: 1.45;
+  }
+  .page {
+    max-width: 720px; margin: 0 auto;
+    padding: max(20px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom));
+  }
+  .page, .stack { display: flex; flex-direction: column; gap: 14px; }
+  h1, h2, h3 { line-height: 1.2; margin: 0; text-wrap: balance; }
+  p { margin: 0; }
+  a { color: var(--accent); }
+  button, input, textarea { font: inherit; color: inherit; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .row > .field { flex: 1 1 12em; }
+  .field { width: 100%; min-width: 0; padding: .6em .75em; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); }
+  textarea.field { resize: vertical; }
+  label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+  label.check { flex-direction: row; align-items: center; gap: 8px; font-weight: 400; }
+  .btn { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .6em 1.1em; font-weight: 600; cursor: pointer; }
+  .btn.primary { background: var(--accent); border-color: transparent; color: light-dark(#fff, #10131c); align-self: flex-start; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .muted { color: var(--muted); font-weight: 400; }
+  .warn { color: var(--bad); font-weight: 600; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85em; }
+  .answer { white-space: pre-wrap; overflow-wrap: anywhere; border-left: 3px solid var(--accent); padding-left: 12px; }
+  .md > :is(h1, h2, h3, h4, h5, h6) { font-size: 1.1rem; }
+  .md :is(p, ul, ol, pre, blockquote) { margin: 0; }
+  .md { overflow-wrap: anywhere; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main id="app" class="page"><p class="muted">Loading…</p></main>
+<script type="module">
+// Blind Review: two people answer questions; neither can read the other's
+// answers until both have submitted, or until the manager sends an unlock link.
+//
+//   Manager  → invite link (questions + manager PUBLIC key)  → person 1
+//   Person 1 → partner link (adds the pair's shared database) → person 2
+//   Manager  → unlock link (manager PRIVATE key), sent on the unlock date
+//
+// Each person encrypts their answers with a random key and stores, in the
+// pair's database: the ciphertext + that key wrapped to the manager's public
+// key. A person's own key is published only once the partner's ciphertext is
+// there. The manager never gets the pair's link, so their private key alone
+// opens nothing. Everything secret travels in the URL #fragment (never sent to
+// a server) or in localStorage.
+//
+// shortcut: both people share one Evolu owner, so either can overwrite or
+// delete rows (sabotage is possible, reading early is not); upgrade to signed
+// rows if that matters.
+// shortcut: person 2 receives the manager's public key from person 1, so a
+// person 1 with a modified app could swap it; this is detected only when the
+// real unlock link is opened. Upgrade: manager sends the invite to both.
+
+import { marked } from './quiz/vendor/marked.esm.js'; // shared with the quiz tool
+const EVOLU = './food-monitor/vendor/evolu/js/evolu.js'; // shared with food-monitor; loaded only for a review
+
+const $app = document.getElementById('app');
+const H = new URLSearchParams(location.hash.slice(1));
+const Q = new URLSearchParams(location.search);
+const BASE = location.origin + location.pathname;
+const subtle = crypto.subtle;
+
+const el = (tag, props, ...kids) => {
+  const n = Object.assign(document.createElement(tag), props);
+  n.append(...kids.flat().filter(k => k != null && k !== false && k !== ''));
+  return n;
+};
+const show = (...kids) => $app.replaceChildren(...kids.flat().filter(Boolean));
+
+// ── localStorage: { made: {id: cycle}, unlock: {id: pkcs8}, inv: {id: seed}, rev: {"seed.me": review} }
+const LS = 'blind-review';
+const store = {
+  get() { try { return JSON.parse(localStorage.getItem(LS)) ?? {}; } catch { return {}; } },
+  update(fn) { const s = this.get(); fn(s); localStorage.setItem(LS, JSON.stringify(s)); }, // throws if storage is blocked
+};
+
+// ── encoding
+const b64u = buf => { let s = ''; for (const b of new Uint8Array(buf)) s += String.fromCharCode(b); return btoa(s).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, ''); };
+const unb64u = s => Uint8Array.from(atob(String(s).replaceAll('-', '+').replaceAll('_', '/')), c => c.charCodeAt(0));
+const utf8 = s => new TextEncoder().encode(s);
+
+async function pack(obj) {
+  const stream = new Blob([JSON.stringify(obj)]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+  return b64u(await new Response(stream).arrayBuffer());
+}
+async function unpack(text) {
+  const reader = new Blob([unb64u(text)]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+  const chunks = [];
+  for (let size = 0; ;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if ((size += value.length) > 200_000) throw new Error('Link data is too large'); // a link is untrusted input
+    chunks.push(value);
+  }
+  return JSON.parse(await new Blob(chunks).text());
+}
+
+// Review definition carried in the links: { v, id, t: title, by: 'YYYY-MM-DD'|'', n: [name1, name2], q: [md1, md2?], k: manager public key }
+function checkDef(d) {
+  const str = (v, max) => typeof v === 'string' && v.length <= max;
+  const ok = d?.v === 1 && str(d.id, 40) && str(d.t, 200) && str(d.by, 10) && str(d.k, 100)
+    && Array.isArray(d.n) && d.n.length === 2 && d.n.every(x => str(x, 80))
+    && Array.isArray(d.q) && (d.q.length === 1 || d.q.length === 2) && d.q.every(x => str(x, 50_000));
+  if (!ok) throw new Error('This link is damaged or incomplete. Ask for it again.');
+  return d;
+}
+const reviewLink = (d, p, me) => `${BASE}#${new URLSearchParams({ d, p, me: me + 1 })}`;
+const dateText = by => by ? new Date(by + 'T00:00').toLocaleDateString(undefined, { dateStyle: 'long' }) : '';
+
+// ── crypto (Web Crypto only)
+const EC = { name: 'ECDH', namedCurve: 'P-256' };
+const aes = (bytes, use) => subtle.importKey('raw', bytes, 'AES-GCM', false, [use]);
+async function seal(keyBytes, obj) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  return { iv: b64u(iv), ct: b64u(await subtle.encrypt({ name: 'AES-GCM', iv }, await aes(keyBytes, 'encrypt'), utf8(JSON.stringify(obj)))) };
+}
+async function open(keyBytes, box) {
+  const plain = await subtle.decrypt({ name: 'AES-GCM', iv: unb64u(box.iv) }, await aes(keyBytes, 'decrypt'), unb64u(box.ct));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+async function kek(privateKey, publicKey, use) {
+  const bits = await subtle.deriveBits({ name: 'ECDH', public: publicKey }, privateKey, 256);
+  return subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(), info: utf8('blind-review wrap v1') },
+    await subtle.importKey('raw', bits, 'HKDF', false, ['deriveKey']), { name: 'AES-GCM', length: 256 }, false, [use]);
+}
+// Encrypt a key so that only the holder of the manager's private key can read it.
+async function wrapFor(pub, keyBytes) {
+  const eph = await subtle.generateKey(EC, false, ['deriveBits']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await kek(eph.privateKey, await subtle.importKey('raw', unb64u(pub), EC, false, []), 'encrypt');
+  return { e: b64u(await subtle.exportKey('raw', eph.publicKey)), iv: b64u(iv), ct: b64u(await subtle.encrypt({ name: 'AES-GCM', iv }, key, keyBytes)) };
+}
+async function unwrap(pkcs8, w) {
+  const priv = await subtle.importKey('pkcs8', unb64u(pkcs8), EC, false, ['deriveBits']);
+  const key = await kek(priv, await subtle.importKey('raw', unb64u(w.e), EC, false, []), 'decrypt');
+  return new Uint8Array(await subtle.decrypt({ name: 'AES-GCM', iv: unb64u(w.iv) }, key, unb64u(w.ct)));
+}
+async function pubOf(pkcs8) { // public key (raw, base64url) that belongs to a private key
+  const jwk = await subtle.exportKey('jwk', await subtle.importKey('pkcs8', unb64u(pkcs8), EC, true, ['deriveBits']));
+  return b64u([4, ...unb64u(jwk.x), ...unb64u(jwk.y)]);
+}
+const digest = async obj => b64u(await subtle.digest('SHA-256', utf8(JSON.stringify(obj))));
+
+// ── markdown
+// Every heading starts a question (text under it belongs to it; text above the
+// first heading is an intro). Without headings, every paragraph or list item is one.
+function splitQuestions(src) {
+  const tokens = marked.lexer(String(src ?? ''));
+  const byHeading = tokens.some(t => t.type === 'heading');
+  const questions = [];
+  let intro = '';
+  for (const t of tokens) {
+    if (byHeading) {
+      if (t.type === 'heading') questions.push(t.raw);
+      else if (questions.length) questions[questions.length - 1] += t.raw;
+      else intro += t.raw;
+    } else if (t.type === 'list') questions.push(...t.items.map(i => i.text));
+    else if (t.type !== 'space') questions.push(t.raw);
+  }
+  return { intro: intro.trim(), questions: questions.map(q => q.trim()).filter(Boolean) };
+}
+// Questions come from a link anyone can craft, so only an allow-list survives.
+const OK_TAGS = new Set('A B BLOCKQUOTE BR CODE DEL EM H1 H2 H3 H4 H5 H6 HR I LI OL P PRE S STRONG SUB SUP TABLE TBODY TD TH THEAD TR U UL'.split(' '));
+function clean(node) {
+  for (const n of [...node.children]) {
+    if (!OK_TAGS.has(n.tagName)) { n.remove(); continue; }
+    for (const a of [...n.attributes]) if (!(n.tagName === 'A' && a.name === 'href')) n.removeAttribute(a.name);
+    if (n.tagName === 'A') {
+      let url = null;
+      try { url = new URL(n.getAttribute('href')); } catch { /* relative or junk */ }
+      if (url && ['http:', 'https:', 'mailto:'].includes(url.protocol)) { n.href = url.href; n.target = '_blank'; n.rel = 'noopener noreferrer'; }
+      else n.removeAttribute('href');
+    }
+    clean(n);
+  }
+}
+function md(source) {
+  const t = document.createElement('template'); // inert: nothing loads or runs
+  t.innerHTML = marked.parse(String(source ?? ''));
+  clean(t.content);
+  return t.content;
+}
+
+// ── shared UI
+function linkBox(title, url, hint) {
+  const input = el('input', { className: 'field mono', readOnly: true, value: url, ariaLabel: title });
+  input.addEventListener('focus', () => input.select());
+  const btn = el('button', { className: 'btn', type: 'button', textContent: 'Copy' });
+  btn.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(url); btn.textContent = 'Copied ✓'; }
+    catch { input.focus(); btn.textContent = 'Press Ctrl+C'; }
+  });
+  return el('div', { className: 'card' }, el('h3', { textContent: title }), hint && el('p', { className: 'muted', textContent: hint }), el('div', { className: 'row' }, input, btn));
+}
+const home = () => el('p', {}, el('a', { href: BASE, textContent: '← All reviews on this device' }));
+
+// ── manager: create a review
+function homeView() {
+  const s = store.get();
+  const input = (label, props) => { const i = el('input', { className: 'field', ...props }); return [i, el('label', {}, label, i)]; };
+  const area = label => {
+    const count = el('span', { className: 'muted' });
+    const t = el('textarea', { className: 'field', rows: 8, placeholder: '## What went well this quarter?\nGive one or two concrete examples.\n\n## What should change?' });
+    t.addEventListener('input', () => {
+      const n = splitQuestions(t.value).questions.length;
+      count.textContent = `${n} question${n === 1 ? '' : 's'} detected`;
+      t.setCustomValidity(n || t.closest('[hidden]') ? '' : 'Write at least one question');
+    });
+    return [t, el('label', {}, label, t, count)];
+  };
+  const [title, titleL] = input('Review title', { required: true, maxLength: 200, placeholder: 'Q4 peer review' });
+  const [n1, n1L] = input('First person', { required: true, maxLength: 80, value: 'Person A' });
+  const [n2, n2L] = input('Second person', { required: true, maxLength: 80, value: 'Person B' });
+  const [by, byL] = input('Unlock date (optional)', { type: 'date' });
+  const [q1, q1L] = area('Questions for the first person (Markdown)');
+  const [q2, q2L] = area('Questions for the second person (Markdown)');
+  const diff = el('input', { type: 'checkbox' });
+  q2L.hidden = true;
+  diff.addEventListener('change', () => { q2L.hidden = !diff.checked; q2.dispatchEvent(new Event('input')); });
+  q1.dispatchEvent(new Event('input'));
+
+  const form = el('form', { className: 'card' },
+    el('h2', { textContent: 'New review' }), titleL, el('div', { className: 'row' }, n1L, n2L), byL, q1L,
+    el('label', { className: 'check' }, diff, 'Different questions for the second person'), q2L,
+    el('p', { className: 'muted', textContent: 'Each heading starts a question. Without headings, each paragraph or list item is a question.' }),
+    el('button', { className: 'btn primary', textContent: 'Create links' }));
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const pair = await subtle.generateKey(EC, true, ['deriveBits']);
+    const id = b64u(crypto.getRandomValues(new Uint8Array(9)));
+    const def = { v: 1, id, t: title.value.trim(), by: by.value, n: [n1.value.trim(), n2.value.trim()],
+      q: diff.checked ? [q1.value, q2.value] : [q1.value], k: b64u(await subtle.exportKey('raw', pair.publicKey)) };
+    const invite = `${BASE}#d=${await pack(checkDef(def))}`;
+    const unlock = `${BASE}#${new URLSearchParams({ u: b64u(await subtle.exportKey('pkcs8', pair.privateKey)), id })}`;
+    store.update(st => { (st.made ??= {})[id] = { t: def.t, by: def.by, n: def.n, invite, unlock, at: Date.now() }; });
+    location.search = new URLSearchParams({ made: id });
+  });
+
+  const list = (heading, items) => items.length ? el('div', { className: 'card' }, el('h2', { textContent: heading }), el('ul', {}, items)) : null;
+  show(el('h1', { textContent: 'Blind Review' }),
+    el('p', { className: 'muted', textContent: 'Two people answer questions. Neither sees the other’s answers until both have submitted, or until you send the unlock link. You never see the answers.' }),
+    list('Reviews you answer on this device', Object.values(s.rev ?? {}).filter(r => r.link).map(r => el('li', {}, el('a', { href: r.link, textContent: `${r.t} (as ${r.n})` })))),
+    list('Reviews you created on this device', Object.entries(s.made ?? {}).map(([id, m]) => el('li', {}, el('a', { href: `${BASE}?${new URLSearchParams({ made: id })}`, textContent: m.t })))),
+    form);
+}
+
+function madeView() {
+  const m = store.get().made?.[Q.get('made')];
+  if (!m) throw new Error('This review was not created in this browser.');
+  const when = dateText(m.by);
+  show(el('h1', { textContent: m.t }),
+    linkBox(`1. Invite link: send now to ${m.n[0]}`, m.invite, `${m.n[0]} opens it and gets a link to pass on to ${m.n[1]}.`),
+    linkBox(`2. Unlock link: keep secret${when ? ` until ${when}` : ''}`, m.unlock,
+      `Schedule it now as a delayed message to both people${when ? ` for ${when}` : ''}. Anyone in the pair who has it can read what the other has already submitted.`),
+    m.invite.length > 6000 && el('p', { className: 'warn', textContent: 'The invite link is very long. Some chat apps cut long links, so check that it arrives whole.' }),
+    el('p', { className: 'muted', textContent: 'These links are saved only in this browser. You cannot read any answers: they are stored in a place only the two people know.' }),
+    home());
+}
+
+// ── person 1: open the invite
+async function inviteView() {
+  const d = H.get('d');
+  const def = checkDef(await unpack(d));
+  const go = p => location.replace(reviewLink(d, p, 0));
+  const known = store.get().inv?.[def.id];
+  if (known) return go(known);
+  const start = el('button', { className: 'btn primary', textContent: `Start as ${def.n[0]}` });
+  start.addEventListener('click', async () => {
+    start.disabled = true;
+    const { Evolu } = await import(EVOLU);
+    const p = Evolu.ownerSecretToMnemonic(Evolu.createOwnerSecret({ randomBytes: Evolu.createRandomBytes() })).replaceAll(' ', '-');
+    store.update(s => { (s.inv ??= {})[def.id] = p; }); // reopening the invite here returns to the same review
+    go(p);
+  });
+  show(el('h1', { textContent: def.t }),
+    el('div', { className: 'card' },
+      el('p', { textContent: `You are invited as ${def.n[0]}. Your partner is ${def.n[1]}.` }),
+      el('p', { className: 'muted', textContent: `Only ${def.n[0]} starts here. ${def.n[1]} gets their own link from ${def.n[0]} in the next step.` }),
+      start));
+}
+
+// ── anyone in the pair: open the unlock link
+async function unlockView() {
+  const pk = H.get('u'), id = H.get('id');
+  let pub;
+  try { pub = await pubOf(pk); } catch { throw new Error('This unlock link is damaged. Ask for it again.'); }
+  const mine = Object.values(store.get().rev ?? {}).filter(r => r.id === id && r.link);
+  const good = mine.filter(r => r.k === pub);
+  if (good.length || !mine.length) store.update(s => { (s.unlock ??= {})[id] = pk; }); // a key that fits no review here must not replace one that does
+  if (good.length === 1 && mine.length === 1) return location.replace(good[0].link);
+  show(el('h1', { textContent: good.length || !mine.length ? 'Unlock key saved' : 'Unlock key does not fit' }),
+    mine.length > good.length && el('p', { className: 'warn', textContent: 'A review in this browser was set up with a different manager key than this unlock link. Its link may have been tampered with. Tell your manager.' }),
+    good.length
+      ? el('div', { className: 'card' }, el('p', { textContent: 'Open your review:' }), el('ul', {}, good.map(r => el('li', {}, el('a', { href: r.link, textContent: `${r.t} (as ${r.n})` })))))
+      : !mine.length && el('p', { textContent: 'Now open your own review link in this browser. The answers will show there.' }));
+}
+
+// ── the review itself
+async function reviewView() {
+  const d = H.get('d'), p = H.get('p'), me = H.get('me') === '2' ? 1 : 0, other = 1 - me;
+  const def = checkDef(await unpack(d));
+  const names = def.n, rk = `${p}.${me}`;
+  const mine = () => store.get().rev?.[rk] ?? {};
+  const setMine = patch => store.update(s => { (s.rev ??= {})[rk] = { ...s.rev[rk], ...patch }; });
+  setMine({ t: def.t, id: def.id, k: def.k, n: names[me], link: location.href });
+  const questions = i => splitQuestions(def.q[i] ?? def.q[0]);
+
+  let Evolu, EvoluLocalFirst, evolu, run, appOwner, query;
+  try {
+    const mod = await import(EVOLU);
+    ({ Evolu, EvoluLocalFirst } = mod);
+    const seed = Evolu.Mnemonic.fromUnknown(p.replaceAll('-', ' '));
+    if (!seed.ok) throw new Error('This link is damaged or incomplete. Ask for it again.');
+    appOwner = Evolu.createAppOwner(Evolu.mnemonicToOwnerSecret(seed.value));
+    run = mod.EvoluWeb.createRun(mod.EvoluWeb.createEvoluDeps());
+    const Schema = { kv: { id: Evolu.id('Kv'), key: Evolu.NonEmptyTrimmedString100, value: Evolu.nullOr(Evolu.Json) } };
+    evolu = await run.ok(Evolu.createEvolu(Schema, { appName: Evolu.AppName.orThrow('blind-review'), appOwner }));
+    query = Evolu.createQueryBuilder(Schema)(db => db.selectFrom('kv').select(['key', 'value']).where('isDeleted', 'is not', Evolu.sqliteTrue));
+    await evolu.loadQuery(query);
+  } catch (e) {
+    if (/damaged/.test(e?.message)) throw e;
+    console.error(e);
+    throw new Error('This browser cannot store the review. Open the link in a regular browser window (Chrome, Safari, Firefox, Edge), not inside a chat app.');
+  }
+  const rows = () => new Map(evolu.getQueryRows(query).map(r => { try { return [r.key, JSON.parse(r.value)]; } catch { return [r.key, null]; } }));
+  const put = (key, obj) => evolu.upsert('kv', { id: Evolu.createIdFromString(key), key, value: Evolu.Json.orThrow(JSON.stringify(obj)), isDeleted: Evolu.sqliteFalse });
+
+  // The unlock key the manager sent, if it is in this browser and belongs to this review.
+  let unlockCache;
+  async function unlockKey() {
+    const pk = store.get().unlock?.[def.id];
+    if (!pk) return { pk: null };
+    if (unlockCache?.pk !== pk) unlockCache = { pk, match: await pubOf(pk).catch(() => null) === def.k };
+    return unlockCache.match ? { pk } : { pk: null, mismatch: true };
+  }
+  // → array of answers, null while still locked, 'bad' if it cannot be decrypted
+  async function reveal(row, k, pk, who) {
+    if (!row || (!k && !pk)) return null;
+    for (const getKey of [k && (() => unb64u(k)), pk && (() => unwrap(pk, row.w))].filter(Boolean)) {
+      try {
+        const plain = await open(await getKey(), row);
+        if (plain.who === who && Array.isArray(plain.a)) return plain.a.map(String);
+      } catch { /* wrong key or damaged row: try the next key */ }
+    }
+    return 'bad';
+  }
+
+  const $sync = el('span', { className: 'muted', textContent: '○ Connecting…' });
+  const $status = el('p', { role: 'status' });
+  const $warn = el('p', { className: 'warn', role: 'alert', hidden: true });
+  const $partner = linkBox(`Send this link to ${names[other]}`, reviewLink(d, p, other), `It is ${names[other]}’s personal link to this review. Send it only to them.`);
+  const $body = el('div', { className: 'stack' });
+  const when = dateText(def.by);
+  show(el('h1', { textContent: def.t }),
+    el('p', { className: 'muted' }, `You answer as ${names[me]}. Answers stay hidden until both of you have submitted${when ? `, or until your manager unlocks them (planned ${when})` : ''}. `, $sync),
+    $warn, me === 0 && $partner, $status, $body, home());
+
+  async function submit(answers) {
+    const empty = answers.filter(a => !a.trim()).length;
+    if (!confirm(`${empty ? `${empty} question${empty === 1 ? ' is' : 's are'} unanswered. ` : ''}Submit your answers? You cannot change them afterwards.`)) return;
+    const k = crypto.getRandomValues(new Uint8Array(32));
+    const sent = { ...await seal(k, { who: me, a: answers }), w: await wrapFor(def.k, k) };
+    try { setMine({ key: b64u(k), sent, draft: null }); } // saved first: the key exists nowhere else
+    catch { alert('Could not save in this browser (storage is blocked or full). Nothing was submitted.'); return; }
+    put(`ans${me}`, sent);
+    tick();
+  }
+
+  const answersOf = (i, answers, title) => el('section', { className: 'stack' }, el('h2', { textContent: title }),
+    questions(i).questions.map((q, n) => el('div', { className: 'card md' }, md(q), el('p', { className: 'answer', textContent: answers[n]?.trim() || '(no answer)' }))));
+  function formBody() {
+    const { intro, questions: qs } = questions(me);
+    const draft = mine().draft ?? [];
+    const form = el('form', { className: 'stack' }, intro && el('div', { className: 'card md' }, md(intro)),
+      qs.map((q, i) => el('div', { className: 'card md' }, md(q), el('textarea', { className: 'field', rows: 5, value: draft[i] ?? '', ariaLabel: `Answer to question ${i + 1}` }))),
+      el('button', { className: 'btn primary', textContent: 'Submit answers' }),
+      el('p', { className: 'muted', textContent: 'Your draft is saved in this browser as you type. Submit from this same browser.' }));
+    const values = () => [...form.querySelectorAll('textarea')].map(t => t.value);
+    form.addEventListener('input', () => { try { setMine({ draft: values() }); } catch { /* draft only */ } });
+    form.addEventListener('submit', e => { e.preventDefault(); submit(values()); });
+    return form;
+  }
+
+  // Reconcile with the shared database, then repaint. Runs on every change; one at a time.
+  let busy = false, again = false, painted = '';
+  async function tick() {
+    if (busy) { again = true; return; }
+    busy = true;
+    try {
+      do {
+        again = false;
+        const r = rows(), m = mine();
+        const myRow = r.get(`ans${me}`) ?? m.sent, otRow = r.get(`ans${other}`);
+        if (m.sent && !r.has(`ans${me}`)) put(`ans${me}`, m.sent); // local database lost or still writing: same row again
+        // Both ciphertexts exist → release my key (and remember what I saw of theirs).
+        if (m.key && myRow && otRow && !r.has(`key${me}`)) {
+          if (!m.saw) setMine({ saw: await digest(otRow) });
+          put(`key${me}`, { k: m.key });
+        }
+        const { pk, mismatch } = await unlockKey();
+        const theirs = await reveal(otRow, r.get(`key${other}`)?.k, pk, other);
+        const own = await reveal(myRow, m.key, pk, me);
+        const saw = mine().saw;
+
+        const warns = [
+          mismatch && 'The unlock key from your manager does not match this review. The review link may have been tampered with. Tell your manager.',
+          saw && otRow && saw !== await digest(otRow) && `${names[other]}’s answers changed after you released yours.`,
+          theirs === 'bad' && `${names[other]}’s answers cannot be decrypted. They are damaged or were tampered with.`,
+        ].filter(Boolean);
+        $warn.textContent = warns.join(' ');
+        $warn.hidden = !warns.length;
+        $partner.hidden = !!otRow;
+
+        const isOpen = Array.isArray(theirs);
+        const phase = isOpen ? 'open' : myRow ? 'waiting' : 'form';
+        $status.textContent = isOpen ? (myRow ? 'Both sets of answers are unlocked.' : 'The review was unlocked before you submitted, so submitting is closed.')
+          : !myRow ? (otRow ? `${names[other]} has already submitted. Their answers show after you submit.` : '')
+          : !otRow ? `Submitted ✓ Waiting for ${names[other]} to submit.`
+          : !m.key ? 'Both of you have submitted. Open this review in the browser where you submitted, or wait for the unlock link from your manager.'
+          : `Both of you have submitted. ${names[other]}’s answers appear here as soon as they open their link again.`;
+        const sig = phase === 'form' ? phase : JSON.stringify([phase, theirs, own]); // never rebuild the form under the user's fingers
+        if (sig !== painted) {
+          painted = sig;
+          $body.replaceChildren(...[
+            phase === 'form' && formBody(),
+            isOpen && answersOf(other, theirs, `${names[other]}’s answers`),
+            Array.isArray(own) && answersOf(me, own, 'Your answers'),
+          ].filter(Boolean));
+        }
+      } while (again);
+    } finally { busy = false; }
+  }
+  evolu.subscribeQuery(query)(tick);
+  run.deps.syncState.subscribe(() => {
+    const st = EvoluLocalFirst.syncStateToOwnerSyncStatus(run.deps.syncState.get(), evolu.name, appOwner.id);
+    $sync.textContent = { Synced: '● Synced', Syncing: '○ Syncing…' }[st.type] ?? '○ Offline: changes sync when you reconnect';
+  });
+  addEventListener('storage', e => { if (e.key === LS) tick(); }); // unlock link opened in another tab
+  await tick();
+}
+
+// ── ?selftest: quick checks of the parser and the crypto round trips
+async function selfTest() {
+  const eq = (a, b, what) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${what}: ${JSON.stringify(a)}`); };
+  eq(splitQuestions('intro\n\n## A\ntext\n\n## B').questions, ['## A\ntext', '## B'], 'headings');
+  eq(splitQuestions('intro\n\n## A').intro, 'intro', 'intro');
+  eq(splitQuestions('- one\n- two\n\nthree').questions, ['one', 'two', 'three'], 'no headings');
+  eq(splitQuestions('').questions, [], 'empty');
+  eq(await unpack(await pack({ a: 'ž' })), { a: 'ž' }, 'pack');
+  const pair = await subtle.generateKey(EC, true, ['deriveBits']);
+  const pub = b64u(await subtle.exportKey('raw', pair.publicKey)), pk = b64u(await subtle.exportKey('pkcs8', pair.privateKey));
+  eq(await pubOf(pk), pub, 'pubOf');
+  const k = crypto.getRandomValues(new Uint8Array(32));
+  const box = { ...await seal(k, { a: ['x'] }), w: await wrapFor(pub, k) };
+  eq(await open(await unwrap(pk, box.w), box), { a: ['x'] }, 'wrap + seal');
+  const t = el('div', {}, md('<img src=x onerror=alert(1)><script>1<\/script>[a](javascript:alert(1)) **b**'));
+  eq([t.querySelector('img, script, [href], [onerror]'), t.querySelector('strong')?.textContent], [null, 'b'], 'sanitise');
+  show(el('p', { id: 'selftest', textContent: 'selftest ok' }));
+}
+
+addEventListener('hashchange', () => location.reload());
+try {
+  await (Q.has('selftest') ? selfTest() : H.has('u') ? unlockView() : H.has('d') && H.has('p') ? reviewView() : H.has('d') ? inviteView() : Q.has('made') ? madeView() : homeView());
+} catch (e) {
+  console.error(e);
+  show(el('h1', { textContent: 'Blind Review' }), el('p', { className: 'warn', textContent: e?.message || 'Something went wrong.' }), home());
+}
+</script>
+</body>
+</html>

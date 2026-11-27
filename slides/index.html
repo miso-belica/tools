@@ -30,6 +30,12 @@
     .busy #grid { pointer-events: none; opacity: .6; cursor: wait; }
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-content: start; box-shadow: 0 4px 14px #5A3A2014; cursor: grab; }
     .card.bad { opacity: .55; }
+    .card > .box { cursor: zoom-in; }
+    .card .row .del { margin-left: auto; }
+    #peek { margin: auto; padding: 12px; width: min(96vw, (94dvh - 70px) * var(--ar)); background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; }
+    #peek:focus { outline: none; }
+    #peek::backdrop { background: #1F1A17CC; }
+    #peek p { margin: 8px 0 0; text-align: center; }
     .card.over { outline: 3px dashed var(--accent); outline-offset: 2px; }
     .name { display: flex; align-items: center; font-size: .85rem; gap: 2px; }
     .name input { flex: 1; min-width: 0; background: none; border: 1px solid transparent; border-radius: 6px; padding: 2px 4px; }
@@ -133,6 +139,11 @@
         <div class="notes next" id="nextNotes"></div>
     </div>
 </section>
+
+<dialog id="peek" aria-label="Slide preview">
+    <div class="box" id="peekBox"></div>
+    <p class="muted"><span id="peekNo"></span> · ← → other slides · Esc close</p>
+</dialog>
 
 <dialog id="editor">
     <form method="dialog">
@@ -327,17 +338,53 @@ function card(s, i) {
     input.onchange = () => { const n = pre + input.value.trim() + ext; if (input.value.trim()) mutate(() => rename(s.name, n)); };
     const box = h(document, 'div', { className: 'box' + (s.kind === 'unknown' ? ' bad' : '') });
     li.append(box, h(document, 'div', { className: 'name' }, pre, input, ext));
+    const row = h(document, 'div', { className: 'row' });
+    li.append(row);
     if (s.kind === 'unknown') li.append(h(document, 'p', { className: 'warn' }, '⚠️ not shown – remove or convert'));
     else {
-        const row = h(document, 'div', { className: 'row' });
+        box.onclick = () => peek(i);
         if (s.mdName) row.append(h(document, 'button', { textContent: 'Edit', onclick: () => edit(s) }));
         else row.append(h(document, 'button', { textContent: 'Add notes', onclick: () => addNotes(s) }));
-        li.append(row);
         if (s.warn.length) li.append(h(document, 'p', { className: 'warn' }, `⚠️ ${s.warn.join(', ')} – not shown – remove or convert`));
     }
+    row.append(h(document, 'button', { className: 'del', textContent: '🗑', title: 'Move to .trash', ariaLabel: `Delete ${s.name}`, onclick: () => trash(s) }));
     box.append(s.kind === 'unknown' ? '⚠️' : renderSlide(document, s));
     return li;
 }
+
+// Delete = move into .trash/ inside the deck (dot folders are never slides), so nothing is lost by a misclick.
+function trash(s) {
+    if (!confirm(`Move "${s.name}" to the .trash folder in this deck?`)) return;
+    mutate(async () => {
+        const t = await root.getDirectoryHandle('.trash', { create: true }), n = await free(t, s.name);
+        try { await s.hd.move(t, n); }
+        catch {
+            if (s.hd.kind === 'file') await write(t, n, await s.hd.getFile());
+            else await copyDir(s.hd, await t.getDirectoryHandle(n, { create: true }));
+            await root.removeEntry(s.name, { recursive: true });
+        }
+    });
+}
+
+// Preview: the slide as the audience sees it. Grid items zoom like in the presenter view; Esc unzooms, then closes.
+const shown = () => deck.map((s, i) => i).filter(i => deck[i].kind !== 'unknown');
+let pk = 0, pz = null;
+function peek(i, z = null) {
+    pk = i; pz = z;
+    const s = deck[i], grid = s.media.length > 1;
+    const el = renderSlide(document, s, z, grid ? k => peek(pk, pz === null ? k : null) : undefined);
+    if (!grid || z !== null) for (const v of el.querySelectorAll('video')) Object.assign(v, { controls: true, onclick: e => e.stopPropagation() });
+    $('#peekBox').replaceChildren(el);
+    $('#peekNo').textContent = `${i + 1} / ${deck.length} · ${s.name}`;
+    if (!$('#peek').open) $('#peek').showModal();
+}
+$('#peek').oncancel = e => { if (pz !== null) { e.preventDefault(); peek(pk); } };
+$('#peek').onclose = () => $('#peekBox').querySelectorAll('video').forEach(v => v.pause());
+$('#peek').onclick = e => { if (e.target === $('#peek')) $('#peek').close(); };
+$('#peek').onkeydown = e => {
+    const l = shown(), at = l.indexOf(pk), to = l[at + (e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : NaN)];
+    if (to !== undefined) { e.preventDefault(); peek(to); }
+};
 
 let busy = Promise.resolve();
 function mutate(fn) { // one disk change at a time, then the deck is read again

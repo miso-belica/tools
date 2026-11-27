@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slides</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+        color-scheme: light dark; --ar: 1.7778;
+        --bg: #FFF8EE; --ink: #1F1A17; --accent: #E8573C; --muted: #6E625A; --card: #FFFDF9; --line: #EEDFCB; --tint: #E8573C1A;
+        --round: ui-rounded, system-ui, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+        :root { --bg: #221D1A; --ink: #F3E9DD; --accent: #F2785C; --muted: #AD9E90; --card: #2C2521; --line: #3E342E; --tint: #F2785C24; }
+    }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--ink); min-height: 100dvh; }
+    button, input, textarea { font: inherit; color: inherit; }
+    button { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; cursor: pointer; white-space: nowrap; }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); color: #1F1A17; border-color: transparent; font-weight: 600; }
+    [hidden] { display: none !important; }
+    .muted { color: var(--muted); }
+    header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+    header h1 { font: 700 1.4rem var(--round); color: var(--accent); margin-right: auto; overflow-wrap: anywhere; }
+    #start { max-width: 36rem; margin: 14dvh auto 0; padding: 16px; display: grid; gap: 16px; justify-items: center; text-align: center; line-height: 1.5; }
+    #start h1 { font: 800 3rem var(--round); color: var(--accent); }
+    #hint { padding: 8px 16px 0; font-size: .85rem; }
+    #grid { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 16px; padding: 16px; }
+    .busy #grid { pointer-events: none; opacity: .6; cursor: wait; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-content: start; box-shadow: 0 4px 14px #5A3A2014; cursor: grab; }
+    .card.bad { opacity: .55; }
+    .card.over { outline: 3px dashed var(--accent); outline-offset: 2px; }
+    .name { display: flex; align-items: center; font-size: .85rem; gap: 2px; }
+    .name input { flex: 1; min-width: 0; background: none; border: 1px solid transparent; border-radius: 6px; padding: 2px 4px; }
+    .name input:is(:hover, :focus) { border-color: var(--line); }
+    .card .row { display: flex; gap: 6px; }
+    .card .row button { padding: 4px 12px; font-size: .8rem; }
+    .warn { font-size: .75rem; color: var(--muted); overflow-wrap: anywhere; }
+    .box, #stage { container-type: size; } /* the slide's own padding and gaps scale with its box */
+    .box { position: relative; width: 100%; aspect-ratio: var(--ar); border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+    .box.bad { display: grid; place-items: center; font-size: 2.5rem; }
+
+    /* a slide: everything scales with its own box, so thumbnails, presenter and audience look alike */
+    .slide { position: absolute; inset: 0; container-type: size; background: var(--bg); color: var(--ink); display: grid; gap: 4cqh 5cqw; padding: 6cqh 6cqw; overflow: hidden; }
+    .slide.full { padding: 3cqh; }
+    .title { grid-area: title; font: 700 1em/1.1 var(--round); color: var(--accent); max-height: 26cqh; overflow: hidden; text-wrap: balance; }
+    .text { grid-area: text; min-height: 0; overflow: hidden; line-height: 1.35; overflow-wrap: break-word; }
+    .text > * + * { margin-top: .5em; }
+    .text :is(h1, h2, h3, h4, h5, h6) { font-family: var(--round); line-height: 1.15; font-size: 1.15em; }
+    .text h1 { font-size: 1.4em; } .text h2 { font-size: 1.25em; }
+    .text :is(ul, ol) { padding-left: 1.3em; }
+    .text li::marker, .text strong, .text a { color: var(--accent); }
+    .text li + li { margin-top: .25em; }
+    .text blockquote { border-left: .2em solid var(--accent); padding-left: .8em; font-style: italic; }
+    .text code { background: var(--tint); border-radius: .3em; padding: 0 .25em; font-size: .9em; }
+    .text pre { background: var(--tint); border-radius: .5em; padding: .5em .8em; white-space: pre-wrap; }
+    .text pre code { background: none; padding: 0; }
+    .text table { border-collapse: collapse; } .text :is(td, th) { border-bottom: 1px solid var(--line); padding: .2em .6em; }
+    .media { grid-area: media; min-height: 0; min-width: 0; display: grid; gap: 2cqmin; grid-template-columns: repeat(var(--cols, 1), 1fr); grid-auto-rows: 1fr; }
+    .cell { container-type: size; display: grid; place-items: center; min-height: 0; min-width: 0; }
+    /* contain-fit that keeps the element box equal to the picture, so corners and shadow hug it */
+    .cell > * { width: min(100cqw, 100cqh * var(--ar, 1.5)); aspect-ratio: var(--ar, 1.5); object-fit: cover; border-radius: clamp(3px, 3cqmin, 18px); box-shadow: 0 1cqmin 4cqmin #5A3A2030; }
+    #pcur .media .cell { cursor: zoom-in; } #pcur .full .cell { cursor: zoom-out; }
+
+    .audience { overflow: hidden; }
+    .audience.black { background: #000; } .audience.black #stage { visibility: hidden; }
+    #stage { position: fixed; inset: 0; }
+
+    #present { display: grid; grid-template: "bar bar" auto "cur side" 1fr / 1.7fr 1fr; gap: 16px; padding: 16px; height: 100dvh; }
+    #bar { grid-area: bar; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; font-variant-numeric: tabular-nums; }
+    #bar b { font: 700 1.6rem var(--round); }
+    #bar .sp { margin-right: auto; }
+    #pcur { grid-area: cur; display: grid; align-content: start; justify-items: center; gap: 10px; min-height: 0; }
+    #pcur .box { width: min(100%, (100dvh - 190px) * var(--ar)); box-shadow: 0 6px 24px #5A3A2022; }
+    #vctl { display: flex; gap: 10px; align-items: center; width: 100%; }
+    #vctl input { flex: 1; accent-color: var(--accent); }
+    #side { grid-area: side; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 10px; min-height: 0; }
+    #side .box { width: 70%; }
+    .notes { overflow: auto; white-space: pre-wrap; font-size: 1.3rem; line-height: 1.45; }
+    .notes.next { opacity: .5; font-size: 1rem; max-height: 22dvh; }
+    .label { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+
+    #editor { margin: auto; width: min(96vw, 1200px); max-height: 94dvh; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; }
+    #editor::backdrop { background: #1F1A1799; }
+    #editor form { display: grid; gap: 12px; padding: 12px; }
+    #editor header { padding: 0; border: 0; } #editor header b { margin-right: auto; overflow-wrap: anywhere; }
+    .ed { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; align-items: start; }
+    .ed textarea { width: 100%; height: min(60dvh, 520px); resize: vertical; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font-family: ui-monospace, monospace; font-size: .9rem; }
+    @media (max-width: 760px) { .ed { grid-template-columns: 1fr; } .ed textarea { height: 40dvh; } #present { grid-template: "bar" auto "cur" auto "side" 1fr / 1fr; height: auto; } }
+</style>
+</head>
+<body>
+<section id="start">
+    <h1>Slides</h1>
+    <p>A presentation is a folder: every file or subfolder is one slide, in name order.<br>
+        Pictures and videos fill the screen, <code>.md</code> files become text slides,<br>a folder puts its <code>.md</code> text next to its pictures. <code>&lt;!-- comments --&gt;</code> are speaker notes.</p>
+    <p id="unsupported" hidden>⚠️ This browser can't open folders. Use Chrome or Edge on a computer.</p>
+    <button class="primary" id="pick">Open folder</button>
+    <button id="reopen" hidden></button>
+</section>
+
+<section id="build" hidden>
+    <header>
+        <h1 id="deckName"></h1>
+        <button id="pick2">Open folder</button>
+        <button id="add">+ text slide</button>
+        <button class="primary" id="go">▶ Present</button>
+    </header>
+    <p id="hint" class="muted">Drag cards to reorder (files get renamed to 001-…, 002-…). Drop files here to add them as slides.</p>
+    <ol id="grid"></ol>
+</section>
+
+<section id="present" hidden>
+    <div id="bar">
+        <b id="count"></b><span id="elapsed"></span><span id="clock" class="muted"></span>
+        <span class="muted sp">→ next · ← back · B black · F fullscreen</span>
+        <button id="black" aria-pressed="false">Black</button>
+        <button id="stop">Stop</button>
+    </div>
+    <div id="pcur">
+        <div class="box" id="curBox"></div>
+        <div id="vctl" hidden><button id="play">▶</button><input type="range" id="seek" min="0" step="0.1" value="0" aria-label="Seek video"></div>
+    </div>
+    <div id="side">
+        <span class="label">Next</span>
+        <div class="box" id="nextBox"></div>
+        <div class="notes" id="notes"></div>
+        <div class="notes next" id="nextNotes"></div>
+    </div>
+</section>
+
+<dialog id="editor">
+    <form method="dialog">
+        <header><b id="edName"></b><button value="" id="cancel">Cancel</button><button value="save" class="primary">Save</button></header>
+        <div class="ed"><textarea id="src" spellcheck="true" aria-label="Markdown"></textarea><div class="box" id="preview"></div></div>
+        <p class="muted">First heading = title. <code>&lt;!-- comments --&gt;</code> are speaker notes. Pictures go next to the text file, not into it.</p>
+    </form>
+</dialog>
+
+<script type="module">
+import { marked } from './vendor/marked.esm.js';
+
+const $ = s => document.querySelector(s);
+const h = (doc, tag, props = {}, ...kids) => { const e = Object.assign(doc.createElement(tag), props); e.append(...kids); return e; };
+const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true });
+const IMG = /\.(jpe?g|png|gif|webp|avif|svg|bmp)$/i, VID = /\.(mp4|webm|mov|m4v|ogv)$/i, MD = /\.md$/i;
+const PREFIX = /^\d+-/, pad = n => String(n).padStart(3, '0');
+const params = new URLSearchParams(location.search);
+
+let root, deck = [], live = [], urls = [], saved, win, tick, t0, P = { i: 0, zoom: null };
+
+// ── Markdown → sanitized DOM (from quiz/index.html), minus images and any other media
+const OK_TAGS = new Set(('A B BLOCKQUOTE BR CODE DEL DIV EM H1 H2 H3 H4 H5 H6 HR I LI OL P PRE S SMALL ' +
+    'SPAN STRONG SUB SUP TABLE TBODY TD TH THEAD TR U UL').split(' '));
+const OK_ATTRS = { A: ['href', 'title'], TD: ['align'], TH: ['align'], OL: ['start'] };
+function clean(node) {
+    for (const el of [...node.children]) {
+        if (!OK_TAGS.has(el.tagName)) { el.remove(); continue; }
+        for (const attr of [...el.attributes]) if (!(OK_ATTRS[el.tagName] ?? []).includes(attr.name)) el.removeAttribute(attr.name);
+        if (el.tagName === 'A' && el.hasAttribute('href')) {
+            let ok = false; try { ok = ['http:', 'https:', 'mailto:'].includes(new URL(el.getAttribute('href')).protocol); } catch { /* relative or bad */ }
+            if (ok) Object.assign(el, { target: '_blank', rel: 'noopener noreferrer' }); else el.removeAttribute('href');
+        }
+        clean(el);
+    }
+}
+function md(doc, source, inline) {
+    const t = doc.createElement('template'); // inert: nothing loads or runs
+    t.innerHTML = inline ? marked.parseInline(source) : marked.parse(source);
+    clean(t.content);
+    return t.content;
+}
+
+// <!-- comments --> are notes, the first heading is the title, the rest is the body.
+// shortcut: a comment or heading inside a ``` code block counts too, fine for slides.
+function parse(src) {
+    const notes = [];
+    let title = '', body = src.replace(/<!--([\s\S]*?)-->/g, (_, n) => (notes.push(n.trim().replace(/^notes?\s*:\s*/i, '')), ''));
+    body = body.replace(/^ {0,3}#{1,6}[ \t]+(.+?)[ \t#]*$/m, (_, t) => (title = t, '')).trim();
+    return { src, title, body, hasText: !!md(document, body).textContent.trim(), notes: notes.filter(Boolean).join('\n\n') };
+}
+
+// ── deck on disk
+const entry = (dir, name) => dir.getFileHandle(name).catch(() => dir.getDirectoryHandle(name));
+const exists = (dir, name) => entry(dir, name).then(() => true, () => false);
+async function write(dir, name, data) {
+    const w = await (await dir.getFileHandle(name, { create: true })).createWritable();
+    await w.write(data); await w.close();
+}
+async function free(dir, name) { // never overwrite: cat.jpg → cat-2.jpg
+    for (let k = 2, n = name; ; n = name.replace(/(\.[^.]*)?$/, `-${k++}$1`)) if (!await exists(dir, n)) return n;
+}
+const nextNo = () => Math.max(0, ...deck.map(s => +(s.name.match(PREFIX)?.[0].slice(0, -1) ?? 0))) + 1;
+
+async function copyDir(src, dst) {
+    for await (const [n, hd] of src.entries()) {
+        if (hd.kind === 'file') await write(dst, n, await hd.getFile());
+        else await copyDir(hd, await dst.getDirectoryHandle(n, { create: true }));
+    }
+}
+// Renames a top-level entry. move() where the browser has it, else copy everything and delete the original only after.
+async function rename(from, to) {
+    if (from === to) return;
+    if (await exists(root, to)) throw new Error(`"${to}" already exists.`);
+    const hd = await entry(root, from);
+    try { await hd.move(to); }
+    catch {
+        if (hd.kind === 'file') await write(root, to, await hd.getFile());
+        else await copyDir(hd, await root.getDirectoryHandle(to, { create: true }));
+        await root.removeEntry(from, { recursive: true });
+    }
+}
+
+async function media(hd) {
+    const url = URL.createObjectURL(await hd.getFile());
+    urls.push(url);
+    return { name: hd.name, url, video: VID.test(hd.name) };
+}
+async function readSlide(name, hd) {
+    const s = { name, hd, kind: 'unknown', media: [], warn: [], title: '', body: '', notes: '', hasText: false };
+    if (hd.kind === 'file') {
+        if (IMG.test(name) || VID.test(name)) { s.kind = 'media'; s.media.push(await media(hd)); }
+        else if (MD.test(name)) Object.assign(s, { kind: 'md', mdName: name }, parse(await (await hd.getFile()).text()));
+        return s;
+    }
+    const kids = [];
+    for await (const [n, k] of hd.entries()) if (!n.startsWith('.')) kids.push(k);
+    for (const k of kids.sort((a, b) => byName(a.name, b.name))) {
+        if (k.kind === 'directory') s.warn.push(k.name + '/');
+        else if (MD.test(k.name) && !s.mdName) Object.assign(s, { mdName: k.name }, parse(await (await k.getFile()).text()));
+        else if (IMG.test(k.name) || VID.test(k.name)) s.media.push(await media(k));
+        else s.warn.push(k.name);
+    }
+    if (s.mdName || s.media.length) s.kind = 'folder';
+    return s;
+}
+async function scan() {
+    urls.forEach(URL.revokeObjectURL); urls = [];
+    const all = [];
+    for await (const [n, hd] of root.entries()) if (!n.startsWith('.')) all.push(readSlide(n, hd));
+    deck = (await Promise.all(all)).sort((a, b) => byName(a.name, b.name));
+    live = deck.filter(s => s.kind !== 'unknown');
+}
+
+// ── rendering one slide into any document (builder, presenter or the audience window)
+function renderSlide(doc, s, zoom = null, onCell) {
+    const el = h(doc, 'div', { className: 'slide' });
+    if (!s) return el; // end screen
+    let items = s.media.map((m, k) => [m, k]), title = s.title, text = s.hasText;
+    if (zoom !== null) { items = [items[zoom]]; title = ''; text = false; }
+    const pic = items.length > 0, both = text && pic;
+    if (!title && !text) el.classList.add('full');
+    el.style.gridTemplateAreas = [title && (both ? '"title title"' : '"title"'), both ? '"text media"' : text ? '"text"' : '"media"'].filter(Boolean).join(' ');
+    el.style.gridTemplateRows = title ? 'auto minmax(0, 1fr)' : 'minmax(0, 1fr)';
+    el.style.gridTemplateColumns = both ? '1fr 1.15fr' : '1fr';
+    if (title) el.append(h(doc, 'h1', { className: 'title' }, md(doc, title, true)));
+    if (text) el.append(h(doc, 'div', { className: 'text' }, md(doc, s.body)));
+    if (pic) {
+        const box = h(doc, 'div', { className: 'media' });
+        box.style.setProperty('--cols', Math.max(1, Math.round(Math.sqrt(items.length * (both ? .6 : 1.2))))); // narrow column stacks, wide area spreads
+        for (const [m, k] of items) {
+            const e = h(doc, m.video ? 'video' : 'img', { src: m.url, alt: m.name });
+            if (m.video) Object.assign(e, { muted: doc === document, preload: doc === document ? 'metadata' : 'auto', playsInline: true });
+            e.onload = e.onloadedmetadata = () => e.style.setProperty('--ar', (e.naturalWidth || e.videoWidth) / (e.naturalHeight || e.videoHeight));
+            const cell = h(doc, 'div', { className: 'cell' }, e);
+            if (onCell) cell.onclick = () => onCell(k);
+            box.append(cell);
+        }
+        el.append(box);
+    }
+    const w = doc.defaultView; // each window needs its own observer; the fit runs once laid out and on every resize
+    (w.slidesRO ??= new w.ResizeObserver(es => es.forEach(x => fitSlide(x.target)))).observe(el);
+    return el;
+}
+function fit(el, max) { // largest font size without overflow
+    let lo = 2, hi = Math.max(2, max);
+    for (let k = 0; k < 12; k++) {
+        const m = (lo + hi) / 2; el.style.fontSize = m + 'px';
+        const slack = 1 + m * .2; // glyphs of a line may stick out of a tight line-height without needing more room
+        if (el.scrollHeight > el.clientHeight + slack || el.scrollWidth > el.clientWidth + 1) hi = m; else lo = m;
+    }
+    el.style.fontSize = lo + 'px';
+}
+function fitSlide(el) {
+    const H = el.clientHeight, t = el.querySelector('.title'), x = el.querySelector('.text');
+    if (!H) return;
+    if (t) fit(t, H * .12);
+    if (x) fit(x, H * .075);
+}
+
+// ── views and URL state
+function view(mode) {
+    for (const id of ['start', 'build', 'present']) $('#' + id).hidden = id !== mode;
+    const u = new URL(location);
+    if (mode !== 'start') u.searchParams.set('mode', mode);
+    if (mode === 'present') u.searchParams.set('slide', P.i + 1); else u.searchParams.delete('slide');
+    history.replaceState(null, '', u);
+}
+
+async function open(dir) {
+    root = dir;
+    idb('readwrite', s => s.put(dir, 'root')).catch(() => {});
+    await scan();
+    if (params.get('mode') === 'present') { params.delete('mode'); if (present(Math.max(0, (+params.get('slide') || 1) - 1))) return; }
+    build();
+}
+window.openDeck = open; // also the test hook: any FileSystemDirectoryHandle works (e.g. OPFS)
+
+// ── builder
+let drag = null;
+function build() {
+    view('build');
+    $('#deckName').textContent = root.name;
+    window.slidesRO?.disconnect();
+    $('#grid').replaceChildren(...deck.map((s, i) => card(s, i)));
+}
+function card(s, i) {
+    const li = h(document, 'li', { className: 'card' + (s.kind === 'unknown' ? ' bad' : ''), draggable: true });
+    li.dataset.i = i;
+    const pre = s.name.match(PREFIX)?.[0] ?? '', ext = s.hd.kind === 'file' ? s.name.match(/\.[^.]*$/)?.[0] ?? '' : '';
+    const input = h(document, 'input', { value: s.name.slice(pre.length, s.name.length - ext.length), ariaLabel: 'Name' });
+    input.onchange = () => { const n = pre + input.value.trim() + ext; if (input.value.trim()) mutate(() => rename(s.name, n)); };
+    const box = h(document, 'div', { className: 'box' + (s.kind === 'unknown' ? ' bad' : '') });
+    li.append(box, h(document, 'div', { className: 'name' }, pre, input, ext));
+    if (s.kind === 'unknown') li.append(h(document, 'p', { className: 'warn' }, '⚠️ not shown – remove or convert'));
+    else {
+        const row = h(document, 'div', { className: 'row' });
+        if (s.mdName) row.append(h(document, 'button', { textContent: 'Edit', onclick: () => edit(s) }));
+        else row.append(h(document, 'button', { textContent: 'Add notes', onclick: () => addNotes(s) }));
+        li.append(row);
+        if (s.warn.length) li.append(h(document, 'p', { className: 'warn' }, `⚠️ ${s.warn.join(', ')} – not shown – remove or convert`));
+    }
+    box.append(s.kind === 'unknown' ? '⚠️' : renderSlide(document, s));
+    return li;
+}
+
+let busy = Promise.resolve();
+function mutate(fn) { // one disk change at a time, then the deck is read again
+    return busy = busy.then(async () => {
+        document.body.classList.add('busy');
+        try { return await fn(); }
+        catch (e) { alert(e.message); }
+        finally { await scan().catch(e => alert(e.message)); build(); document.body.classList.remove('busy'); }
+    });
+}
+
+// Every entry becomes NNN-name. Two passes via ~NNN-name temp names, so no rename ever hits a name still in use.
+async function reorder(from, to) {
+    const order = deck.slice();
+    order.splice(to, 0, ...order.splice(from, 1));
+    const plan = order.map((s, k) => [s.name, `${pad(k + 1)}-${s.name.replace(PREFIX, '')}`]).filter(([a, b]) => a !== b);
+    for (const [, n] of plan) if (await exists(root, '~' + n)) throw new Error(`"~${n}" is in the way, nothing was renamed.`);
+    for (const [o, n] of plan) await rename(o, '~' + n);
+    for (const [, n] of plan) await rename('~' + n, n);
+}
+
+const grid = $('#grid'), cardAt = e => e.target.closest?.('.card');
+grid.ondragstart = e => { drag = +cardAt(e).dataset.i; e.dataTransfer.effectAllowed = 'move'; };
+grid.ondragend = () => { drag = null; grid.querySelector('.over')?.classList.remove('over'); };
+grid.ondragover = e => {
+    if (drag === null) return;
+    e.preventDefault();
+    grid.querySelector('.over')?.classList.remove('over');
+    cardAt(e)?.classList.add('over');
+};
+grid.ondrop = e => {
+    const c = cardAt(e);
+    if (drag === null || !c) return;
+    e.preventDefault(); e.stopPropagation();
+    const from = drag, to = +c.dataset.i;
+    if (from !== to) mutate(() => reorder(from, to));
+};
+// files from the desktop: copied in as new slides at the end
+$('#build').ondragover = e => { if (drag === null && e.dataTransfer.types.includes('Files')) e.preventDefault(); };
+$('#build').ondrop = e => {
+    if (drag !== null || !e.dataTransfer.files.length) return;
+    e.preventDefault();
+    const files = [...e.dataTransfer.files];
+    mutate(async () => { let n = nextNo(); for (const f of files) await write(root, await free(root, `${pad(n++)}-${f.name.replace(PREFIX, '')}`), f); });
+};
+
+$('#add').onclick = async () => {
+    let name;
+    await mutate(async () => { name = await free(root, `${pad(nextNo())}-untitled.md`); await write(root, name, '# Untitled\n\n- \n'); });
+    const s = deck.find(s => s.name === name);
+    if (s) edit(s);
+};
+
+// 005-cat.jpg → 005-cat/cat.jpg + notes.md; a folder without .md just gets notes.md
+async function addNotes(s) {
+    let name = s.name;
+    await mutate(async () => {
+        if (s.hd.kind === 'directory') return write(s.hd, await free(s.hd, 'notes.md'), '<!-- notes: -->\n');
+        name = s.name.replace(/\.[^.]*$/, '');
+        if (await exists(root, name)) throw new Error(`"${name}" already exists.`);
+        const dir = await root.getDirectoryHandle(name, { create: true }), inner = s.name.replace(PREFIX, '');
+        await write(dir, 'notes.md', '<!-- notes: -->\n');
+        const hd = await root.getFileHandle(s.name);
+        try { await hd.move(dir, inner); }
+        catch { await write(dir, inner, await hd.getFile()); await root.removeEntry(s.name); }
+    });
+    const t = deck.find(x => x.name === name);
+    if (t?.mdName) edit(t);
+}
+
+// ── editor
+const ed = $('#editor'), src = $('#src');
+let editing;
+function preview() {
+    $('#preview').replaceChildren(renderSlide(document, { ...editing, ...parse(src.value) }));
+}
+function edit(s) {
+    editing = s;
+    $('#edName').textContent = s.hd.kind === 'directory' ? `${s.name}/${s.mdName}` : s.name;
+    src.value = s.src;
+    ed.returnValue = '';
+    ed.showModal(); preview();
+}
+src.oninput = preview;
+const discard = e => { if (src.value !== editing.src && !confirm('Discard your changes?')) e.preventDefault(); };
+$('#cancel').onclick = discard; ed.oncancel = discard;
+ed.onclose = () => {
+    if (ed.returnValue !== 'save') return;
+    const s = editing, text = src.value;
+    mutate(async () => write(s.hd.kind === 'directory' ? s.hd : root, s.mdName, text));
+};
+
+// ── presenting: this window becomes the presenter view, the popup shows the audience view (we draw into its DOM)
+function present(i = 0) {
+    if (!live.length) { alert('There are no slides to present yet.'); return false; }
+    win = window.open('', 'slides-audience', 'popup,width=1280,height=720');
+    if (!win) { alert('Allow pop-ups for this page to open the audience window.'); return false; }
+    win.document.open();
+    win.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><style>${$('style').textContent}</style></head><body class="audience"><div id="stage"></div></body></html>`);
+    win.document.close();
+    win.document.title = root.name;
+    win.addEventListener('keydown', key);
+    win.addEventListener('resize', ratio);
+    P = { i: Math.min(i, live.length - 1), zoom: null, black: false };
+    t0 = Date.now(); clearInterval(tick); tick = setInterval(clock, 500); clock();
+    view('present'); ratio(); show();
+    return true;
+}
+function stop() {
+    clearInterval(tick); tick = null;
+    if (win && !win.closed) win.close();
+    win = null;
+    document.fullscreenElement && document.exitFullscreen();
+    build();
+}
+function ratio() { $('#present').style.setProperty('--ar', win.innerWidth / win.innerHeight || 1.7778); }
+function clock() {
+    if (win.closed) return stop();
+    const s = Math.floor((Date.now() - t0) / 1000), two = n => String(n).padStart(2, '0');
+    $('#elapsed').textContent = (s >= 3600 ? Math.floor(s / 3600) + ':' : '') + two(Math.floor(s / 60) % 60) + ':' + two(s % 60);
+    $('#clock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function show() {
+    const s = live[P.i], n = live[P.i + 1], stage = win.document.getElementById('stage');
+    for (const v of [...stage.querySelectorAll('video'), ...$('#present').querySelectorAll('video')]) { v.pause(); v.removeAttribute('src'); v.load(); }
+    window.slidesRO?.disconnect(); win.slidesRO?.disconnect();
+    stage.replaceChildren(renderSlide(win.document, s, P.zoom));
+    $('#curBox').replaceChildren(renderSlide(document, s, P.zoom, k => zoom(P.zoom === null ? k : null)));
+    $('#nextBox').replaceChildren(renderSlide(document, n));
+    $('#count').textContent = s ? `${P.i + 1} / ${live.length}` : `End · ${live.length} slides`;
+    $('#notes').textContent = s?.notes ?? '';
+    $('#nextNotes').textContent = n?.notes ?? '';
+    view('present');
+    // one playable video at most: a lone video on screen, never one inside a grid
+    const one = stage.querySelectorAll('.cell').length === 1, a = one && stage.querySelector('video'), p = $('#curBox video');
+    $('#vctl').hidden = !a;
+    if (!a) return;
+    const seek = $('#seek'), btn = $('#play');
+    btn.textContent = '▶';
+    a.onloadedmetadata = () => { seek.max = a.duration; a.style.setProperty('--ar', a.videoWidth / a.videoHeight); };
+    a.ontimeupdate = () => { seek.value = a.currentTime; if (Math.abs(p.currentTime - a.currentTime) > .3) p.currentTime = a.currentTime; };
+    a.onplay = () => { btn.textContent = '⏸'; p.play(); };
+    a.onpause = () => { btn.textContent = '▶'; p.pause(); };
+    seek.value = 0;
+    seek.oninput = () => a.currentTime = p.currentTime = +seek.value;
+}
+function playPause() {
+    const a = win.document.querySelector('#stage .cell:only-child video');
+    if (!a) return false;
+    if (a.paused) a.play().catch(e => alert('The audience window blocked playback: ' + e.message + '\nClick into it once, then try again.'));
+    else a.pause();
+    return true;
+}
+function go(i) { P.i = Math.max(0, Math.min(live.length, i)); P.zoom = null; show(); }
+function zoom(k) { P.zoom = k; show(); }
+function black() {
+    P.black = !P.black;
+    win.document.body.classList.toggle('black', P.black);
+    $('#black').ariaPressed = P.black;
+}
+function key(e) {
+    if (e.target.matches?.('textarea, input:not([type=range])') || e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    if (['ArrowRight', 'PageDown'].includes(k) || k === ' ' && !playPause()) go(P.i + 1);
+    else if (k === ' ') { /* played or paused */ }
+    else if (['ArrowLeft', 'PageUp'].includes(k)) go(P.i - 1);
+    else if (k === 'Home') go(0);
+    else if (k === 'End') go(live.length - 1);
+    else if (k === 'b' || k === 'B') black();
+    else if (k === 'f' || k === 'F') { const d = e.view.document; d.fullscreenElement ? d.exitFullscreen() : d.documentElement.requestFullscreen(); }
+    else if (k === 'Escape' && P.zoom !== null) zoom(null);
+    else return;
+    e.preventDefault();
+}
+addEventListener('keydown', e => { if (!$('#present').hidden && win) key(e); });
+$('#play').onclick = playPause;
+$('#black').onclick = black;
+$('#stop').onclick = stop;
+$('#go').onclick = () => present(0);
+addEventListener('pagehide', () => win?.close());
+
+// ── start: pick a folder, or reopen the last one in one click
+function idb(mode, fn) {
+    return new Promise((ok, no) => {
+        const r = indexedDB.open('slides', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('kv');
+        r.onerror = () => no(r.error);
+        r.onsuccess = () => { const q = fn(r.result.transaction('kv', mode).objectStore('kv')); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); };
+    });
+}
+async function pick() {
+    let dir;
+    try { dir = await showDirectoryPicker({ mode: 'readwrite', id: 'slides' }); }
+    catch (e) { if (e.name !== 'AbortError') alert(e.message); return; }
+    open(dir);
+}
+$('#pick').onclick = $('#pick2').onclick = pick;
+$('#reopen').onclick = async () => { if (await saved.requestPermission({ mode: 'readwrite' }) === 'granted') open(saved); };
+if (!('showDirectoryPicker' in window)) { $('#unsupported').hidden = false; $('#pick').hidden = true; }
+else {
+    saved = await idb('readonly', s => s.get('root')).catch(() => null);
+    if (saved) Object.assign($('#reopen'), { hidden: false, textContent: `Reopen “${saved.name}”` });
+}
+
+console.assert(JSON.stringify(parse('# Hi *there*\n<!-- notes: say hi -->\ntext\n<!-- b -->')) === JSON.stringify({ src: '# Hi *there*\n<!-- notes: say hi -->\ntext\n<!-- b -->', title: 'Hi *there*', body: 'text', hasText: true, notes: 'say hi\n\nb' }), 'parse');
+console.assert(parse('<!-- only notes -->').hasText === false && parse('![x](y.png)').hasText === false, 'parse: invisible');
+</script>
+</body>
+</html>

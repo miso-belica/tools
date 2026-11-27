@@ -17,3 +17,4 @@
 1. [Live Quiz – builder](https://miso-belica.github.io/tools/quiz/builder.html)
 1. [SQLite on GitHub](https://miso-belica.github.io/tools/sqlite/)
 1. [Blind Review](https://miso-belica.github.io/tools/blind-review.html)
+1. [Slides](https://miso-belica.github.io/tools/slides/)

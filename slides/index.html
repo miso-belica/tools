@@ -71,14 +71,16 @@
     #bar { grid-area: bar; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; font-variant-numeric: tabular-nums; }
     #bar b { font: 700 1.6rem var(--round); }
     #bar .sp { margin-right: auto; }
-    #pcur { grid-area: cur; display: grid; align-content: start; justify-items: center; gap: 10px; min-height: 0; }
-    #pcur .box { width: min(100%, (100dvh - 190px) * var(--ar)); box-shadow: 0 6px 24px #5A3A2022; }
+    #pcur { grid-area: cur; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); justify-items: center; gap: 10px; min-height: 0; }
+    #pcur .label, #pcur .notes { justify-self: stretch; }
+    #pcur .box { width: min(100%, (62dvh - 100px) * var(--ar)); box-shadow: 0 6px 24px #5A3A2022; }
     #vctl { display: flex; gap: 10px; align-items: center; width: 100%; }
     #vctl input { flex: 1; accent-color: var(--accent); }
-    #side { grid-area: side; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 10px; min-height: 0; }
+    #side { grid-area: side; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: 10px; min-height: 0; }
     #side .box { width: 70%; }
     .notes { overflow: auto; white-space: pre-wrap; font-size: 1.3rem; line-height: 1.45; }
-    .notes.next { opacity: .5; font-size: 1rem; max-height: 22dvh; }
+    .notes.next { opacity: .6; font-size: 1rem; }
+    .notes:empty::before { content: "—"; color: var(--muted); }
     .label { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 
     #editor { margin: auto; width: min(96vw, 1200px); max-height: 94dvh; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; }
@@ -121,11 +123,13 @@
     <div id="pcur">
         <div class="box" id="curBox"></div>
         <div id="vctl" hidden><button id="play">▶</button><input type="range" id="seek" min="0" step="0.1" value="0" aria-label="Seek video"></div>
+        <span class="label">Notes</span>
+        <div class="notes" id="notes"></div>
     </div>
     <div id="side">
         <span class="label">Next</span>
         <div class="box" id="nextBox"></div>
-        <div class="notes" id="notes"></div>
+        <span class="label">Next notes</span>
         <div class="notes next" id="nextNotes"></div>
     </div>
 </section>

@@ -37,6 +37,7 @@
     #peek::backdrop { background: #1F1A17CC; }
     #peek p { margin: 8px 0 0; text-align: center; }
     .card.over { outline: 3px dashed var(--accent); outline-offset: 2px; }
+    .card.picked { outline: 3px solid var(--accent); outline-offset: 2px; background: color-mix(in srgb, var(--accent) 10%, var(--card)); }
     .name { display: flex; align-items: center; font-size: .85rem; gap: 2px; }
     .name input { flex: 1; min-width: 0; background: none; border: 1px solid transparent; border-radius: 6px; padding: 2px 4px; }
     .name input:is(:hover, :focus) { border-color: var(--line); }
@@ -115,7 +116,7 @@
         <button id="add">+ text slide</button>
         <button class="primary" id="go">▶ Present</button>
     </header>
-    <p id="hint" class="muted">Drag cards to reorder (files get renamed to 001-…, 002-…). Drop files here to add them as slides.</p>
+    <p id="hint" class="muted">Drag cards to reorder (files get renamed to 001-…, 002-…). Cmd/Ctrl+click to pick several, then drag them together. Drop files here to add them as slides.</p>
     <ol id="grid"></ol>
 </section>
 
@@ -316,14 +317,14 @@ function view(mode) {
 async function open(dir) {
     root = dir;
     idb('readwrite', s => s.put(dir, 'root')).catch(() => {});
-    await scan();
+    await scan(); picked.clear();
     if (params.get('mode') === 'present') { params.delete('mode'); if (present(Math.max(0, (+params.get('slide') || 1) - 1))) return; }
     build();
 }
 window.openDeck = open; // also the test hook: any FileSystemDirectoryHandle works (e.g. OPFS)
 
 // ── builder
-let drag = null;
+let drag = null, picked = new Set(); // picked: indexes into deck, cleared whenever the deck is read again
 function build() {
     view('build');
     $('#deckName').textContent = root.name;
@@ -333,6 +334,7 @@ function build() {
 function card(s, i) {
     const li = h(document, 'li', { className: 'card' + (s.kind === 'unknown' ? ' bad' : ''), draggable: true });
     li.dataset.i = i;
+    li.classList.toggle('picked', picked.has(i));
     const pre = s.name.match(PREFIX)?.[0] ?? '', ext = s.hd.kind === 'file' ? s.name.match(/\.[^.]*$/)?.[0] ?? '' : '';
     const input = h(document, 'input', { value: s.name.slice(pre.length, s.name.length - ext.length), ariaLabel: 'Name' });
     input.onchange = () => { const n = pre + input.value.trim() + ext; if (input.value.trim()) mutate(() => rename(s.name, n)); };
@@ -392,16 +394,17 @@ function mutate(fn) { // one disk change at a time, then the deck is read again
         document.body.classList.add('busy');
         try { return await fn(); }
         catch (e) { alert(e.message); }
-        finally { await scan().catch(e => alert(e.message)); build(); document.body.classList.remove('busy'); }
+        finally { await scan().catch(e => alert(e.message)); picked.clear(); build(); document.body.classList.remove('busy'); }
     });
 }
 
 // Every entry becomes NNN-name. Two passes via tmp-reorder-NNN-name, so no rename ever hits a name still in use.
 // Chrome refuses names starting with ~ on a real disk (OPFS allows them), hence a plain-text temp prefix.
 const TMP = 'tmp-reorder-';
-async function reorder(from, to) {
-    const order = deck.slice();
-    order.splice(to, 0, ...order.splice(from, 1));
+// Moves the slides at indexes `from` as one block, keeping their order: after card `to` when dragged forward, before it when dragged back.
+async function reorder(from, to, after) {
+    const sel = new Set(from), order = deck.filter((s, k) => !sel.has(k));
+    order.splice(order.indexOf(deck[to]) + after, 0, ...deck.filter((s, k) => sel.has(k)));
     const plan = order.map((s, k) => [s.name, `${pad(k + 1)}-${s.name.replace(TMP, '').replace(PREFIX, '')}`]).filter(([a, b]) => a !== b);
     for (const [, n] of plan) if (await exists(root, TMP + n)) throw new Error(`"${TMP + n}" is in the way, nothing was renamed.`);
     for (const [o, n] of plan) await rename(o, TMP + n);
@@ -409,6 +412,15 @@ async function reorder(from, to) {
 }
 
 const grid = $('#grid'), cardAt = e => e.target.closest?.('.card');
+grid.addEventListener('click', e => { // capture: Cmd/Ctrl+click picks instead of previewing
+    const c = cardAt(e);
+    if (!c || !(e.metaKey || e.ctrlKey) || e.target.closest('input, button')) return;
+    e.preventDefault(); e.stopPropagation();
+    const i = +c.dataset.i;
+    picked.has(i) ? picked.delete(i) : picked.add(i);
+    c.classList.toggle('picked', picked.has(i));
+}, true);
+addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#build').hidden && !document.querySelector('dialog[open]')) { picked.clear(); grid.querySelectorAll('.picked').forEach(c => c.classList.remove('picked')); } });
 grid.ondragstart = e => { drag = +cardAt(e).dataset.i; e.dataTransfer.effectAllowed = 'move'; };
 grid.ondragend = () => { drag = null; grid.querySelector('.over')?.classList.remove('over'); };
 grid.ondragover = e => {
@@ -421,8 +433,8 @@ grid.ondrop = e => {
     const c = cardAt(e);
     if (drag === null || !c) return;
     e.preventDefault(); e.stopPropagation();
-    const from = drag, to = +c.dataset.i;
-    if (from !== to) mutate(() => reorder(from, to));
+    const to = +c.dataset.i, from = picked.has(drag) ? [...picked].sort((a, b) => a - b) : [drag];
+    if (!from.includes(to)) mutate(() => reorder(from, to, to > drag));
 };
 // files from the desktop: copied in as new slides at the end
 $('#build').ondragover = e => { if (drag === null && e.dataTransfer.types.includes('Files')) e.preventDefault(); };

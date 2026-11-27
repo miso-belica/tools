@@ -30,6 +30,7 @@
     .busy #grid { pointer-events: none; opacity: .6; cursor: wait; }
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-content: start; box-shadow: 0 4px 14px #5A3A2014; cursor: grab; }
     .card.bad { opacity: .55; }
+    .card.gone { cursor: default; box-shadow: none; } .card.gone > :not(.row) { opacity: .3; pointer-events: none; }
     .card > .box { cursor: zoom-in; }
     .card .row .del { margin-left: auto; }
     #peek { margin: auto; padding: 12px; width: min(96vw, (94dvh - 70px) * var(--ar)); background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; }
@@ -219,12 +220,15 @@ async function copyDir(src, dst) {
 async function rename(from, to) {
     if (from === to) return;
     if (await exists(root, to)) throw new Error(`"${to}" already exists.`);
-    const hd = await entry(root, from);
-    try { await hd.move(to); }
+    await moveEntry(root, from, root, to);
+}
+async function moveEntry(src, from, dst, to) {
+    const hd = await entry(src, from);
+    try { await hd.move(dst, to); }
     catch {
-        if (hd.kind === 'file') await write(root, to, await hd.getFile());
-        else await copyDir(hd, await root.getDirectoryHandle(to, { create: true }));
-        await root.removeEntry(from, { recursive: true });
+        if (hd.kind === 'file') await write(dst, to, await hd.getFile());
+        else await copyDir(hd, await dst.getDirectoryHandle(to, { create: true }));
+        await src.removeEntry(from, { recursive: true });
     }
 }
 
@@ -256,7 +260,7 @@ async function scan() {
     const all = [];
     for await (const [n, hd] of root.entries()) if (!n.startsWith('.')) all.push(readSlide(n, hd));
     deck = (await Promise.all(all)).sort((a, b) => byName(a.name, b.name));
-    live = deck.filter(s => s.kind !== 'unknown');
+    relive();
 }
 
 // ── rendering one slide into any document (builder, presenter or the audience window)
@@ -335,6 +339,7 @@ function card(s, i) {
     const li = h(document, 'li', { className: 'card' + (s.kind === 'unknown' ? ' bad' : ''), draggable: true });
     li.dataset.i = i;
     li.classList.toggle('picked', picked.has(i));
+    if (s.gone) { li.classList.add('gone'); li.draggable = false; }
     const pre = s.name.match(PREFIX)?.[0] ?? '', ext = s.hd.kind === 'file' ? s.name.match(/\.[^.]*$/)?.[0] ?? '' : '';
     const input = h(document, 'input', { value: s.name.slice(pre.length, s.name.length - ext.length), ariaLabel: 'Name' });
     input.onchange = () => { const n = pre + input.value.trim() + ext; if (input.value.trim()) mutate(() => rename(s.name, n)); };
@@ -349,27 +354,35 @@ function card(s, i) {
         else row.append(h(document, 'button', { textContent: 'Add notes', onclick: () => addNotes(s) }));
         if (s.warn.length) li.append(h(document, 'p', { className: 'warn' }, `⚠️ ${s.warn.join(', ')} – not shown – remove or convert`));
     }
-    row.append(h(document, 'button', { className: 'del', textContent: '🗑', title: 'Move to .trash', ariaLabel: `Delete ${s.name}`, onclick: () => trash(s) }));
+    if (s.gone) { row.replaceChildren(h(document, 'button', { className: 'del', textContent: '↩ Undo', ariaLabel: `Restore ${s.name}`, onclick: () => untrash(i) })); box.append(s.kind === 'unknown' ? '⚠️' : renderSlide(document, s)); return li; }
+    row.append(h(document, 'button', { className: 'del', textContent: '🗑', title: 'Delete (moves to .trash, undo right here)', ariaLabel: `Delete ${s.name}`, onclick: () => trash(i) }));
     box.append(s.kind === 'unknown' ? '⚠️' : renderSlide(document, s));
     return li;
 }
 
-// Delete = move into .trash/ inside the deck (dot folders are never slides), so nothing is lost by a misclick.
-function trash(s) {
-    if (!confirm(`Move "${s.name}" to the .trash folder in this deck?`)) return;
-    mutate(async () => {
-        const t = await root.getDirectoryHandle('.trash', { create: true }), n = await free(t, s.name);
-        try { await s.hd.move(t, n); }
-        catch {
-            if (s.hd.kind === 'file') await write(t, n, await s.hd.getFile());
-            else await copyDir(s.hd, await t.getDirectoryHandle(n, { create: true }));
-            await root.removeEntry(s.name, { recursive: true });
-        }
-    });
+// Delete = move into .trash/ inside the deck (dot folders are never slides). The card stays in place, faded, with Undo,
+// so the grid doesn't jump while deleting; it disappears the next time the deck is read (reorder, edit, reopen).
+const relive = () => live = deck.filter(s => s.kind !== 'unknown' && !s.gone);
+function trash(i) {
+    busy = busy.then(async () => {
+        const s = deck[i], t = await root.getDirectoryHandle('.trash', { create: true });
+        s.gone = await free(t, s.name);
+        await moveEntry(root, s.name, t, s.gone);
+        picked.delete(i); relive(); grid.children[i]?.replaceWith(card(s, i));
+    }).catch(e => alert(e.message));
+}
+function untrash(i) {
+    busy = busy.then(async () => {
+        const name = deck[i].name;
+        if (await exists(root, name)) throw new Error(`"${name}" already exists, so it stays in .trash.`);
+        await moveEntry(await root.getDirectoryHandle('.trash'), deck[i].gone, root, name);
+        deck[i] = await readSlide(name, await entry(root, name)); // fresh handle and media after the move
+        relive(); grid.children[i]?.replaceWith(card(deck[i], i));
+    }).catch(e => alert(e.message));
 }
 
 // Preview: the slide as the audience sees it. Grid items zoom like in the presenter view; Esc unzooms, then closes.
-const shown = () => deck.map((s, i) => i).filter(i => deck[i].kind !== 'unknown');
+const shown = () => deck.map((s, i) => i).filter(i => deck[i].kind !== 'unknown' && !deck[i].gone);
 let pk = 0, pz = null;
 function peek(i, z = null) {
     pk = i; pz = z;
@@ -403,7 +416,7 @@ function mutate(fn) { // one disk change at a time, then the deck is read again
 const TMP = 'tmp-reorder-';
 // Moves the slides at indexes `from` as one block, keeping their order: after card `to` when dragged forward, before it when dragged back.
 async function reorder(from, to, after) {
-    const sel = new Set(from), order = deck.filter((s, k) => !sel.has(k));
+    const sel = new Set(from), order = deck.filter((s, k) => !sel.has(k) && !s.gone);
     order.splice(order.indexOf(deck[to]) + after, 0, ...deck.filter((s, k) => sel.has(k)));
     const plan = order.map((s, k) => [s.name, `${pad(k + 1)}-${s.name.replace(TMP, '').replace(PREFIX, '')}`]).filter(([a, b]) => a !== b);
     for (const [, n] of plan) if (await exists(root, TMP + n)) throw new Error(`"${TMP + n}" is in the way, nothing was renamed.`);
@@ -414,7 +427,7 @@ async function reorder(from, to, after) {
 const grid = $('#grid'), cardAt = e => e.target.closest?.('.card');
 grid.addEventListener('click', e => { // capture: Cmd/Ctrl+click picks instead of previewing
     const c = cardAt(e);
-    if (!c || !(e.metaKey || e.ctrlKey) || e.target.closest('input, button')) return;
+    if (!c || !(e.metaKey || e.ctrlKey) || e.target.closest('input, button') || deck[+c.dataset.i].gone) return;
     e.preventDefault(); e.stopPropagation();
     const i = +c.dataset.i;
     picked.has(i) ? picked.delete(i) : picked.add(i);
@@ -431,7 +444,7 @@ grid.ondragover = e => {
 };
 grid.ondrop = e => {
     const c = cardAt(e);
-    if (drag === null || !c) return;
+    if (drag === null || !c || deck[+c.dataset.i].gone) return;
     e.preventDefault(); e.stopPropagation();
     const to = +c.dataset.i, from = picked.has(drag) ? [...picked].sort((a, b) => a - b) : [drag];
     if (!from.includes(to)) mutate(() => reorder(from, to, to > drag));

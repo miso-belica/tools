@@ -349,14 +349,16 @@ function mutate(fn) { // one disk change at a time, then the deck is read again
     });
 }
 
-// Every entry becomes NNN-name. Two passes via ~NNN-name temp names, so no rename ever hits a name still in use.
+// Every entry becomes NNN-name. Two passes via tmp-reorder-NNN-name, so no rename ever hits a name still in use.
+// Chrome refuses names starting with ~ on a real disk (OPFS allows them), hence a plain-text temp prefix.
+const TMP = 'tmp-reorder-';
 async function reorder(from, to) {
     const order = deck.slice();
     order.splice(to, 0, ...order.splice(from, 1));
-    const plan = order.map((s, k) => [s.name, `${pad(k + 1)}-${s.name.replace(PREFIX, '')}`]).filter(([a, b]) => a !== b);
-    for (const [, n] of plan) if (await exists(root, '~' + n)) throw new Error(`"~${n}" is in the way, nothing was renamed.`);
-    for (const [o, n] of plan) await rename(o, '~' + n);
-    for (const [, n] of plan) await rename('~' + n, n);
+    const plan = order.map((s, k) => [s.name, `${pad(k + 1)}-${s.name.replace(TMP, '').replace(PREFIX, '')}`]).filter(([a, b]) => a !== b);
+    for (const [, n] of plan) if (await exists(root, TMP + n)) throw new Error(`"${TMP + n}" is in the way, nothing was renamed.`);
+    for (const [o, n] of plan) await rename(o, TMP + n);
+    for (const [, n] of plan) await rename(TMP + n, n);
 }
 
 const grid = $('#grid'), cardAt = e => e.target.closest?.('.card');
